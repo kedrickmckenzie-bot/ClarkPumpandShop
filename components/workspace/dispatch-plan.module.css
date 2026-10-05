@@ -143,6 +143,8 @@
 .queue h2 {
   display: flex;
   align-items: center;
+  gap: 6px;
+  white-space: nowrap;
   position: sticky;
   top: 0;
   z-index: 1;
@@ -152,6 +154,7 @@
   font-size: 18px;
 }
 .queue h2 span {
+  flex-shrink: 0;
   display: inline-block;
   min-width: 24px;
   margin-left: 6px;

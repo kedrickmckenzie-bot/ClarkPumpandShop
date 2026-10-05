@@ -61,6 +61,14 @@ unset for this demo. Anyone who can reach this Render demo can use its fictional
 preview roles; do not put real customer data in it. Customer production must use
 authenticated mode with a verified identity adapter.
 
+Driving routes on the Dispatch map are optional. Set `OPS_ROUTING_PROVIDER=osrm`
+to turn them on. By default this uses the free public OSRM demo server, which is
+meant for light use only; each store-to-store drive is looked up once and saved,
+so normal use stays very light. Point `OPS_OSRM_URL` at a self-hosted OSRM server
+before heavier use. Without the setting, the map still shows every job as a pin
+and says that driving routes are not set up. Drive times are for a typical day,
+not live traffic.
+
 For uploaded evidence, create a separate private S3-compatible bucket and set
 the `S3_*` variables from `.env.render.example`. Do not use Render's ephemeral
 local disk and do not reuse DockSafe object-storage credentials. The core demo

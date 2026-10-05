@@ -2250,3 +2250,14 @@ export const opsTechnicianStatuses = pgTable("ops_technician_statuses", {
   foreignKey({columns:[t.organizationId,t.workOrderId],foreignColumns:[opsWorkOrders.organizationId,opsWorkOrders.id]}),
   check("chk_ops_technician_status",sql`${t.revision} > 0 AND ${t.status} IN ('heading','parts','break','done') AND (${t.status} != 'heading' OR ${t.workOrderId} IS NOT NULL)`),
 ]);
+
+/** Cached driving route between two points; keyed by coordinates so a moved store simply misses the cache. */
+export const opsRouteLegs = pgTable("ops_route_legs", {
+  id: text("id").primaryKey(), organizationId: text("organization_id").notNull(),
+  fromLatE6: integer("from_lat_e6").notNull(), fromLngE6: integer("from_lng_e6").notNull(), toLatE6: integer("to_lat_e6").notNull(), toLngE6: integer("to_lng_e6").notNull(),
+  distanceM: integer("distance_m").notNull(), durationS: integer("duration_s").notNull(), geometry: text("geometry").notNull(), provider: text("provider").notNull(), fetchedAt: text("fetched_at").notNull(),
+},t=>[
+  uniqueIndex("idx_ops_route_legs_points").on(t.organizationId,t.fromLatE6,t.fromLngE6,t.toLatE6,t.toLngE6),
+  foreignKey({columns:[t.organizationId],foreignColumns:[opsOrganizations.id]}),
+  check("chk_ops_route_legs",sql`${t.distanceM} >= 0 AND ${t.durationS} >= 0`),
+]);

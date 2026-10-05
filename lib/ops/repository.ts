@@ -228,6 +228,8 @@ export interface OpsStatement {
 export interface OpsRepository extends TaskRepository {
   getLatestTechnicianVisit(organizationId:string,membershipId:string):Promise<VisitSession|null>;
   getTechnicianStatus(organizationId:string,membershipId:string): Promise<import("./technician-status").TechnicianStatus|null>;
+  /** Cached driving legs for these exact point pairs (at most 100 per call). */
+  getRouteLegs(organizationId:string,pairs:{fromLatE6:number;fromLngE6:number;toLatE6:number;toLngE6:number}[]): Promise<import("./route-legs").RouteLeg[]>;
   getDispatchFilters(scope: OrganizationScope): Promise<{people:{id:string;name:string;homeRegionId?:string;skills:string[]}[];regions:{id:string;name:string}[]}>;
   getDispatchDayCounts(scope: OrganizationScope, query: WorkOrderListQuery): Promise<Array<{ membershipId?: string; name?: string; day?: string; count: number }>>;
   getInternalSchedule(org: string, id: string): Promise<import("./internal-schedule-types").InternalSchedule | null>;

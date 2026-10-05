@@ -4,6 +4,22 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Dispatch map with real driving routes — October 5, 2026
+
+The owner chose free OSRM road routing ("lets go with OSRM for now") and asked for real road lines rather than straight lines. Work is on `codex/internal-dispatch-p1`.
+
+- **Map** joins Day and Week on Dispatch and follows the same date controls (opens on today, or the day already chosen). Each tech's day is drawn along real roads in stop order with numbered pins, one colour per tech (six colours checked for colour-blind separation; numbers and names carry identity too). Grey dots are jobs that need a tech; a coloured badge marks the store a tech is checked in at. Tapping a pin opens the job panel; tapping a tech in the side list shows only that route. The side list shows stops, drive time and miles for each tech. The map re-centres only when its pins change, so the 30-second refresh never undoes a zoom.
+- **Routes are cached per store pair** in a new tenant-scoped `ops_route_legs` table (migration 0078, D1 and PostgreSQL), keyed by coordinates so a moved store simply looks its routes up again. Each pair is fetched once, then reused; at most 20 lookups per request, the rest on the next request.
+- Routing is an **opt-in outside service**: `OPS_ROUTING_PROVIDER=osrm` turns it on, `OPS_OSRM_URL` can point at a self-hosted OSRM server (default: public demo server, light use only). Without it the map still shows pins and says routes are not set up. The provider sits behind a neutral `RoutingProvider` interface so a traffic-aware service can replace it later. Map background: free OpenFreeMap Positron tiles (MapLibre).
+- No automatic re-ordering: OSRM can suggest an order, but any future "suggest a better order" must be confirmed by a person, as the dispatch rules require. Drive times are typical-day, not live traffic.
+- Tests: polyline decoding, one lookup per pair, routing-off and partial-failure behaviour, tenant isolation, and the SQL repository path including a duplicate save.
+
+Also: the Plan board (Day, Week, Map) no longer loads per-tech "next job", "today" lists, day counts or bucket totals it never shows, removing about 35 queries for a 30-tech team.
+
+Validation: seed, typecheck, lint, 213 test files / 1,498 tests passed / 15 intentional adapter-specific skips (real PostgreSQL dispatch tests enabled), 68 end-to-end checks, Vinext build and Render build.
+
+Status: implemented; browser-checked at 1440 px and 390 px with real OSRM routes and map tiles (7 route pairs cached for the demo day). Next planned: a "Nearby jobs" list in the job panel, and an "Our team services this store" store setting so 70-store customers can limit maps and routes to in-house stores.
+
 ### Dispatch board redesign and 43b0b7e fixes — October 5, 2026
 
 The owner asked Claude to take over from Codex, make Dispatch a full working board, and make changing a tech's job order easy ("im fine if you need a full redesign"). Work is on `codex/internal-dispatch-p1`.

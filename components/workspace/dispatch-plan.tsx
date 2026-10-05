@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { cachedDateTimeFormat } from "@/lib/ops/intl-format-cache";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { roleCan } from "@/components/ops/role-policy";
 import {
@@ -16,6 +16,7 @@ import { civilDate, mondayOf } from "@/lib/ops/dispatch-calendar";
 import type { loadDispatchBoard } from "@/lib/server/dispatch-board-page";
 import { JobSheet, Sheet } from "./dispatch-board";
 import { jobShortName } from "@/lib/ops/short-name";
+import { DispatchMap, TECH_COLORS, type MapTech } from "./dispatch-map";
 import styles from "./dispatch-plan.module.css";
 
 type Board = Awaited<ReturnType<typeof loadDispatchBoard>>;
@@ -29,7 +30,7 @@ type Move = {
   plan?: DispatchJob["schedule"];
 };
 type Undo = { before: DispatchJob; after: DispatchJob }[];
-type Scale = "day" | "week";
+type Scale = "day" | "week" | "map";
 const minutes = (job: DispatchJob) =>
   job.estimatedMinutes ?? job.schedule?.durationMinutes;
 const hours = (value: number) => `${Math.round((value / 60) * 10) / 10} h`;
@@ -72,9 +73,7 @@ export function stopOrders(
       floor = Math.max(floor, fixed);
       return fixed;
     }
-    const nextFixed = list
-      .slice(i + 1)
-      .find((j) => !movable(j));
+    const nextFixed = list.slice(i + 1).find((j) => !movable(j));
     floor += nextFixed ? 1 : 10;
     return floor;
   });
@@ -90,7 +89,7 @@ export function DispatchPlan(initial: Board) {
   const [data, setData] = useState(initial),
     [week, setWeek] = useState(initial.week),
     [scale, setScale] = useState<Scale>(
-      initial.view === "day" ? "day" : "week",
+      initial.view === "day" ? "day" : initial.view === "map" ? "map" : "week",
     ),
     [focusDay, setFocusDay] = useState(initial.day ?? initial.today);
   const [chosenJobs, setChosenJobs] = useState<DispatchJob[]>([]);
@@ -346,7 +345,12 @@ export function DispatchPlan(initial: Board) {
         ?.items.filter((j) => j.schedule?.day === day) ?? [],
     );
   /** Puts `job` at position `index` in a tech's day and saves every stop whose position changed. */
-  function placeJob(job: DispatchJob, techId: string, day: string, index: number) {
+  function placeJob(
+    job: DispatchJob,
+    techId: string,
+    day: string,
+    index: number,
+  ) {
     if (!canPlanJob(job)) return;
     const list = placeAt(jobsFor(techId, day), job, index);
     const order = stopOrders(list, canPlanJob);
@@ -442,14 +446,20 @@ export function DispatchPlan(initial: Board) {
       civilDate(update.recordedAt, data.organizationZone) >= data.today
     )
       return {
-        heading: { text: `On the way to ${update.storeNumber ?? "a job"}`, tone: "moving" },
+        heading: {
+          text: `On the way to ${update.storeNumber ?? "a job"}`,
+          tone: "moving",
+        },
         parts: { text: "Getting parts", tone: "paused" },
         break: { text: "On a break", tone: "paused" },
         done: { text: "Done for the day", tone: "off" },
       }[update.status];
     return visit?.checkedOutAt &&
       civilDate(visit.checkedOutAt, data.organizationZone) >= data.today
-      ? { text: `Finished ${visit.storeNumber ?? ""} at ${clock(visit.checkedOutAt)}`, tone: "idle" }
+      ? {
+          text: `Finished ${visit.storeNumber ?? ""} at ${clock(visit.checkedOutAt)}`,
+          tone: "idle",
+        }
       : { text: "Not started", tone: "idle" };
   };
   /** One job on the board: number, few-word name, store, then time and state. */
@@ -554,13 +564,16 @@ export function DispatchPlan(initial: Board) {
   const queue = (
     <aside className={styles.queue} aria-label="Jobs that need a tech">
       <h2>
-        Needs a tech <span>{data.queue.totalCount ?? data.queue.items.length}</span>
+        Needs a tech{" "}
+        <span>{data.queue.totalCount ?? data.queue.items.length}</span>
         <button className={styles.railHide} onClick={() => setRailOpen(false)}>
           Hide
         </button>
       </h2>
       {manager && data.queue.items.length ? (
-        <p className={styles.hint}>Drag onto a tech, or tick and press Give to.</p>
+        <p className={styles.hint}>
+          Drag onto a tech, or tick and press Give to.
+        </p>
       ) : null}
       {!data.queue.items.length ? (
         <p className={styles.hint}>Every ready job has a tech.</p>
@@ -593,7 +606,10 @@ export function DispatchPlan(initial: Board) {
                           onChange={() => toggle(job)}
                         />
                       ) : null}
-                      <button className={styles.job} onClick={() => setDetail(job)}>
+                      <button
+                        className={styles.job}
+                        onClick={() => setDetail(job)}
+                      >
                         <strong>
                           {jobShortName(job)}
                           {["urgent", "emergency"].includes(job.priority) ? (
@@ -604,7 +620,9 @@ export function DispatchPlan(initial: Board) {
                         <span className={styles.problem}>{job.problem}</span>
                         <small>
                           {duration(job)}
-                          {job.dueAt ? ` · ${dueLabel(job, data.today, data.organizationZone)}` : ""}
+                          {job.dueAt
+                            ? ` · ${dueLabel(job, data.today, data.organizationZone)}`
+                            : ""}
                         </small>
                       </button>
                     </li>
@@ -628,7 +646,10 @@ export function DispatchPlan(initial: Board) {
           <button
             className={styles.primary}
             onClick={() =>
-              choose(all().filter((j) => selected.includes(j.id)), focusDay)
+              choose(
+                all().filter((j) => selected.includes(j.id)),
+                focusDay,
+              )
             }
           >
             Give to…
@@ -645,8 +666,26 @@ export function DispatchPlan(initial: Board) {
       void refreshSafely(nextWeek);
     }
   };
-  const stepDays = scale === "day" ? 1 : 7;
+  const daily = scale !== "week";
+  const stepDays = daily ? 1 : 7;
   const visibleTechs = data.commitments;
+  // One colour per tech, in board order, so colours stay put while the map is open.
+  const mapTechs = useMemo<MapTech[]>(
+    () =>
+      data.commitments.map((tech, i) => ({
+        id: tech.id,
+        name: tech.name,
+        color: TECH_COLORS[i % TECH_COLORS.length],
+        stops: orderedStops(
+          tech.items.filter((j) => j.schedule?.day === focusDay),
+        ),
+        currentStoreId:
+          tech.lastVisit?.status === "active"
+            ? tech.current?.storeId
+            : undefined,
+      })),
+    [data.commitments, focusDay],
+  );
   const quickMove = (moves: Move[]) => {
     setDetail(undefined);
     void move(moves);
@@ -656,25 +695,29 @@ export function DispatchPlan(initial: Board) {
       <header className={styles.header}>
         <div>
           <h1>Dispatch</h1>
-          <p>{manager ? "Drag a job to move it. Use ↑ ↓ on a job to change the order." : "Who does what, and in what order"}</p>
+          <p>
+            {manager
+              ? "Drag a job to move it. Use ↑ ↓ on a job to change the order."
+              : "Who does what, and in what order"}
+          </p>
         </div>
         <Link href="/app/dispatch?view=list">Search all jobs</Link>
       </header>
       <div className={styles.toolbar}>
         <div className={styles.scale} role="group" aria-label="Board view">
-          {(["day", "week"] as const).map((value) => (
+          {(["day", "week", "map"] as const).map((value) => (
             <button
               key={value}
               aria-pressed={scale === value}
               onClick={() => setScale(value)}
             >
-              {value === "day" ? "Day" : "Week"}
+              {value === "day" ? "Day" : value === "week" ? "Week" : "Map"}
             </button>
           ))}
         </div>
         <div className={styles.dateNav}>
           <button
-            aria-label={scale === "day" ? "Previous day" : "Previous week"}
+            aria-label={daily ? "Previous day" : "Previous week"}
             onClick={() => goTo(addCalendarDays(focusDay, -stepDays))}
           >
             ‹
@@ -682,21 +725,21 @@ export function DispatchPlan(initial: Board) {
           <button
             onClick={() => goTo(data.today)}
             aria-current={
-              (scale === "day" ? focusDay === data.today : week === mondayOf(data.today))
+              (daily ? focusDay === data.today : week === mondayOf(data.today))
                 ? "date"
                 : undefined
             }
           >
-            {scale === "day" ? "Today" : "This week"}
+            {daily ? "Today" : "This week"}
           </button>
           <button
-            aria-label={scale === "day" ? "Next day" : "Next week"}
+            aria-label={daily ? "Next day" : "Next week"}
             onClick={() => goTo(addCalendarDays(focusDay, stepDays))}
           >
             ›
           </button>
           <strong>
-            {scale === "day"
+            {daily
               ? dayLabel(focusDay, "long")
               : `${dayLabel(week)} – ${dayLabel(addCalendarDays(week, 6))}`}
           </strong>
@@ -709,7 +752,7 @@ export function DispatchPlan(initial: Board) {
               onChange={(e) =>
                 router.push(
                   `/app/dispatch?${new URLSearchParams({
-                    view: scale === "day" ? "day" : "plan",
+                    view: scale === "week" ? "plan" : scale,
                     week,
                     day: focusDay,
                     ...(e.target.value ? { region: e.target.value } : {}),
@@ -759,126 +802,155 @@ export function DispatchPlan(initial: Board) {
       {!data.people.length ? (
         <p role="status">No technicians are available in your store scope.</p>
       ) : null}
-      <button
-        className={styles.mobileToggle}
-        onClick={() => setShowQueue(!showQueue)}
-      >
-        Needs a tech ({data.queue.totalCount ?? 0}) · {showQueue ? "Hide" : "Show"}
-      </button>
-      {!railOpen ? (
-        <button className={styles.railShow} onClick={() => setRailOpen(true)}>
-          Needs a tech ({data.queue.totalCount ?? 0}) · Show
-        </button>
-      ) : null}
-      <div className={`${styles.layout} ${railOpen ? "" : styles.layoutWide}`}>
-        <div
-          className={`${showQueue ? styles.queueVisible : styles.queueDesktop} ${railOpen ? "" : styles.railClosed}`}
-        >
-          {queue}
-        </div>
-        <div className={styles.plan}>
-          <label className={styles.mobileSelect}>
-            Technician
-            <select
-              value={mobilePerson}
-              onChange={(e) => setMobilePerson(e.target.value)}
+      {scale === "map" ? (
+        <DispatchMap
+          techs={mapTechs}
+          queue={data.queue.items}
+          onOpen={setDetail}
+          shortStore={shortStore}
+        />
+      ) : (
+        <>
+          <button
+            className={styles.mobileToggle}
+            onClick={() => setShowQueue(!showQueue)}
+          >
+            Needs a tech ({data.queue.totalCount ?? 0}) ·{" "}
+            {showQueue ? "Hide" : "Show"}
+          </button>
+          {!railOpen ? (
+            <button
+              className={styles.railShow}
+              onClick={() => setRailOpen(true)}
             >
-              {data.commitments.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          {scale === "day" ? (
+              Needs a tech ({data.queue.totalCount ?? 0}) · Show
+            </button>
+          ) : null}
+          <div
+            className={`${styles.layout} ${railOpen ? "" : styles.layoutWide}`}
+          >
             <div
-              className={styles.dayBoard}
-              style={{ "--techs": visibleTechs.length } as React.CSSProperties}
+              className={`${showQueue ? styles.queueVisible : styles.queueDesktop} ${railOpen ? "" : styles.railClosed}`}
             >
-              {visibleTechs.map((tech) => {
-                const now = status(tech);
-                return (
-                  <section
-                    key={tech.id}
-                    className={`${styles.column} ${tech.id === mobilePerson ? styles.mobileActive : ""}`}
-                    aria-label={tech.name}
-                  >
-                    <header>
-                      <Link href={`/app/dispatch/technicians/${tech.id}`}>
-                        {tech.name}
-                      </Link>
-                      <small>
-                        {data.regions.find((r) => r.id === tech.homeRegionId)?.name ?? "No home area"}
-                      </small>
-                      {focusDay === data.today ? (
-                        <span className={styles.live} data-tone={now.tone}>
-                          {now.text}
-                        </span>
-                      ) : null}
-                    </header>
-                    {stopList(tech.id, focusDay)}
-                  </section>
-                );
-              })}
+              {queue}
             </div>
-          ) : (
-            <div className={styles.board}>
-              <div
-                className={styles.boardHeader}
-                style={{ "--plan-days": days.length } as React.CSSProperties}
-              >
-                <b>Technician</b>
-                {days.map((day) => (
-                  <button
-                    key={day}
-                    className={day === data.today ? styles.todayHead : undefined}
-                    onClick={() => {
-                      setFocusDay(day);
-                      setScale("day");
-                    }}
-                    title="Open this day"
-                  >
-                    {dayLabel(day)}
-                  </button>
-                ))}
-              </div>
-              {data.commitments.map((tech) => {
-                const now = status(tech);
-                return (
-                  <div
-                    className={`${styles.techRow} ${tech.id === mobilePerson ? styles.mobileActive : ""}`}
-                    style={{ "--plan-days": days.length } as React.CSSProperties}
-                    key={tech.id}
-                  >
-                    <div className={styles.person}>
-                      <Link href={`/app/dispatch/technicians/${tech.id}`}>
-                        {tech.name}
-                      </Link>
-                      <small>
-                        {data.regions.find((r) => r.id === tech.homeRegionId)?.name ?? "No home area"}
-                      </small>
-                      <span className={styles.live} data-tone={now.tone}>
-                        {now.text}
-                      </span>
-                    </div>
-                    {days.map((day) => (
-                      <section className={styles.day} key={day}>
-                        <h3>{dayLabel(day)}</h3>
-                        {stopList(tech.id, day, true)}
+            <div className={styles.plan}>
+              <label className={styles.mobileSelect}>
+                Technician
+                <select
+                  value={mobilePerson}
+                  onChange={(e) => setMobilePerson(e.target.value)}
+                >
+                  {data.commitments.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {scale === "day" ? (
+                <div
+                  className={styles.dayBoard}
+                  style={
+                    { "--techs": visibleTechs.length } as React.CSSProperties
+                  }
+                >
+                  {visibleTechs.map((tech) => {
+                    const now = status(tech);
+                    return (
+                      <section
+                        key={tech.id}
+                        className={`${styles.column} ${tech.id === mobilePerson ? styles.mobileActive : ""}`}
+                        aria-label={tech.name}
+                      >
+                        <header>
+                          <Link href={`/app/dispatch/technicians/${tech.id}`}>
+                            {tech.name}
+                          </Link>
+                          <small>
+                            {data.regions.find(
+                              (r) => r.id === tech.homeRegionId,
+                            )?.name ?? "No home area"}
+                          </small>
+                          {focusDay === data.today ? (
+                            <span className={styles.live} data-tone={now.tone}>
+                              {now.text}
+                            </span>
+                          ) : null}
+                        </header>
+                        {stopList(tech.id, focusDay)}
                       </section>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className={styles.board}>
+                  <div
+                    className={styles.boardHeader}
+                    style={
+                      { "--plan-days": days.length } as React.CSSProperties
+                    }
+                  >
+                    <b>Technician</b>
+                    {days.map((day) => (
+                      <button
+                        key={day}
+                        className={
+                          day === data.today ? styles.todayHead : undefined
+                        }
+                        onClick={() => {
+                          setFocusDay(day);
+                          setScale("day");
+                        }}
+                        title="Open this day"
+                      >
+                        {dayLabel(day)}
+                      </button>
                     ))}
-                    {tech.nextCursor ? (
-                      <Link href={`/app/dispatch/technicians/${tech.id}`}>
-                        More jobs
-                      </Link>
-                    ) : null}
                   </div>
-                );
-              })}
+                  {data.commitments.map((tech) => {
+                    const now = status(tech);
+                    return (
+                      <div
+                        className={`${styles.techRow} ${tech.id === mobilePerson ? styles.mobileActive : ""}`}
+                        style={
+                          { "--plan-days": days.length } as React.CSSProperties
+                        }
+                        key={tech.id}
+                      >
+                        <div className={styles.person}>
+                          <Link href={`/app/dispatch/technicians/${tech.id}`}>
+                            {tech.name}
+                          </Link>
+                          <small>
+                            {data.regions.find(
+                              (r) => r.id === tech.homeRegionId,
+                            )?.name ?? "No home area"}
+                          </small>
+                          <span className={styles.live} data-tone={now.tone}>
+                            {now.text}
+                          </span>
+                        </div>
+                        {days.map((day) => (
+                          <section className={styles.day} key={day}>
+                            <h3>{dayLabel(day)}</h3>
+                            {stopList(tech.id, day, true)}
+                          </section>
+                        ))}
+                        {tech.nextCursor ? (
+                          <Link href={`/app/dispatch/technicians/${tech.id}`}>
+                            More jobs
+                          </Link>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
+        </>
+      )}
       {confirmation ? (
         <Sheet
           title="Check this move"
@@ -990,7 +1062,9 @@ export function DispatchPlan(initial: Board) {
                 )
               }
             >
-              Give to {data.commitments.find((t) => t.id === person)?.name ?? "tech"} · {dayLabel(assignDay)}
+              Give to{" "}
+              {data.commitments.find((t) => t.id === person)?.name ?? "tech"} ·{" "}
+              {dayLabel(assignDay)}
             </button>
           </div>
         </Sheet>
@@ -1001,7 +1075,13 @@ export function DispatchPlan(initial: Board) {
           manager={manager}
           organizationZone={data.organizationZone}
           week={week}
-          quickMoves={<QuickMoves job={detail} from={detail.schedule?.day ?? focusDay} onMove={quickMove} />}
+          quickMoves={
+            <QuickMoves
+              job={detail}
+              from={detail.schedule?.day ?? focusDay}
+              onMove={quickMove}
+            />
+          }
           onClose={() => setDetail(undefined)}
           onSaved={(note, _nextWeek, saved) => {
             setMessage(note);
@@ -1034,7 +1114,15 @@ export function DispatchPlan(initial: Board) {
 }
 
 /** One-tap moves shown in the job panel. */
-function QuickMoves({ job, from, onMove }: { job: DispatchJob; from: string; onMove: (moves: Move[]) => void }) {
+function QuickMoves({
+  job,
+  from,
+  onMove,
+}: {
+  job: DispatchJob;
+  from: string;
+  onMove: (moves: Move[]) => void;
+}) {
   return (
     <>
       <button onClick={() => onMove([{ job, day: addCalendarDays(from, 1) }])}>
