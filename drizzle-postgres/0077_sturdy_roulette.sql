@@ -1,0 +1,1 @@
+ALTER TABLE "ops_work_orders" ADD COLUMN "short_name" text;

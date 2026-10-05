@@ -21,6 +21,8 @@ export async function updateJobPreparation(
     workOrderId: string;
     actor: ActorContext;
     expectedVersion: number;
+    /** Few-word planning label; leave undefined to keep the current one. */
+    shortName?: string;
     technicianNotes?: string;
     estimatedMinutes?: number;
     confirmationDelay?: WorkOrder["confirmationDelay"];
@@ -50,6 +52,8 @@ export async function updateJobPreparation(
     );
   if (["closed", "cancelled", "resolved"].includes(work.status))
     throw new OpsDomainError("CONFLICT", "This job is no longer open.");
+  if ((input.shortName?.trim().length ?? 0) > 40)
+    throw new OpsDomainError("VALIDATION", "Keep the short name to 40 characters.");
   if ((input.technicianNotes?.length ?? 0) > 3000)
     throw new OpsDomainError(
       "VALIDATION",
@@ -108,6 +112,8 @@ export async function updateJobPreparation(
       );
   }
   const notes = input.technicianNotes?.trim() || undefined;
+  // Technicians keep the manager's planning label; managers may change or clear it.
+  const shortName = input.shortName === undefined || identity.role === "internal_technician" ? work.shortName : input.shortName.trim() || undefined;
   const ids = svc.ids ?? {
     next: (prefix: string) => `${prefix}-${crypto.randomUUID()}`,
   };
@@ -155,8 +161,9 @@ export async function updateJobPreparation(
         now,
       ),
       {
-        sql: "UPDATE ops_work_orders SET technician_notes = ?, estimated_minutes = ?, confirmation_delay = ? WHERE organization_id = ? AND id = ?",
+        sql: "UPDATE ops_work_orders SET short_name = ?, technician_notes = ?, estimated_minutes = ?, confirmation_delay = ? WHERE organization_id = ? AND id = ?",
         params: [
+          shortName ?? null,
           notes ?? null,
           minutes ?? null,
           input.confirmationDelay ?? null,
@@ -172,10 +179,12 @@ export async function updateJobPreparation(
         "work_order.preparation_updated",
         {
           previous: {
+            shortName: work.shortName,
             notes: work.technicianNotes,
             minutes: work.estimatedMinutes,
             confirmationDelay: work.confirmationDelay,
           },
+          shortName,
           notes,
           minutes,
           confirmationDelay: input.confirmationDelay,

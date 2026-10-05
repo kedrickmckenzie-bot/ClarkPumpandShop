@@ -19,9 +19,13 @@ type Review = {
 export function ReviewRouteButton({
   id,
   kind,
+  label = "Review and route",
+  primary = false,
 }: {
   id: string;
   kind: "work" | "request";
+  label?: string;
+  primary?: boolean;
 }) {
   const router = useRouter(),
     [open, setOpen] = useState(false),
@@ -65,6 +69,7 @@ export function ReviewRouteButton({
             assignmentId: data.assignmentId,
             key: crypto.randomUUID(),
             priority: form.get("priority"),
+            shortName: form.get("shortName") ?? undefined,
             technicianNotes: form.get("technicianNotes") || undefined,
             estimatedMinutes: form.get("estimatedMinutes")
               ? Number(form.get("estimatedMinutes"))
@@ -97,14 +102,14 @@ export function ReviewRouteButton({
   return (
     <>
       <button
-        className={styles.open}
+        className={primary ? `${styles.open} ${styles.openPrimary}` : styles.open}
         onClick={() => {
           setOpen(true);
           setSaved(undefined);
           void load();
         }}
       >
-        Review and route
+        {label}
       </button>
       {open ? (
         <Sheet
@@ -191,6 +196,8 @@ export function ReviewRouteButton({
                   </label>
                   {!["not_needed", "ready"].includes(decision) ? (
                     <JobPreparationFields
+                      shortName={work?.shortName}
+                      problem={data.item.problem}
                       notes={work?.technicianNotes}
                       minutes={work?.estimatedMinutes}
                       confirmationDelay={work?.confirmationDelay}

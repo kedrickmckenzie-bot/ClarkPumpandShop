@@ -98,3 +98,9 @@
     grid-template-columns: 1fr;
   }
 }
+.openPrimary {
+  background: #2457d6;
+  border-color: #2457d6;
+  color: #fff;
+  font-weight: 600;
+}

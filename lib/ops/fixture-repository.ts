@@ -160,7 +160,7 @@ function workOrderRow(fixture: OpsFixture, workOrder: WorkOrder): WorkOrderListR
   const internalMember = assignment?.internalMembershipId ? fixture.memberships.find((row) => row.organizationId === workOrder.organizationId && row.id === assignment.internalMembershipId) : undefined;
   const internalName = internalMember ? fixture.users.find((row) => row.id === internalMember.userId)?.displayName : undefined;
   return {
-    technicianNotes: workOrder.technicianNotes, estimatedMinutes: workOrder.estimatedMinutes, confirmationDelay: workOrder.confirmationDelay,
+    shortName: workOrder.shortName, technicianNotes: workOrder.technicianNotes, estimatedMinutes: workOrder.estimatedMinutes, confirmationDelay: workOrder.confirmationDelay,
     targetCompletionAt: workOrder.targetCompletionAt, targetCompletionSource: workOrder.targetCompletionSource,
     schedule: (fixture.internalSchedules ?? []).find(p => p.organizationId === workOrder.organizationId && p.id === workOrder.internalScheduleId && p.assignmentId === assignment?.id && assignment.kind === "internal"),
     needsConfirmation: (fixture.workflowTasks ?? []).some(t => t.organizationId === workOrder.organizationId && t.workOrderId === workOrder.id && t.taskType === "verify_repair" && ["open", "in_progress"].includes(t.status)),

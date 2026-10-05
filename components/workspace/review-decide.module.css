@@ -1,0 +1,31 @@
+.page { display: grid; gap: 20px; font-size: 16px; color: #172033; }
+.header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; }
+.header h1 { margin: 0; font-size: 28px; }
+.header p { margin: 6px 0 0; color: #526174; }
+.section { background: #fff; border: 1px solid #d9e0e8; border-radius: 6px; }
+.sectionHead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 16px 20px; border-bottom: 1px solid #e2e7ee; }
+.sectionHead h2 { margin: 0; font-size: 20px; }
+.sectionHead p { margin: 0; color: #526174; }
+.list { list-style: none; margin: 0; padding: 0; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 24px; align-items: center; padding: 16px 20px; border-top: 1px solid #e2e7ee; }
+.row:first-child { border-top: 0; }
+.main { display: grid; gap: 6px; min-width: 0; }
+.main p { margin: 0; overflow-wrap: anywhere; }
+.problem { font-size: 17px; font-weight: 600; line-height: 1.4; }
+.meta { color: #526174; }
+.need { color: #8a4b00; font-weight: 600; }
+.urgent { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 3px; background: #fdecea; color: #9b2c22; font-size: 13px; font-weight: 700; vertical-align: 2px; }
+.late { color: #9b2c22; font-weight: 600; }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 9px 16px; border-radius: 5px; font-weight: 600; text-decoration: none; border: 1px solid #9fb4e8; color: #2457d6; background: #fff; white-space: nowrap; }
+.btnPrimary { background: #2457d6; border-color: #2457d6; color: #fff; }
+.more { display: block; padding: 14px 20px; border-top: 1px solid #e2e7ee; }
+.empty { margin: 0; padding: 16px 20px; color: #526174; }
+.allLink { font-weight: 600; }
+@media (max-width: 700px) {
+  .row { grid-template-columns: 1fr; padding: 16px; }
+  .actions { justify-content: stretch; }
+  .actions > * { flex: 1 1 100%; }
+  .sectionHead { padding: 14px 16px; }
+  .header h1 { font-size: 25px; }
+}

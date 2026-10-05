@@ -94,7 +94,7 @@
 .btn, .workspace summary.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 42px; padding: 9px 16px; border-radius: 4px; font-weight: 600; text-decoration: none; cursor: pointer; white-space: nowrap; box-sizing: border-box; list-style: none; }
 .workspace summary.btn::-webkit-details-marker { display: none; }
 .btnPrimary, .workspace a.btnPrimary { background: #2457d6; color: #fff; border: 1px solid #2457d6; }
-.btnSecondary, .workspace a.btnSecondary { background: #fff; color: #2457d6; border: 1px solid #9fb4e8; }
+.btnSecondary, .workspace a.btnSecondary, .workspace button.btnSecondary { background: #fff; color: #2457d6; border: 1px solid #9fb4e8; }
 .workspace a.btn { text-decoration: none; }
 .sectionHead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 16px 20px; border-bottom: 1px solid #e2e7ee; }
 .sectionHead h2 { margin: 0; font-size: 19px; }
@@ -125,3 +125,16 @@
 .badgeActive { background: #e6eeff; color: #1e3f9a; }
 
 .jobBody .historyList {list-style:none;display:grid;gap:16px;padding:0;} .jobBody .historyList > li {border-bottom:1px solid #e2e7ee;padding:0 0 16px;} .jobBody .historyList p {margin:8px 0;}
+
+/* What's next: one clear main choice, the rest quieter underneath. */
+.nextForm { display: grid; gap: 12px; margin: 16px 0; max-width: 480px; }
+.nextMain { flex-direction: column; align-items: flex-start; gap: 2px; min-height: 64px; padding: 12px 18px; font-size: 17px; white-space: normal; text-align: left; }
+.nextMain span { font-weight: 500; font-size: 15px; opacity: 0.9; }
+.nextOthers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.nextOthers .btn, .nextJob { white-space: normal; text-align: center; }
+.nextJob { justify-content: flex-start; text-align: left; width: 100%; }
+.nextDifferent { max-width: 480px; margin: 8px 0 16px; }
+.nextDifferent[open] > .nextForm { margin: 8px 0; }
+@media (max-width: 700px) {
+  .nextOthers { grid-template-columns: 1fr; }
+}

@@ -119,6 +119,7 @@ export async function POST(request: Request) {
         requestId: formText(formData, "requestId", { max: 120 }) || undefined,
         pmOccurrenceId: formText(formData, "pmOccurrenceId", { max: 120 }) || undefined,
         problem: formText(formData, "problem", { required: true, max: WORK_PROBLEM_MAX_LENGTH }),
+        shortName: formText(formData,"shortName",{max:40}) || undefined,
         technicianNotes: formText(formData,"technicianNotes",{max:3000}) || undefined,
         estimatedMinutes: formText(formData,"estimatedMinutes",{max:10}) ? Number(formText(formData,"estimatedMinutes",{max:10})) : undefined,
         confirmationDelay: formText(formData,"confirmationDelay",{max:30}) as "next_morning" | "four_hours" || undefined,

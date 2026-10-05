@@ -20,6 +20,7 @@ import { resolveWorkOrderWorkspace } from "@/lib/ops/work-order-workspace";
 import { dispatchActor, dispatchChange, dispatchJob, dispatchManager, dispatchNow, dispatchOrg, dispatchServices, dispatchTech } from "./helpers/internal-dispatch-regression";
 import { insertDispatchRecord } from "@/lib/ops/internal-dispatch";
 import type { OpsRepository } from "@/lib/ops/repository";
+import { bulkSeedD1 } from "./helpers/d1-bulk-seed";
 
 const postgresUrl=process.env.OPS_DISPATCH_TEST_DATABASE_URL;
 it("offers only authorized outcomes for look-and-report job and checkout forms", () => {
@@ -35,13 +36,13 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
     const fixture=buildShowcaseFixture(dispatchNow);fixture.outboxMessages=[];
     if(adapter==="fixture")r=createOpsFixtureRepository(fixture);
     const historical=structuredClone(fixture);
-    historical.technicianProfiles=[];historical.internalSchedules=[];historical.workResults=[];
+    historical.technicianProfiles=[];historical.internalSchedules=[];historical.workResults=[];for(const job of historical.workOrders)delete job.shortName;
     for(const rows of [historical.workOrders,historical.assignments,historical.workflowTasks,historical.followUps,historical.workOrderVisitHolds??[],historical.auditEvents]){for(let i=rows.length-1;i>=0;i--)if(rows[i].id.startsWith("dispatch-study-"))rows.splice(i,1);}
     if(adapter==="D1"){
       runtime=new Miniflare({modules:true,script:"export default {fetch(){return new Response('ok')}}",d1Databases:["DB"]});const db=await runtime.getD1Database("DB");
       const migrations=readdirSync("drizzle").filter(f=>/^\d.*\.sql$/.test(f)).sort();
       for(const file of migrations.filter(f=>f<"0068"))for(const sql of readFileSync(`drizzle/${file}`,"utf8").split("--> statement-breakpoint").map(s=>s.trim()).filter(Boolean))await db.prepare(sql).run();
-      r=createOpsD1Repository(db as unknown as D1Database);await seedOpsRepository(r,historical,[],{omitStoreContacts:true});
+      r=createOpsD1Repository(db as unknown as D1Database);await bulkSeedD1(db,historical,{omitStoreContacts:true});
       for(const file of migrations.filter(f=>f>="0068"))for(const sql of readFileSync(`drizzle/${file}`,"utf8").split("--> statement-breakpoint").map(s=>s.trim()).filter(Boolean))await db.prepare(sql).run();
     }
     if(adapter==="PostgreSQL"){

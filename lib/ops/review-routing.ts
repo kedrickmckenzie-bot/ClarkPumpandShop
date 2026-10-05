@@ -25,6 +25,7 @@ export interface ReviewRouteInput {
   expectedVersion: number;
   decision: "internal" | "outside_vendor" | "next_visit" | "not_needed";
   priority: WorkOrder["priority"];
+  shortName?: string;
   technicianNotes?: string;
   estimatedMinutes?: number;
   confirmationDelay?: WorkOrder["confirmationDelay"];
@@ -76,11 +77,12 @@ export async function routeReviewItem(
     throw new OpsDomainError("VALIDATION", "Choose a decision and urgency.");
   if (
     (input.technicianNotes?.length ?? 0) > 3000 ||
+    (input.shortName?.trim().length ?? 0) > 40 ||
     (input.reason?.length ?? 0) > 1000
   )
     throw new OpsDomainError(
       "VALIDATION",
-      "Keep notes under 3,000 characters and the reason under 1,000.",
+      "Keep the short name to 40 characters, notes under 3,000 and the reason under 1,000.",
     );
   if (
     input.estimatedMinutes !== undefined &&
@@ -168,6 +170,7 @@ export async function routeReviewItem(
       expectedRequestVersion: input.expectedVersion,
       problem: report.problem,
       priority: input.priority,
+      shortName: input.shortName,
       technicianNotes: input.technicianNotes,
       estimatedMinutes: input.estimatedMinutes,
       confirmationDelay: input.confirmationDelay,
@@ -203,6 +206,7 @@ export async function routeReviewItem(
   if (input.decision === "not_needed")
     input = {
       ...input,
+      shortName: work.shortName,
       technicianNotes: work.technicianNotes,
       estimatedMinutes: work.estimatedMinutes,
       confirmationDelay: work.confirmationDelay,
@@ -210,6 +214,7 @@ export async function routeReviewItem(
   const projected = {
     ...work,
     priority: input.priority,
+    shortName: input.shortName?.trim() || undefined,
     technicianNotes: input.technicianNotes,
     estimatedMinutes: input.estimatedMinutes,
     confirmationDelay: input.confirmationDelay,
@@ -217,9 +222,10 @@ export async function routeReviewItem(
   const preparation: OpsStatement[] = [
     access,
     {
-      sql: "UPDATE ops_work_orders SET priority = ?, technician_notes = ?, estimated_minutes = ?, confirmation_delay = ? WHERE organization_id = ? AND id = ?",
+      sql: "UPDATE ops_work_orders SET priority = ?, short_name = ?, technician_notes = ?, estimated_minutes = ?, confirmation_delay = ? WHERE organization_id = ? AND id = ?",
       params: [
         input.priority,
+        input.shortName?.trim() || null,
         input.technicianNotes ?? null,
         input.estimatedMinutes ?? null,
         input.confirmationDelay ?? null,
@@ -230,6 +236,7 @@ export async function routeReviewItem(
     ...resultAudit(work, input.actor, now, ids, "work_order.review_routed", {
       decision: input.decision,
       priority: input.priority,
+      shortName: input.shortName,
       technicianNotes: input.technicianNotes,
       estimatedMinutes: input.estimatedMinutes,
       confirmationDelay: input.confirmationDelay,

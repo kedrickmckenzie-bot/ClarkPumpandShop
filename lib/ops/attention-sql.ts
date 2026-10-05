@@ -7,7 +7,7 @@ import { WARRANTY_REVIEW_TITLE } from "./warranty-review";
 import { INSPECTION_RESULT_TASK_TYPES, INSPECTION_REVIEW_REASON, INSPECTION_REVIEW_ROLES, inspectionReviewLane, inspectionReviewTitle, quoteRoundCopy } from "./attention-projection";
 import { reviewQueueExceptionCopy } from "./attention-copy";
 import { attentionScope } from "./attention-query";
-import { ACCOUNTABILITY_EXCEPTION_KINDS, attentionCursor, readAttentionCursor, validateAttentionQuery, type AttentionAccess, type AttentionPage, type AttentionQuery, type AttentionQueueRow } from "./attention-query";
+import { ACCOUNTABILITY_EXCEPTION_KINDS, REVIEW_DECISION_TASKS, attentionCursor, readAttentionCursor, validateAttentionQuery, type AttentionAccess, type AttentionPage, type AttentionQuery, type AttentionQueueRow } from "./attention-query";
 
 /** Six source populations are grouped and scoped before counting or selecting a page. */
 export async function queryAttention(driver: OpsSqlDriver, scope: OrganizationScope, access: AttentionAccess, query: AttentionQuery): Promise<AttentionPage> {
@@ -57,7 +57,18 @@ export async function queryAttention(driver: OpsSqlDriver, scope: OrganizationSc
   const search = query.q?.trim().toLowerCase().replace(/[\\%_]/g, value => `\\${value}`);
   const exceptionSearch=`CASE WHEN a.source_kind='exception' THEN CASE a.reason ${Object.entries(reviewQueueExceptionCopy).map(([kind,copy])=>`WHEN ${literal(kind)} THEN ${literal(`${copy.title} ${copy.label}`)}`).join(" ")} ELSE '' END ELSE '' END`;
   const searchText = "COALESCE(a.title,'') || ' ' || COALESCE(a.reason,'') || ' ' || COALESCE(a.owner,'') || ' ' || CASE WHEN a.store_id IS NULL THEN 'Companywide' ELSE 'Store ' || a.store_number || ' · ' || a.store_name END || ' ' || COALESCE(a.work_number,'') || ' ' || COALESCE(a.request_reference,'') || ' ' || COALESCE(a.vendor_name,'')" + ` || ' ' || ${exceptionSearch} || ' ' || CASE a.lane WHEN 'waiting' THEN 'Waiting on another party' WHEN 'mine' THEN 'Needs my action' WHEN 'upcoming' THEN 'Upcoming review' ELSE 'Team work' END`;
-  const filtered = `SELECT a.* FROM ordered a WHERE ${query.lane ? `a.lane=${bind(query.lane)}` : "1=1"} AND ${query.group ? `a.group_name=${bind(query.group)}` : "1=1"} AND ${typeWhere} AND ${query.stage === "stuck" ? `EXISTS (SELECT 1 FROM ops_follow_ups f WHERE f.organization_id=${bind(scope.organizationId)} AND f.work_order_id=a.work_order_id AND f.status='open')` : query.stage === "confirmation_overdue" ? `a.overdue_order=0 AND EXISTS (SELECT 1 FROM visible_tasks vt WHERE vt.id=a.id AND vt.task_type='verify_repair')` : "1=1"} AND ${query.priority ? query.priority === "urgent" ? urgentWhere : `NOT (${urgentWhere})` : "1=1"} AND ${query.itemIds ? query.itemIds.length ? `a.id IN (${query.itemIds.map(id => bind(id)).join(",")})` : "1=0" : "1=1"} AND ${search ? `LOWER(${searchText}) LIKE ${bind(`%${search}%`)} ESCAPE '\\'` : "1=1"}`;
+  // Review sections: New needs a routing decision, Stuck has an open follow-up, Done was reported fixed.
+  // Literal, not bind(): this text is reused and lands after later binds, so positional parameters would shift.
+  const stuckSql = `EXISTS (SELECT 1 FROM ops_follow_ups f WHERE f.organization_id=${literal(scope.organizationId)} AND f.work_order_id=a.work_order_id AND f.status='open')`;
+  const taskIs = (types: readonly string[]) => `EXISTS (SELECT 1 FROM visible_tasks vt WHERE vt.id=a.id AND vt.task_type IN (${types.map(type => literal(type)).join(",")}))`;
+  const newSql = `(${taskIs(REVIEW_DECISION_TASKS)} AND NOT ${stuckSql})`, doneSql = `(${taskIs(["verify_repair"])} AND NOT ${stuckSql})`;
+  const stageWhere = query.stage === "stuck" ? stuckSql
+    : query.stage === "confirmation_overdue" ? `a.overdue_order=0 AND ${taskIs(["verify_repair"])}`
+    : query.stage === "new" ? newSql
+    : query.stage === "done" ? doneSql
+    : query.stage === "decide" ? `(${stuckSql} OR ${newSql} OR ${doneSql})`
+    : "1=1";
+  const filtered = `SELECT a.* FROM ordered a WHERE ${query.lane ? `a.lane=${bind(query.lane)}` : "1=1"} AND ${query.group ? `a.group_name=${bind(query.group)}` : "1=1"} AND ${typeWhere} AND ${stageWhere} AND ${query.priority ? query.priority === "urgent" ? urgentWhere : `NOT (${urgentWhere})` : "1=1"} AND ${query.itemIds ? query.itemIds.length ? `a.id IN (${query.itemIds.map(id => bind(id)).join(",")})` : "1=0" : "1=1"} AND ${search ? `LOWER(${searchText}) LIKE ${bind(`%${search}%`)} ESCAPE '\\'` : "1=1"}`;
   const cursor = readAttentionCursor(query.cursor);
   const { limit, offset } = dashboardPageBounds(query);
   const idOrder = driver.dialect === "postgres" ? 'id COLLATE "C"' : "id COLLATE BINARY";

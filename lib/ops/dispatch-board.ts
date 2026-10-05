@@ -7,7 +7,7 @@ import { formatOperationsDate } from "./local-time";
 /** Only operational fields cross the board's client boundary. */
 export type DispatchJob = Omit<WorkOrderListRow, "recordedCostMinor" | "recordedCostLineCount" | "currency"> & { storeZone?: string; storeRegionId?: string };
 export function dispatchJob(row: WorkOrderListRow, storeZone?: string, storeRegionId?: string): DispatchJob {
-  return { technicianNotes: row.technicianNotes, estimatedMinutes: row.estimatedMinutes, confirmationDelay: row.confirmationDelay, id: row.id, number: row.number, problem: row.problem, storeId: row.storeId, storeNumber: row.storeNumber, storeName: row.storeName,
+  return { shortName: row.shortName, technicianNotes: row.technicianNotes, estimatedMinutes: row.estimatedMinutes, confirmationDelay: row.confirmationDelay, id: row.id, number: row.number, problem: row.problem, storeId: row.storeId, storeNumber: row.storeNumber, storeName: row.storeName,
     storeZone, storeRegionId, priority: row.priority, status: row.status, schedule: row.schedule, targetCompletionAt: row.targetCompletionAt,
     categoryKey: row.categoryKey, assignmentKind: row.assignmentKind, assignmentStatus: row.assignmentStatus, assignmentId: row.assignmentId,
     internalMembershipId: row.internalMembershipId, internalAssigneeName: row.internalAssigneeName, internalTarget: row.internalTarget,

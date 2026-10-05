@@ -18,7 +18,8 @@ export interface AttentionQuery extends PageRequest {
   group?: AttentionProjectionItem["group"];
   type?: "service-record" | "follow-up" | "vendor-task";
   priority?: "urgent" | "standard";
-  stage?: "stuck" | "confirmation_overdue";
+  /** new = needs a routing decision; done = reported fixed, needs a check; decide = any of new, stuck or done. */
+  stage?: "stuck" | "confirmation_overdue" | "new" | "done" | "decide";
   q?: string;
   store?: string;
   /** Scoped exact selection used for source pages and next-item navigation. */
@@ -56,12 +57,15 @@ export function readAttentionCursor(value?: string): ReturnType<typeof attention
   } catch { /* Do not silently restart an invalid page. */ }
   throw new RangeError("This page link is invalid. Open the first page.");
 }
+/** Task types that mean "someone must decide how this work is handled". */
+export const REVIEW_DECISION_TASKS: readonly string[] = ["review_issue", "choose_service_provider"];
+
 export function validateAttentionQuery(query: AttentionQuery) {
   if (!Number.isFinite(Date.parse(query.asOf))) throw new RangeError("Choose a valid review date.");
   if (query.lane && !["mine", "team", "waiting", "upcoming", "history"].includes(query.lane)) throw new RangeError("Choose a review view.");
   if (query.group && !["work_vendor", "completion", "service_record", "financial", "vendor_relationship"].includes(query.group)) throw new RangeError("Choose a review group.");
   if (query.type && !["service-record", "follow-up", "vendor-task"].includes(query.type)) throw new RangeError("Choose a review type.");
-  if(query.stage && !["stuck","confirmation_overdue"].includes(query.stage))throw new RangeError("Choose a review status.");
+  if(query.stage && !["stuck","confirmation_overdue","new","done","decide"].includes(query.stage))throw new RangeError("Choose a review status.");
   if (query.priority && !["urgent", "standard"].includes(query.priority)) throw new RangeError("Choose a priority.");
   if (query.itemIds && (query.itemIds.length > 25 || query.itemIds.some(id => !id || id.length > 200))) throw new RangeError("Choose a valid review item.");
   if (query.q && query.q.length > 200) throw new RangeError("Keep the search under 200 characters.");
@@ -84,7 +88,17 @@ export function attentionFromFixture(fixture: OpsFixture, scope: OrganizationSco
         vendorName: fixture.vendors.find(vendor => vendor.organizationId === scope.organizationId && vendor.id === row.vendorId)?.name };
     }).filter(row => !query.type || (query.type === "service-record" ? row.sourceKind === "exception" : query.type === "vendor-task" ? row.sourceKind === "vendor_reminder" : !["exception", "vendor_reminder"].includes(row.sourceKind)))
     .filter(row => !query.priority || (query.priority === "urgent") === (row.lane !== "history" && (row.priority === "critical" || Boolean(row.dueAt && Date.parse(row.dueAt) <= Date.parse(query.asOf)))))
-    .filter(row => !query.stage || (query.stage === "stuck" ? Boolean(row.workOrderId && fixture.followUps.some(f=>f.organizationId===scope.organizationId&&f.workOrderId===row.workOrderId&&f.status==="open")) : row.taskType==="verify_repair"&&Boolean(row.dueAt&&row.dueAt<=query.asOf)))
+    .filter(row => {
+      if (!query.stage) return true;
+      const stuck = Boolean(row.workOrderId && fixture.followUps.some(f=>f.organizationId===scope.organizationId&&f.workOrderId===row.workOrderId&&f.status==="open"));
+      const isNew = REVIEW_DECISION_TASKS.includes(row.taskType ?? "");
+      const done = row.taskType === "verify_repair";
+      if (query.stage === "stuck") return stuck;
+      if (query.stage === "new") return isNew && !stuck;
+      if (query.stage === "done") return done && !stuck;
+      if (query.stage === "decide") return stuck || isNew || done;
+      return done && Boolean(row.dueAt&&row.dueAt<=query.asOf);
+    })
     .filter(row => !query.itemIds || query.itemIds.includes(row.id))
     .filter(row => !query.q?.trim() || attentionSearchText(row).includes(query.q.trim().toLowerCase()))
     .sort((a, b) => compareAttentionKeys(attentionSortKey(a, query.asOf), attentionSortKey(b, query.asOf)));

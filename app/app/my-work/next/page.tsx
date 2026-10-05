@@ -4,6 +4,7 @@ import { internalDispatchScope } from "@/lib/server/internal-dispatch-context";
 import { RecordForm } from "@/components/ops/record-form";
 import { orderedStops, dispatchJob } from "@/lib/ops/dispatch-board";
 import { civilDate } from "@/lib/ops/dispatch-calendar";
+import { jobShortName } from "@/lib/ops/short-name";
 import styles from "@/components/workspace/internal-dispatch.module.css";
 
 export default async function NextStatus() {
@@ -31,75 +32,65 @@ export default async function NextStatus() {
       (j) => !j.hasOpenFollowUp,
     ),
     next = jobs[0],
+    others = jobs.filter((j) => j.id !== next?.id),
     storeId = next?.storeId ?? scope.storeIds?.[0];
+  const revision = (
+    <input name="expectedRevision" type="hidden" value={current?.revision ?? 0} />
+  );
   return (
     <section className={styles.workspace}>
       <h1>What&apos;s next?</h1>
-      <p>Share an optional update with your team.</p>
+      <p>Let your team know. This is optional.</p>
       {storeId ? (
-        <RecordForm action="/api/ops/technician-status" className={styles.form}>
-          <input
-            name="expectedRevision"
-            type="hidden"
-            value={current?.revision ?? 0}
-          />
+        <RecordForm action="/api/ops/technician-status" className={styles.nextForm}>
+          {revision}
           <input name="storeId" type="hidden" value={storeId} />
           {next ? (
             <>
               <input type="hidden" name="workOrderId" value={next.id} />
-              <button name="status" value="heading" type="submit">
-                Heading to next job · {next.storeNumber} · {next.problem}
+              <button className={`${styles.btn} ${styles.btnPrimary} ${styles.nextMain}`} name="status" value="heading" type="submit">
+                Heading to next job
+                <span>{next.storeNumber} · {jobShortName(next)}</span>
               </button>
             </>
           ) : null}
-          <button name="status" value="parts" type="submit">
-            Getting parts first
-          </button>
-          <button name="status" value="break" type="submit">
-            Taking a break
-          </button>
-          <a className={styles.btn} href="#different-job">
-            Different job
-          </a>
-          <button name="status" value="done" type="submit">
-            Done for the day
-          </button>
+          <div className={styles.nextOthers}>
+            <button className={`${styles.btn} ${styles.btnSecondary}`} name="status" value="parts" type="submit">
+              Getting parts first
+            </button>
+            <button className={`${styles.btn} ${styles.btnSecondary}`} name="status" value="break" type="submit">
+              Taking a break
+            </button>
+            <button className={`${styles.btn} ${styles.btnSecondary}`} name="status" value="done" type="submit">
+              Done for the day
+            </button>
+          </div>
         </RecordForm>
       ) : (
         <p>No stores are currently available in your scope.</p>
       )}
-      <details id="different-job">
-        <summary className={styles.btn}>Choose a different job</summary>
-        {jobs
-          .filter((j) => j.id !== next?.id)
-          .map((job) => (
-            <RecordForm
-              key={job.id}
-              action="/api/ops/technician-status"
-              className={styles.form}
-            >
-              <input
-                name="expectedRevision"
-                type="hidden"
-                value={current?.revision ?? 0}
-              />
-              <input name="storeId" type="hidden" value={job.storeId} />
-              <input name="workOrderId" type="hidden" value={job.id} />
-              <button name="status" value="heading" type="submit">
-                Heading to {job.storeNumber} · {job.problem}
-              </button>
-            </RecordForm>
-          ))}
-        {jobs.length < 2 ? (
+      <details className={styles.nextDifferent}>
+        <summary className={`${styles.btn} ${styles.btnSecondary}`}>Going to a different job</summary>
+        {others.map((job) => (
+          <RecordForm key={job.id} action="/api/ops/technician-status" className={styles.nextForm}>
+            {revision}
+            <input name="storeId" type="hidden" value={job.storeId} />
+            <input name="workOrderId" type="hidden" value={job.id} />
+            <button className={`${styles.btn} ${styles.btnSecondary} ${styles.nextJob}`} name="status" value="heading" type="submit">
+              {job.storeNumber} · {jobShortName(job)}
+            </button>
+          </RecordForm>
+        ))}
+        {others.length === 0 ? (
           <p>
-            No other ready stops today.{" "}
-            <Link href="/app/my-work?view=upcoming">View upcoming work</Link>
+            No other ready jobs today.{" "}
+            <Link href="/app/my-work?view=upcoming">See upcoming work</Link>
           </p>
         ) : null}
       </details>
-      <Link className={styles.btn} href="/app/my-work">
-        Skip for now
-      </Link>
+      <p>
+        <Link href="/app/my-work">Skip for now</Link>
+      </p>
     </section>
   );
 }

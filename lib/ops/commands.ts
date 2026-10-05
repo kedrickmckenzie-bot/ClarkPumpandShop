@@ -644,6 +644,7 @@ export async function createServiceRequest(svc: OpsCommandServices, input: Creat
 
 export interface CreateWorkOrderInput {
   expectedRequestVersion?: number;
+  shortName?: string;
   technicianNotes?: string;
   estimatedMinutes?: number;
   confirmationDelay?: "next_morning" | "four_hours";
@@ -678,6 +679,7 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
   const { repository, clock, ids } = services(svc); assertActorOrganization(input.actor, input.organizationId);
   if (input.estimatedMinutes !== undefined && (!Number.isSafeInteger(input.estimatedMinutes) || input.estimatedMinutes < 1 || input.estimatedMinutes > 1440)) throw new OpsDomainError("VALIDATION", "Enter an estimate from 1 to 1,440 minutes, or leave it unknown.");
   if ((input.technicianNotes?.length ?? 0) > 3000) throw new OpsDomainError("VALIDATION", "Keep technician notes under 3,000 characters.");
+  if ((input.shortName?.trim().length ?? 0) > 40) throw new OpsDomainError("VALIDATION", "Keep the short name to 40 characters.");
   if (input.confirmationDelay && !["next_morning", "four_hours"].includes(input.confirmationDelay)) throw new OpsDomainError("VALIDATION", "Choose a confirmation time.");
   const actorMembership = input.actor.actorType === "user" && input.actor.actorId
     ? await repository.getMembership(input.organizationId, input.actor.actorId)
@@ -857,7 +859,7 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
   const sourceConfirmationPlan = sourcePmOccurrence ? await repository.getPmPlan(input.organizationId, sourcePmOccurrence.planId) : undefined;
   const requireConfirmation = input.requireConfirmation ?? sourceConfirmationPlan?.requireConfirmation ?? (await repository.getActiveWorkflowPolicy(input.organizationId))?.requireConfirmationDefault ?? true;
   if (input.confirmationMembershipId) await confirmationAssignee(repository, { organizationId: input.organizationId, storeId: input.storeId, confirmationMembershipId: input.confirmationMembershipId });
-  const statements: OpsStatement[] = [insert("ops_work_orders", { technician_notes: input.technicianNotes?.trim() || undefined, estimated_minutes: input.estimatedMinutes, confirmation_delay: input.confirmationDelay, require_confirmation: requireConfirmation ? 1 : 0, confirmation_membership_id: input.confirmationMembershipId, id, organization_id: input.organizationId, number, store_id: input.storeId, request_id: input.requestId, problem, authorized_scope: input.authorizedScope, category_key: input.categoryKey, taxonomy_node_id: input.taxonomyNodeId, asset_id: input.assetId, component_id: input.componentId, priority, status, version: 0, internal_accountable_party: internalAccountableParty, internal_accountable_type: internalAccountableType, internal_accountable_id: internalAccountableId, accountable_party: accountableParty, next_action: nextAction, due_at: dueAt, escalation_to: escalationTo, internal_review_threshold_minor: input.internalReviewThresholdMinor, internal_review_currency: input.internalReviewThresholdMinor === undefined ? undefined : input.currency ?? "USD", nte_amount_minor: input.nteAmountMinor, nte_currency: input.nteAmountMinor === undefined ? undefined : input.currency ?? "USD", repair_estimate_amount_minor: input.repairEstimateAmountMinor, repair_estimate_currency: input.repairEstimateAmountMinor === undefined ? undefined : input.repairEstimateCurrency ?? "USD", estimated_service_extension_months: input.estimatedServiceExtensionMonths, created_at: now })];
+  const statements: OpsStatement[] = [insert("ops_work_orders", { short_name: input.shortName?.trim() || undefined, technician_notes: input.technicianNotes?.trim() || undefined, estimated_minutes: input.estimatedMinutes, confirmation_delay: input.confirmationDelay, require_confirmation: requireConfirmation ? 1 : 0, confirmation_membership_id: input.confirmationMembershipId, id, organization_id: input.organizationId, number, store_id: input.storeId, request_id: input.requestId, problem, authorized_scope: input.authorizedScope, category_key: input.categoryKey, taxonomy_node_id: input.taxonomyNodeId, asset_id: input.assetId, component_id: input.componentId, priority, status, version: 0, internal_accountable_party: internalAccountableParty, internal_accountable_type: internalAccountableType, internal_accountable_id: internalAccountableId, accountable_party: accountableParty, next_action: nextAction, due_at: dueAt, escalation_to: escalationTo, internal_review_threshold_minor: input.internalReviewThresholdMinor, internal_review_currency: input.internalReviewThresholdMinor === undefined ? undefined : input.currency ?? "USD", nte_amount_minor: input.nteAmountMinor, nte_currency: input.nteAmountMinor === undefined ? undefined : input.currency ?? "USD", repair_estimate_amount_minor: input.repairEstimateAmountMinor, repair_estimate_currency: input.repairEstimateAmountMinor === undefined ? undefined : input.repairEstimateCurrency ?? "USD", estimated_service_extension_months: input.estimatedServiceExtensionMonths, created_at: now })];
   if (input.idempotency) statements.unshift(idempotencyStatement(input.organizationId, id, now, input.idempotency));
   if (sourcePmOccurrence) {
     const sourceProgram = sourcePmOccurrence.programId
@@ -951,7 +953,7 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
     };
   }
   const createdWorkOrder: WorkOrder = {
-    technicianNotes: input.technicianNotes, estimatedMinutes: input.estimatedMinutes, confirmationDelay: input.confirmationDelay,
+    shortName: input.shortName?.trim() || undefined, technicianNotes: input.technicianNotes, estimatedMinutes: input.estimatedMinutes, confirmationDelay: input.confirmationDelay,
     requireConfirmation, confirmationMembershipId: input.confirmationMembershipId,
     id, organizationId: input.organizationId, number, storeId: input.storeId, requestId: input.requestId,
     problem, authorizedScope: input.authorizedScope, categoryKey: input.categoryKey,

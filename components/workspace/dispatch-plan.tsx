@@ -2,9 +2,11 @@
 import Link from "next/link";
 import { cachedDateTimeFormat } from "@/lib/ops/intl-format-cache";
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { roleCan } from "@/components/ops/role-policy";
 import {
   canPlanJob,
+  dispatchStatus,
   orderedStops,
   dueLabel,
   type DispatchJob,
@@ -13,9 +15,11 @@ import { addCalendarDays } from "@/lib/ops/internal-schedule-types";
 import { civilDate, mondayOf } from "@/lib/ops/dispatch-calendar";
 import type { loadDispatchBoard } from "@/lib/server/dispatch-board-page";
 import { JobSheet, Sheet } from "./dispatch-board";
+import { jobShortName } from "@/lib/ops/short-name";
 import styles from "./dispatch-plan.module.css";
 
 type Board = Awaited<ReturnType<typeof loadDispatchBoard>>;
+type Tech = Board["commitments"][number];
 type Move = {
   job: DispatchJob;
   day?: string;
@@ -25,19 +29,55 @@ type Move = {
   plan?: DispatchJob["schedule"];
 };
 type Undo = { before: DispatchJob; after: DispatchJob }[];
+type Scale = "day" | "week";
 const minutes = (job: DispatchJob) =>
   job.estimatedMinutes ?? job.schedule?.durationMinutes;
+const hours = (value: number) => `${Math.round((value / 60) * 10) / 10} h`;
 const duration = (job: DispatchJob) =>
-  minutes(job) === undefined ? "time unknown" : `${minutes(job)! / 60} h`;
-const dayLabel = (day: string) =>
+  minutes(job) === undefined ? "time unknown" : hours(minutes(job)!);
+const dayLabel = (day: string, weekday: "short" | "long" = "short") =>
   cachedDateTimeFormat("en-US", {
     timeZone: "UTC",
-    weekday: "short",
+    weekday,
     month: "short",
     day: "numeric",
   }).format(new Date(`${day}T12:00:00Z`));
 function totals(jobs: DispatchJob[]) {
-  return `${jobs.length} stops · ~${jobs.reduce((sum, j) => sum + (minutes(j) ?? 0), 0) / 60} h${jobs.some((j) => minutes(j) === undefined) ? ` · ${jobs.filter((j) => minutes(j) === undefined).length} time unknown` : ""}`;
+  const known = jobs.reduce((sum, j) => sum + (minutes(j) ?? 0), 0);
+  const unknown = jobs.filter((j) => minutes(j) === undefined).length;
+  return `${jobs.length} ${jobs.length === 1 ? "job" : "jobs"}${known ? ` · ~${hours(known)}` : ""}${unknown ? ` · ${unknown} time unknown` : ""}`;
+}
+const overFull = (jobs: DispatchJob[]) =>
+  jobs.reduce((n, j) => n + (minutes(j) ?? 0), 0) > 480;
+/** Returns the list with `job` placed at `index`, removing it from any earlier spot. */
+function placeAt(list: DispatchJob[], job: DispatchJob, index: number) {
+  const rest = list.filter((j) => j.id !== job.id);
+  rest.splice(Math.max(0, Math.min(index, rest.length)), 0, job);
+  return rest;
+}
+
+/**
+ * Stop-order numbers that make the board show `list` in this order. Jobs that cannot be
+ * moved (started, waiting on parts) keep their number; movable jobs are numbered around them.
+ */
+export function stopOrders(
+  list: DispatchJob[],
+  movable: (job: DispatchJob) => boolean,
+) {
+  const unset = 1000000;
+  let floor = -1;
+  return list.map((job, i) => {
+    if (!movable(job)) {
+      const fixed = job.schedule?.stopOrder ?? unset;
+      floor = Math.max(floor, fixed);
+      return fixed;
+    }
+    const nextFixed = list
+      .slice(i + 1)
+      .find((j) => !movable(j));
+    floor += nextFixed ? 1 : 10;
+    return floor;
+  });
 }
 
 export function DispatchPlan(initial: Board) {
@@ -49,7 +89,10 @@ export function DispatchPlan(initial: Board) {
   }>();
   const [data, setData] = useState(initial),
     [week, setWeek] = useState(initial.week),
-    [view, setView] = useState(initial.view);
+    [scale, setScale] = useState<Scale>(
+      initial.view === "day" ? "day" : "week",
+    ),
+    [focusDay, setFocusDay] = useState(initial.day ?? initial.today);
   const [chosenJobs, setChosenJobs] = useState<DispatchJob[]>([]);
   const [selected, setSelected] = useState<string[]>([]),
     [chooser, setChooser] = useState(false),
@@ -63,11 +106,16 @@ export function DispatchPlan(initial: Board) {
   const [pending, setPending] = useState(false),
     [receipt, setReceipt] = useState<Undo>(),
     [error, setError] = useState(false),
-    [showQueue, setShowQueue] = useState(false);
+    [showQueue, setShowQueue] = useState(false),
+    [railOpen, setRailOpen] = useState(true),
+    [dropTarget, setDropTarget] = useState<string>();
   const busy = useRef(false),
     drag = useRef<DispatchJob | undefined>(undefined),
     generation = useRef(0);
   const manager = roleCan(initial.session, "assign_internal_work");
+  const router = useRouter();
+  const shortStore = (job: DispatchJob) =>
+    `${job.storeNumber} · ${job.storeName.replace(`${data.session.organizationName} - `, "")}`;
   const all = () => [
     ...new Map(
       [
@@ -81,10 +129,10 @@ export function DispatchPlan(initial: Board) {
       ].map((j) => [j.id, j]),
     ).values(),
   ];
-  async function refresh(nextWeek = week, nextView = view) {
+  async function refresh(nextWeek = week) {
     const revision = ++generation.current;
     const response = await fetch(
-      `/api/ops/internal-dispatch/board?${new URLSearchParams({ week: nextWeek, view: nextView, queueCursor: initial.queueCursor, ...Object.fromEntries(Object.entries(initial.filters).filter(([, v]) => v)) })}`,
+      `/api/ops/internal-dispatch/board?${new URLSearchParams({ week: nextWeek, view: "plan", queueCursor: initial.queueCursor, ...Object.fromEntries(Object.entries(initial.filters).filter(([, v]) => v)) })}`,
       { cache: "no-store" },
     );
     const result = (await response.json()) as Board & { error?: string };
@@ -102,8 +150,8 @@ export function DispatchPlan(initial: Board) {
     }, 30000);
     return () => clearInterval(timer);
   });
-  const refreshSafely = (nextWeek = week, nextView = view) =>
-    refresh(nextWeek, nextView).catch(() => {
+  const refreshSafely = (nextWeek = week) =>
+    refresh(nextWeek).catch(() => {
       setError(true);
       setMessage("Could not refresh. Showing the last saved view.");
     });
@@ -130,9 +178,11 @@ export function DispatchPlan(initial: Board) {
     }));
   async function move(moves: Move[], undo = false, confirmed = false) {
     if (busy.current || !moves.length) return;
+    // Only a change of day can land after a deadline; reordering a day never asks.
     const late = moves.filter(
       (m) =>
         m.day &&
+        m.day !== m.job.schedule?.day &&
         (m.job.targetCompletionAt ?? m.job.dueAt) &&
         m.day >
           cachedDateTimeFormat("en-CA", {
@@ -295,8 +345,55 @@ export function DispatchPlan(initial: Board) {
         .find((t) => t.id === id)
         ?.items.filter((j) => j.schedule?.day === day) ?? [],
     );
-  const days = Array.from({ length: 7 }, (_, i) => addCalendarDays(week, i));
-  const choose = (jobs: DispatchJob[], day = data.today) => {
+  /** Puts `job` at position `index` in a tech's day and saves every stop whose position changed. */
+  function placeJob(job: DispatchJob, techId: string, day: string, index: number) {
+    if (!canPlanJob(job)) return;
+    const list = placeAt(jobsFor(techId, day), job, index);
+    const order = stopOrders(list, canPlanJob);
+    void move(
+      list
+        .map((j, i) => ({ job: j, day, person: techId, order: order[i] }))
+        .filter(
+          (m) =>
+            canPlanJob(m.job) &&
+            (m.job.id === job.id || m.job.schedule?.stopOrder !== m.order),
+        ),
+    );
+  }
+  const dropProps = (techId: string, day: string, index: number) => ({
+    onDragOver: (e: React.DragEvent) => {
+      if (!manager || !drag.current || pending) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const key = `${techId}|${day}|${index}`;
+      if (dropTarget !== key) setDropTarget(key);
+    },
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const job = drag.current;
+      drag.current = undefined;
+      setDropTarget(undefined);
+      if (job) placeJob(job, techId, day, index);
+    },
+  });
+  const dragProps = (job: DispatchJob) => ({
+    draggable: manager && !pending && canPlanJob(job),
+    onDragStart: () => {
+      drag.current = job;
+    },
+    onDragEnd: () => {
+      drag.current = undefined;
+      setDropTarget(undefined);
+    },
+  });
+  // Weekdays always; Saturday and Sunday only when someone has work planned then.
+  const allDays = Array.from({ length: 7 }, (_, i) => addCalendarDays(week, i));
+  const days = allDays.filter(
+    (day, i) =>
+      i < 5 || data.commitments.some((tech) => jobsFor(tech.id, day).length),
+  );
+  const choose = (jobs: DispatchJob[], day = focusDay) => {
     setChosenJobs(jobs);
     setSelected(jobs.map((j) => j.id));
     setAssignDay(day);
@@ -319,258 +416,317 @@ export function DispatchPlan(initial: Board) {
             job.id,
           ],
     );
-  const status = (tech: Board["commitments"][number]) => {
+  const clock = (at: string) =>
+    cachedDateTimeFormat("en-US", {
+      timeZone: data.organizationZone,
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(new Date(at));
+  /** Live status from real check-ins and the tech's own "What's next?" update. */
+  const status = (tech: Tech): { text: string; tone: string } => {
     const visit = tech.lastVisit,
       update = tech.statusUpdate;
-    if (visit?.status === "active")
-      return `Working${tech.current ? ` at ${visit.storeNumber ?? tech.current.storeNumber}` : " onsite"} · since ${cachedDateTimeFormat("en-US", { timeZone: data.organizationZone, hour: "numeric", minute: "2-digit" }).format(new Date(visit.checkedInAt))}`;
+    if (visit?.status === "active") {
+      const elapsed = Math.floor(
+        (Date.parse(data.asOf) - Date.parse(visit.checkedInAt)) / 60000,
+      );
+      const estimate = tech.current ? minutes(tech.current) : undefined;
+      return {
+        text: `Working at ${visit.storeNumber ?? tech.current?.storeNumber ?? "a store"} · since ${clock(visit.checkedInAt)}${estimate !== undefined && elapsed > estimate ? " · running over" : ""}`,
+        tone: "working",
+      };
+    }
     if (
       update &&
       (!visit?.checkedOutAt || update.recordedAt >= visit.checkedOutAt) &&
       civilDate(update.recordedAt, data.organizationZone) >= data.today
     )
       return {
-        heading: `On the way to ${update.storeNumber ?? "a job"}`,
-        parts: "Getting parts",
-        break: "On a break",
-        done: "Done for the day",
+        heading: { text: `On the way to ${update.storeNumber ?? "a job"}`, tone: "moving" },
+        parts: { text: "Getting parts", tone: "paused" },
+        break: { text: "On a break", tone: "paused" },
+        done: { text: "Done for the day", tone: "off" },
       }[update.status];
-    return visit?.checkedOutAt
-      ? `Last: finished ${visit.storeNumber ?? ""} at ${cachedDateTimeFormat("en-US", { timeZone: data.organizationZone, hour: "numeric", minute: "2-digit" }).format(new Date(visit.checkedOutAt))}`
-      : "No activity recorded today";
+    return visit?.checkedOutAt &&
+      civilDate(visit.checkedOutAt, data.organizationZone) >= data.today
+      ? { text: `Finished ${visit.storeNumber ?? ""} at ${clock(visit.checkedOutAt)}`, tone: "idle" }
+      : { text: "Not started", tone: "idle" };
   };
-  const stop = (job: DispatchJob, index: number, siblings: DispatchJob[]) => (
-    <div
-      key={job.id}
-      className={styles.stop}
-      draggable={manager && !pending && canPlanJob(job)}
-      onDragStart={() => {
-        drag.current = job;
-      }}
-      onDragEnd={() => {
-        drag.current = undefined;
-      }}
-    >
-      <button className={styles.job} onClick={() => setDetail(job)}>
-        <strong>
-          {job.storeNumber} ·{" "}
-          {job.storeName.replace(`${data.session.organizationName} - `, "")}
-        </strong>
-        <span>{job.problem}</span>
-        <small>{duration(job)}</small>
-      </button>
-      {job.schedule?.startsAt ? (
-        <small>
-          Appointment{" "}
-          {cachedDateTimeFormat("en-US", {
-            timeZone: job.storeZone ?? data.organizationZone,
-            hour: "numeric",
-            minute: "2-digit",
-          }).format(new Date(job.schedule.startsAt))}
-        </small>
-      ) : null}
-      {job.technicianNotes ? <small>{job.technicianNotes}</small> : null}
-      {manager && canPlanJob(job) ? (
-        <details className={styles.moves}>
-          <summary>Move</summary>
-          <div>
-            <button
-              disabled={pending}
-              onClick={() =>
-                void move([
-                  {
-                    job,
-                    day: addCalendarDays(job.schedule?.day ?? data.today, 1),
-                  },
-                ])
-              }
-            >
-              Tomorrow
-            </button>
-            <button
-              disabled={pending}
-              onClick={() =>
-                void move([
-                  {
-                    job,
-                    day: addCalendarDays(job.schedule?.day ?? data.today, 7),
-                  },
-                ])
-              }
-            >
-              Next week
-            </button>
-            <button
-              disabled={pending}
-              onClick={() => choose([job], job.schedule?.day)}
-            >
-              Give to…
-            </button>
-            <button disabled={pending} onClick={() => void move([{ job }])}>
-              Unschedule
-            </button>
-            {index > 0 && siblings.every(canPlanJob) ? (
-              <button
-                disabled={pending}
-                onClick={() =>
-                  void move(
-                    siblings.map((j, i) => ({
-                      job: j,
-                      day: j.schedule?.day,
-                      order:
-                        i === index ? index - 1 : i === index - 1 ? index : i,
-                    })),
-                  )
-                }
-              >
-                Move up ↑
-              </button>
+  /** One job on the board: number, few-word name, store, then time and state. */
+  const card = (
+    job: DispatchJob,
+    index: number,
+    list: DispatchJob[],
+    techId: string,
+    day: string,
+  ) => {
+    const state = dispatchStatus(job);
+    const movable = manager && canPlanJob(job);
+    const name = jobShortName(job);
+    const late =
+      job.dueAt &&
+      civilDate(job.dueAt, job.storeZone ?? data.organizationZone) < day;
+    return (
+      <li
+        key={job.id}
+        className={`${styles.card} ${dropTarget === `${techId}|${day}|${index}` ? styles.dropBefore : ""}`}
+        data-tone={state.tone}
+        {...dragProps(job)}
+        {...dropProps(techId, day, index)}
+      >
+        <span className={styles.number} aria-hidden="true">
+          {index + 1}
+        </span>
+        <button
+          className={styles.job}
+          title={job.problem}
+          onClick={() => setDetail(job)}
+        >
+          <strong>{name}</strong>
+          <span>{shortStore(job)}</span>
+          <small>
+            {["urgent", "emergency"].includes(job.priority) ? (
+              <em className={styles.urgentTag}>Urgent</em>
             ) : null}
-            {index < siblings.length - 1 && siblings.every(canPlanJob) ? (
-              <button
-                disabled={pending}
-                onClick={() =>
-                  void move(
-                    siblings.map((j, i) => ({
-                      job: j,
-                      day: j.schedule?.day,
-                      order:
-                        i === index ? index + 1 : i === index + 1 ? index : i,
-                    })),
-                  )
-                }
-              >
-                Move down ↓
-              </button>
+            {job.schedule?.startsAt ? (
+              <b>
+                {cachedDateTimeFormat("en-US", {
+                  timeZone: job.storeZone ?? data.organizationZone,
+                  hour: "numeric",
+                  minute: "2-digit",
+                }).format(new Date(job.schedule.startsAt))}
+              </b>
             ) : null}
-          </div>
-        </details>
-      ) : null}
-    </div>
-  );
+            {duration(job)}
+            {late ? <em className={styles.lateTag}>Late</em> : null}
+          </small>
+          {state.tone !== "normal" ? (
+            <span className={styles.state}>{state.label}</span>
+          ) : null}
+        </button>
+        {movable ? (
+          <span className={styles.order}>
+            <button
+              aria-label={`Move ${name} earlier`}
+              title="Earlier"
+              disabled={pending || index === 0}
+              onClick={() => placeJob(job, techId, day, index - 1)}
+            >
+              ↑
+            </button>
+            <button
+              aria-label={`Move ${name} later`}
+              title="Later"
+              disabled={pending || index === list.length - 1}
+              onClick={() => placeJob(job, techId, day, index + 1)}
+            >
+              ↓
+            </button>
+          </span>
+        ) : null}
+      </li>
+    );
+  };
+  /** A tech's ordered jobs for one day, with a drop zone after the last job. */
+  const stopList = (techId: string, day: string, quietEmpty = false) => {
+    const jobs = jobsFor(techId, day);
+    return (
+      <>
+        <ol className={styles.stops}>
+          {jobs.map((job, i) => card(job, i, jobs, techId, day))}
+        </ol>
+        <div
+          className={`${styles.dropEnd} ${dropTarget === `${techId}|${day}|${jobs.length}` ? styles.dropActive : ""}`}
+          {...dropProps(techId, day, jobs.length)}
+        >
+          {jobs.length ? (
+            <small className={overFull(jobs) ? styles.warning : styles.total}>
+              {totals(jobs)}
+              {overFull(jobs) ? " · over 8 h" : ""}
+            </small>
+          ) : quietEmpty ? null : (
+            <small className={styles.empty}>Nothing planned</small>
+          )}
+        </div>
+      </>
+    );
+  };
   const queue = (
-    <aside className={styles.queue}>
+    <aside className={styles.queue} aria-label="Jobs that need a tech">
       <h2>
-        Needs a tech{" "}
-        <small>{data.queue.totalCount ?? data.queue.items.length}</small>
+        Needs a tech <span>{data.queue.totalCount ?? data.queue.items.length}</span>
+        <button className={styles.railHide} onClick={() => setRailOpen(false)}>
+          Hide
+        </button>
       </h2>
+      {manager && data.queue.items.length ? (
+        <p className={styles.hint}>Drag onto a tech, or tick and press Give to.</p>
+      ) : null}
       {!data.queue.items.length ? (
-        <p>All ready work has a technician.</p>
+        <p className={styles.hint}>Every ready job has a tech.</p>
       ) : (
         groups.map((region) => (
           <section key={region}>
             <h3>
-              {data.regions.find((r) => r.id === region)?.name ?? "No region"}
+              {data.regions.find((r) => r.id === region)?.name ?? "No area"}
             </h3>
-            {[
-              ...new Set(
-                data.queue.items
-                  .filter((j) => (j.storeRegionId ?? "unclassified") === region)
-                  .map((j) => j.storeId),
-              ),
-            ].map((store) => (
-              <div key={store}>
-                {data.queue.items
-                  .filter((j) => j.storeId === store)
-                  .map((job) => (
-                    <div className={styles.incoming} key={job.id}>
-                      {manager &&
-                      canPlanJob(job) &&
-                      !job.hasOpenFollowUp &&
-                      !job.visitHoldPosture ? (
-                        <label>
-                          <input
-                            type="checkbox"
-                            checked={selected.includes(job.id)}
-                            onChange={() => toggle(job)}
-                          />
-                          <span>
-                            {job.storeNumber} ·{" "}
-                            {job.storeName.replace(
-                              `${data.session.organizationName} - `,
-                              "",
-                            )}
-                          </span>
-                        </label>
-                      ) : (
-                        <strong>
-                          {job.storeNumber} · {job.storeName}
-                        </strong>
-                      )}
-                      <button
-                        className={styles.job}
-                        onClick={() => setDetail(job)}
-                      >
-                        {job.problem}
-                      </button>
-                      <small>
-                        {duration(job)} ·{" "}
-                        {dueLabel(job, data.today, data.organizationZone)}
-                      </small>
-                      {job.technicianNotes ? (
-                        <p>{job.technicianNotes}</p>
+            <ul>
+              {data.queue.items
+                .filter((j) => (j.storeRegionId ?? "unclassified") === region)
+                .map((job) => {
+                  const pickable =
+                    manager &&
+                    canPlanJob(job) &&
+                    !job.hasOpenFollowUp &&
+                    !job.visitHoldPosture;
+                  return (
+                    <li
+                      className={styles.incoming}
+                      key={job.id}
+                      {...(pickable ? dragProps(job) : {})}
+                    >
+                      {pickable ? (
+                        <input
+                          type="checkbox"
+                          aria-label={`Choose ${jobShortName(job)}`}
+                          checked={selected.includes(job.id)}
+                          onChange={() => toggle(job)}
+                        />
                       ) : null}
-                    </div>
-                  ))}
-              </div>
-            ))}
+                      <button className={styles.job} onClick={() => setDetail(job)}>
+                        <strong>
+                          {jobShortName(job)}
+                          {["urgent", "emergency"].includes(job.priority) ? (
+                            <em className={styles.urgentTag}> Urgent</em>
+                          ) : null}
+                        </strong>
+                        <span>{shortStore(job)}</span>
+                        <span className={styles.problem}>{job.problem}</span>
+                        <small>
+                          {duration(job)}
+                          {job.dueAt ? ` · ${dueLabel(job, data.today, data.organizationZone)}` : ""}
+                        </small>
+                      </button>
+                    </li>
+                  );
+                })}
+            </ul>
           </section>
         ))
       )}
+      {data.queue.nextCursor ? (
+        <Link
+          className={styles.more}
+          href={`/app/dispatch?${new URLSearchParams({ view: "plan", week, queueCursor: data.queue.nextCursor, ...data.filters })}`}
+        >
+          More jobs
+        </Link>
+      ) : null}
       {selected.length ? (
         <div className={styles.bulk}>
-          <b>{selected.length} selected</b>
+          <b>{selected.length} chosen</b>
           <button
             className={styles.primary}
             onClick={() =>
-              choose(
-                all().filter((j) => selected.includes(j.id)),
-                assignDay,
-              )
+              choose(all().filter((j) => selected.includes(j.id)), focusDay)
             }
           >
             Give to…
           </button>
         </div>
       ) : null}
-      {data.queue.nextCursor ? (
-        <Link
-          href={`/app/dispatch?${new URLSearchParams({ view: "plan", week, queueCursor: data.queue.nextCursor, ...data.filters })}`}
-        >
-          More jobs
-        </Link>
-      ) : null}
     </aside>
   );
+  const goTo = (day: string) => {
+    setFocusDay(day);
+    const nextWeek = mondayOf(day);
+    if (nextWeek !== week) {
+      setWeek(nextWeek);
+      void refreshSafely(nextWeek);
+    }
+  };
+  const stepDays = scale === "day" ? 1 : 7;
+  const visibleTechs = data.commitments;
+  const quickMove = (moves: Move[]) => {
+    setDetail(undefined);
+    void move(moves);
+  };
   return (
     <section className={styles.workspace}>
       <header className={styles.header}>
         <div>
           <h1>Dispatch</h1>
-          <p>{view === "day" ? "Live updates from the team" : "Plan by day"}</p>
+          <p>{manager ? "Drag a job to move it. Use ↑ ↓ on a job to change the order." : "Who does what, and in what order"}</p>
         </div>
         <Link href="/app/dispatch?view=list">Search all jobs</Link>
       </header>
-      <nav className={styles.tabs}>
-        <button
-          aria-current={view === "plan" ? "page" : undefined}
-          onClick={() => {
-            setView("plan");
-            void refreshSafely(week, "plan");
-          }}
-        >
-          Plan
-        </button>
-        <button
-          aria-current={view === "day" ? "page" : undefined}
-          onClick={() => {
-            setView("day");
-            void refreshSafely(week, "day");
-          }}
-        >
-          Today
-        </button>
-      </nav>
+      <div className={styles.toolbar}>
+        <div className={styles.scale} role="group" aria-label="Board view">
+          {(["day", "week"] as const).map((value) => (
+            <button
+              key={value}
+              aria-pressed={scale === value}
+              onClick={() => setScale(value)}
+            >
+              {value === "day" ? "Day" : "Week"}
+            </button>
+          ))}
+        </div>
+        <div className={styles.dateNav}>
+          <button
+            aria-label={scale === "day" ? "Previous day" : "Previous week"}
+            onClick={() => goTo(addCalendarDays(focusDay, -stepDays))}
+          >
+            ‹
+          </button>
+          <button
+            onClick={() => goTo(data.today)}
+            aria-current={
+              (scale === "day" ? focusDay === data.today : week === mondayOf(data.today))
+                ? "date"
+                : undefined
+            }
+          >
+            {scale === "day" ? "Today" : "This week"}
+          </button>
+          <button
+            aria-label={scale === "day" ? "Next day" : "Next week"}
+            onClick={() => goTo(addCalendarDays(focusDay, stepDays))}
+          >
+            ›
+          </button>
+          <strong>
+            {scale === "day"
+              ? dayLabel(focusDay, "long")
+              : `${dayLabel(week)} – ${dayLabel(addCalendarDays(week, 6))}`}
+          </strong>
+        </div>
+        {data.regions.length > 1 ? (
+          <label className={styles.area}>
+            <span>Area</span>
+            <select
+              value={data.filters.region}
+              onChange={(e) =>
+                router.push(
+                  `/app/dispatch?${new URLSearchParams({
+                    view: scale === "day" ? "day" : "plan",
+                    week,
+                    day: focusDay,
+                    ...(e.target.value ? { region: e.target.value } : {}),
+                  })}`,
+                )
+              }
+            >
+              <option value="">All areas</option>
+              {data.regions.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+      </div>
       {message ? (
         <div
           role={error ? "alert" : "status"}
@@ -603,125 +759,95 @@ export function DispatchPlan(initial: Board) {
       {!data.people.length ? (
         <p role="status">No technicians are available in your store scope.</p>
       ) : null}
-      {view === "day" ? (
-        <>
-          <p className={styles.muted}>Refreshes every 30 seconds</p>
-          <div className={styles.today}>
-            {data.commitments.map((tech) => {
-              const elapsed =
-                  tech.lastVisit?.status === "active"
-                    ? Math.floor(
-                        (Date.parse(data.asOf) -
-                          Date.parse(tech.lastVisit.checkedInAt)) /
-                          60000,
-                      )
-                    : undefined,
-                estimate = tech.current ? minutes(tech.current) : undefined,
-                late =
-                  elapsed !== undefined &&
-                  estimate !== undefined &&
-                  elapsed > estimate;
-              return (
-                <article key={tech.id}>
-                  <Link href={`/app/dispatch/technicians/${tech.id}`}>
-                    {tech.name}
-                  </Link>
-                  <div>
-                    <strong>{status(tech)}</strong>
-                    {elapsed !== undefined ? (
-                      <p>
-                        {Math.round(elapsed / 6) / 10} h onsite
-                        {estimate !== undefined
-                          ? ` · planned ${estimate / 60} h`
-                          : " · time unknown"}
-                      </p>
-                    ) : null}
-                  </div>
-                  <div>
-                    <small>Next stop</small>
-                    {tech.next ? (
-                      <button
-                        className={styles.job}
-                        onClick={() => setDetail(tech.next)}
-                      >
-                        {tech.next.storeNumber} · {tech.next.problem}
-                      </button>
-                    ) : (
-                      <p>No dated stops</p>
-                    )}
-                    {late && tech.next ? (
-                      <span className={styles.warning}>May start late</span>
-                    ) : null}
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        </>
-      ) : (
-        <>
-          <div className={styles.toolbar}>
-            <div>
-              <button
-                onClick={() => {
-                  const next = mondayOf(data.today);
-                  setWeek(next);
-                  void refreshSafely(next);
-                }}
-              >
-                This week
-              </button>
-              <button
-                onClick={() => {
-                  const next = addCalendarDays(mondayOf(data.today), 7);
-                  setWeek(next);
-                  void refreshSafely(next);
-                }}
-              >
-                Next week
-              </button>
-            </div>
-            <span>
-              {dayLabel(week)} – {dayLabel(addCalendarDays(week, 6))}
-            </span>
-          </div>
-          <button
-            className={styles.mobileToggle}
-            onClick={() => setShowQueue(!showQueue)}
-          >
-            Needs a tech · {data.queue.totalCount ?? 0}{" "}
-            {showQueue ? "Hide" : "View"}
-          </button>
-          <div className={styles.layout}>
-            <div
-              className={showQueue ? styles.queueVisible : styles.queueDesktop}
+      <button
+        className={styles.mobileToggle}
+        onClick={() => setShowQueue(!showQueue)}
+      >
+        Needs a tech ({data.queue.totalCount ?? 0}) · {showQueue ? "Hide" : "Show"}
+      </button>
+      {!railOpen ? (
+        <button className={styles.railShow} onClick={() => setRailOpen(true)}>
+          Needs a tech ({data.queue.totalCount ?? 0}) · Show
+        </button>
+      ) : null}
+      <div className={`${styles.layout} ${railOpen ? "" : styles.layoutWide}`}>
+        <div
+          className={`${showQueue ? styles.queueVisible : styles.queueDesktop} ${railOpen ? "" : styles.railClosed}`}
+        >
+          {queue}
+        </div>
+        <div className={styles.plan}>
+          <label className={styles.mobileSelect}>
+            Technician
+            <select
+              value={mobilePerson}
+              onChange={(e) => setMobilePerson(e.target.value)}
             >
-              {queue}
+              {data.commitments.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          {scale === "day" ? (
+            <div
+              className={styles.dayBoard}
+              style={{ "--techs": visibleTechs.length } as React.CSSProperties}
+            >
+              {visibleTechs.map((tech) => {
+                const now = status(tech);
+                return (
+                  <section
+                    key={tech.id}
+                    className={`${styles.column} ${tech.id === mobilePerson ? styles.mobileActive : ""}`}
+                    aria-label={tech.name}
+                  >
+                    <header>
+                      <Link href={`/app/dispatch/technicians/${tech.id}`}>
+                        {tech.name}
+                      </Link>
+                      <small>
+                        {data.regions.find((r) => r.id === tech.homeRegionId)?.name ?? "No home area"}
+                      </small>
+                      {focusDay === data.today ? (
+                        <span className={styles.live} data-tone={now.tone}>
+                          {now.text}
+                        </span>
+                      ) : null}
+                    </header>
+                    {stopList(tech.id, focusDay)}
+                  </section>
+                );
+              })}
             </div>
-            <div className={styles.plan}>
-              <label className={styles.mobileSelect}>
-                Technician
-                <select
-                  value={mobilePerson}
-                  onChange={(e) => setMobilePerson(e.target.value)}
-                >
-                  {data.commitments.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className={styles.board}>
-                <div className={styles.boardHeader}>
-                  <b>Technician</b>
-                  {days.map((day) => (
-                    <b key={day}>{dayLabel(day)}</b>
-                  ))}
-                </div>
-                {data.commitments.map((tech) => (
+          ) : (
+            <div className={styles.board}>
+              <div
+                className={styles.boardHeader}
+                style={{ "--plan-days": days.length } as React.CSSProperties}
+              >
+                <b>Technician</b>
+                {days.map((day) => (
+                  <button
+                    key={day}
+                    className={day === data.today ? styles.todayHead : undefined}
+                    onClick={() => {
+                      setFocusDay(day);
+                      setScale("day");
+                    }}
+                    title="Open this day"
+                  >
+                    {dayLabel(day)}
+                  </button>
+                ))}
+              </div>
+              {data.commitments.map((tech) => {
+                const now = status(tech);
+                return (
                   <div
                     className={`${styles.techRow} ${tech.id === mobilePerson ? styles.mobileActive : ""}`}
+                    style={{ "--plan-days": days.length } as React.CSSProperties}
                     key={tech.id}
                   >
                     <div className={styles.person}>
@@ -729,56 +855,30 @@ export function DispatchPlan(initial: Board) {
                         {tech.name}
                       </Link>
                       <small>
-                        {data.regions.find((r) => r.id === tech.homeRegionId)
-                          ?.name ?? "No home region"}
+                        {data.regions.find((r) => r.id === tech.homeRegionId)?.name ?? "No home area"}
                       </small>
+                      <span className={styles.live} data-tone={now.tone}>
+                        {now.text}
+                      </span>
                     </div>
-                    {days.map((day) => {
-                      const jobs = jobsFor(tech.id, day);
-                      return (
-                        <section
-                          className={styles.day}
-                          key={day}
-                          onDragOver={(e) => {
-                            if (manager && drag.current && !pending)
-                              e.preventDefault();
-                          }}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            if (drag.current)
-                              void move([
-                                { job: drag.current, day, person: tech.id },
-                              ]);
-                            drag.current = undefined;
-                          }}
-                        >
-                          <h3>{dayLabel(day)}</h3>
-                          {jobs.map((job, i) => stop(job, i, jobs))}
-                          <small
-                            className={
-                              jobs.reduce((n, j) => n + (minutes(j) ?? 0), 0) >
-                              480
-                                ? styles.warning
-                                : styles.total
-                            }
-                          >
-                            {jobs.length ? totals(jobs) : "No stops"}
-                          </small>
-                        </section>
-                      );
-                    })}
+                    {days.map((day) => (
+                      <section className={styles.day} key={day}>
+                        <h3>{dayLabel(day)}</h3>
+                        {stopList(tech.id, day, true)}
+                      </section>
+                    ))}
                     {tech.nextCursor ? (
                       <Link href={`/app/dispatch/technicians/${tech.id}`}>
                         More jobs
                       </Link>
                     ) : null}
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
-          </div>
-        </>
-      )}
+          )}
+        </div>
+      </div>
       {confirmation ? (
         <Sheet
           title="Check this move"
@@ -787,15 +887,14 @@ export function DispatchPlan(initial: Board) {
           <div className={styles.chooser}>
             {confirmation.late ? (
               <p>
-                {confirmation.late} job(s) will be after their deadline. The
-                original deadlines will stay unchanged.
+                {confirmation.late === 1
+                  ? "This job will be planned after its due date."
+                  : `${confirmation.late} jobs will be planned after their due dates.`}{" "}
+                The due dates stay the same.
               </p>
             ) : null}
             {confirmation.appointment ? (
-              <p>
-                The appointment will move to the selected day at its existing
-                local time.
-              </p>
+              <p>The appointment moves to the new day at the same time.</p>
             ) : null}
             <button
               className={styles.primary}
@@ -803,11 +902,9 @@ export function DispatchPlan(initial: Board) {
                 void move(confirmation.moves, confirmation.undo, true)
               }
             >
-              Keep these dates
+              Move anyway
             </button>
-            <button onClick={() => setConfirmation(undefined)}>
-              Cancel move
-            </button>
+            <button onClick={() => setConfirmation(undefined)}>Cancel</button>
           </div>
         </Sheet>
       ) : null}
@@ -826,7 +923,6 @@ export function DispatchPlan(initial: Board) {
                 onChange={(e) => setAssignDay(e.target.value)}
               />
             </label>
-            <p>Technicians listed alphabetically.</p>
             {[...data.commitments]
               .sort((a, b) => a.name.localeCompare(b.name))
               .map((t) => (
@@ -851,7 +947,7 @@ export function DispatchPlan(initial: Board) {
                       }
                     >
                       {data.regions.find((r) => r.id === t.homeRegionId)
-                        ?.name ?? "No home region"}
+                        ?.name ?? "No home area"}
                     </small>
                     <small>
                       {t.skills.length
@@ -873,7 +969,7 @@ export function DispatchPlan(initial: Board) {
                           ))
                         : "Skills not entered"}
                     </small>
-                    <small>{status(t)}</small>
+                    <small>{status(t).text}</small>
                   </span>
                   <small>{totals(jobsFor(t.id, assignDay))}</small>
                 </label>
@@ -894,7 +990,7 @@ export function DispatchPlan(initial: Board) {
                 )
               }
             >
-              Give jobs · {dayLabel(assignDay)}
+              Give to {data.commitments.find((t) => t.id === person)?.name ?? "tech"} · {dayLabel(assignDay)}
             </button>
           </div>
         </Sheet>
@@ -905,6 +1001,7 @@ export function DispatchPlan(initial: Board) {
           manager={manager}
           organizationZone={data.organizationZone}
           week={week}
+          quickMoves={<QuickMoves job={detail} from={detail.schedule?.day ?? focusDay} onMove={quickMove} />}
           onClose={() => setDetail(undefined)}
           onSaved={(note, _nextWeek, saved) => {
             setMessage(note);
@@ -933,5 +1030,22 @@ export function DispatchPlan(initial: Board) {
         />
       ) : null}
     </section>
+  );
+}
+
+/** One-tap moves shown in the job panel. */
+function QuickMoves({ job, from, onMove }: { job: DispatchJob; from: string; onMove: (moves: Move[]) => void }) {
+  return (
+    <>
+      <button onClick={() => onMove([{ job, day: addCalendarDays(from, 1) }])}>
+        Push to next day
+      </button>
+      <button onClick={() => onMove([{ job, day: addCalendarDays(from, 7) }])}>
+        Push a week
+      </button>
+      {job.schedule ? (
+        <button onClick={() => onMove([{ job }])}>Take off the plan</button>
+      ) : null}
+    </>
   );
 }

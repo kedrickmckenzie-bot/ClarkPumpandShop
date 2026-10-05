@@ -4,6 +4,34 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Dispatch board redesign and 43b0b7e fixes — October 5, 2026
+
+The owner asked Claude to take over from Codex, make Dispatch a full working board, and make changing a tech's job order easy ("im fine if you need a full redesign"). Work is on `codex/internal-dispatch-p1`.
+
+**Dispatch board (redesigned)**
+- **Day | Week** switch with ‹ Today › date stepping. Day view shows one column per tech; Week view shows techs down and days across. Clicking a day heading opens that day.
+- Every job is a numbered stop (1, 2, 3…) leading with a few-word job name, then store, then Urgent/appointment time/hours/Late, plus a state tag when it is not simply ready (Work started, Waiting on parts, Reported done).
+- **Changing order:** ↑ ↓ buttons on each job (shown on hover with a mouse, always on touch screens) and drag-and-drop to an exact spot, with a blue line showing where it lands. Dragging from "Needs a tech" onto a tech's day assigns and places it. Jobs that cannot move (started, waiting on parts) keep their place and the others are numbered around them (`stopOrders`). Reordering never asks about deadlines; only a change of day does.
+- Each tech shows live status from real check-ins and their "What's next?" update (Working at 104 · running over, On the way, Getting parts, On a break, Done for the day, Not started). The old separate Today tab is folded into Day view.
+- Job panel has one-tap **Push to next day**, **Push a week** and **Take off the plan**, plus the existing Change date / Reassign.
+- **Area** filter. "Needs a tech" can be hidden to give the board full width. Week cells with nothing planned stay blank.
+- Job history says what changed: Planned for…, Moved to…, Order changed, Given to a different tech, Taken off the plan.
+- Removed the unused older Assign board (`dispatch-assign-board.tsx` and its stylesheet).
+
+**43b0b7e review fixes**
+- **Short job names.** Optional `shortName` on the work order (max 40 characters; migration 0077 for D1 and PostgreSQL), set in the decide/notes form, suggested from the problem when blank; technicians cannot change it.
+- **Review is a decision list.** Facilities and field managers land on **New · needs a decision**, **Stuck** and **Done · needs a check**, each row with one primary button. Two open items on the same job share one row. Store names drop the company prefix. The sidebar badge counts only these decisions (18 in the demo, not 110). New attention stages `new`, `stuck`, `done`, `decide` match in SQL and the fixture.
+- **Query bug fixed:** the stuck filter bound the organization out of order, which broke Review and Plan on PostgreSQL; it now uses an escaped literal and a test runs each stage with a lane and search.
+- **What's next?** One blue "Heading to next job" button; parts, break and done are white; the two duplicate "different job" controls became one list.
+
+**Test reliability**
+- D1 setup hooks timed out because each of ~10,400 seed rows costs ~5 ms in Miniflare. The two historical-data tests now load seed rows with a bulk test helper (`tests/helpers/d1-bulk-seed.ts`): 52 s → 2 s.
+- The invoice record query counted its sections in five separate passes and recalculated shared parts; it now counts in one pass and reuses them (about 2× faster; the test went from 38 s, over its 30 s limit, to about 20 s).
+
+Status: implemented; browser-checked at 1440 px and 390 px for Day, Week, Review, What's next, technician My work and the read-only owner board. Reorder walkthrough on PostgreSQL: arrow down twice, Undo, drag third job to first, drag from "Needs a tech" onto a tech, reload keeps the order. No original IM/IDP/RD gate is closed by this pass.
+
+Not done (honest gaps): map view, text/push alerts to techs, real sign-in (preview roles only), GPS and AI checkout (deferred by owner), automatic route ordering (out of scope).
+
 ### Full in-house workflow — implementation checkpoint, October 5, 2026
 
 The owner superseded the mockup stop gate with **“just do it all and i will approve it at the end.”** The full replacement workflow is implemented on `codex/internal-dispatch-p1`: shared Review and existing Tasks, employee/store-manager intake, routing/notes/human estimates, day Plan with atomic bulk moves and Undo, event-derived Today, six-outcome checkout/optional status, blocker return to the pool, and delayed confirmation/reminder/escalation. [WF-00–WF-07](internal-dispatch/WORKFLOW_2026_10_05.md) records the scope and evidence without replacing earlier acceptance IDs or closing their independent-review gates.

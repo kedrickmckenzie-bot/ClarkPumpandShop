@@ -189,6 +189,14 @@ const people = [
   ["Sam Patel", "foodservice", "refrigeration"], ["Riley Chen", "forecourt", "plumbing"],
 ];
 /** Fictional stable-ID additions. Persisted facts win during insert-only backfill. */
+// Planning labels for demo jobs whose opening words don't make a good short name.
+const demoShortNames: Record<string, string> = {
+  "Water is collecting under the reach-in c": "Reach-in cooler leak",
+  "The replacement flush valve has not arri": "Toilet flush valve",
+  "The replacement driver for the entrance ": "Entrance sign",
+  "The rear delivery door weather strip is ": "Rear door weather strip",
+};
+
 export function addDispatchDemo(f: OpsFixture): OpsFixture {
   const org=f.organizations[0].id, date=f.asOf.slice(0,10), createdAt=`${addCalendarDays(date,-1)}T12:00:00.000Z`;
   const facility="membership-northline-facilities", manager="membership-northline-field-manager";
@@ -214,7 +222,7 @@ export function addDispatchDemo(f: OpsFixture): OpsFixture {
     const dueAt=`${addCalendarDays(date,i===25?-1:i%3===0?0:2)}T16:00:00.000Z`;
     const nextAction=waiting?"Arrange parts":held?"Wait for a suitable internal visit":membershipId?"Begin internal work":"Arrange team pickup";
     const categoryKey=tech===undefined?["plumbing","doors","plumbing","general_repairs","doors","foodservice"][i-24]:people[tech][1];
-    f.workOrders.push({id,organizationId:org,number:`CPS-2026-${String(8401+i).padStart(4,"0")}`,storeId,problem:e.problem,categoryKey,priority:e.urgent?"urgent":"routine",status:waiting?"waiting_on_parts":started?"in_progress":"approved",version:0,internalAccountableType:"membership",internalAccountableId:manager,internalAccountableParty:managerName,accountableParty:waiting||held?managerName:who,nextAction,dueAt,escalationTo:"Facilities leadership",createdAt});
+    f.workOrders.push({id,organizationId:org,number:`CPS-2026-${String(8401+i).padStart(4,"0")}`,storeId,problem:e.problem,shortName:demoShortNames[e.problem.slice(0,40)],categoryKey,priority:e.urgent?"urgent":"routine",status:waiting?"waiting_on_parts":started?"in_progress":"approved",version:0,internalAccountableType:"membership",internalAccountableId:manager,internalAccountableParty:managerName,accountableParty:waiting||held?managerName:who,nextAction,dueAt,escalationTo:"Facilities leadership",createdAt});
     f.assignments.push({id:assignmentId,organizationId:org,workOrderId:id,kind:"internal",internalTarget:membershipId?"person":"pool",internalMembershipId:membershipId,status:membershipId?"accepted":"pending",assignedAt:createdAt});
     if(!held && (started||i%7!==0)){
       const scheduleId=`${id}-schedule`;

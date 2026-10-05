@@ -19,6 +19,7 @@ import { recordInternalWorkResult,markInternalWorkReady } from "@/lib/ops/intern
 import { createFollowUp } from "@/lib/ops/commands";
 import { dispatchActor,dispatchChange,dispatchJob,dispatchNow,dispatchOrg,dispatchServices,dispatchTech,dispatchManager } from "./helpers/internal-dispatch-regression";
 import type { OpsRepository } from "@/lib/ops/repository";
+import { bulkSeedD1 } from "./helpers/d1-bulk-seed";
 
 it("validates civil dates, cross-year Monday weeks and DST gap/fold input",()=>{
   expect(mondayOf("2027-01-03")).toBe("2026-12-28");
@@ -37,12 +38,12 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
   if(adapter==="fixture")r=createOpsFixtureRepository(fixture);
   else {
    const folder=adapter==="D1"?"drizzle":"drizzle-postgres",boundary=adapter==="D1"?"0069":"0070",files=readdirSync(folder).filter(f=>/^\d.*\.sql$/.test(f)).sort();
-   let execute:(sql:string)=>Promise<unknown>;
-   if(adapter==="D1"){runtime=new Miniflare({modules:true,script:"export default {fetch(){return new Response('ok')}}",d1Databases:["DB"]});const db=await runtime.getD1Database("DB");r=createOpsD1Repository(db as unknown as D1Database);execute=sql=>db.prepare(sql).run();}
+   let execute:(sql:string)=>Promise<unknown>,d1:D1Database|undefined;
+   if(adapter==="D1"){runtime=new Miniflare({modules:true,script:"export default {fetch(){return new Response('ok')}}",d1Databases:["DB"]});const db=await runtime.getD1Database("DB");d1=db as unknown as D1Database;r=createOpsD1Repository(d1);execute=sql=>db.prepare(sql).run();}
    else{const url=new URL(postgresUrl!);if(!["localhost","127.0.0.1"].includes(url.hostname)||!/^\/dispatch_.*test$/.test(url.pathname))throw Error("Disposable localhost database required.");databaseName="dispatch_"+crypto.randomUUID().replaceAll("-","")+"_test";const admin=new Pool({connectionString:postgresUrl});try{await admin.query("CREATE DATABASE "+databaseName);}finally{await admin.end();}url.pathname="/"+databaseName;pool=new Pool({connectionString:url.toString(),max:8});r=createOpsPostgresRepository(pool);execute=sql=>pool!.query(sql);}
    for(const file of files.filter(f=>f<boundary))for(const sql of readFileSync(folder+"/"+file,"utf8").split("--> statement-breakpoint").map(s=>s.trim()).filter(Boolean))await execute(sql);
-   const oldFixture=structuredClone(fixture); oldFixture.technicianProfiles=[];oldFixture.internalSchedules=[];for(const job of oldFixture.workOrders)delete job.internalScheduleId;
-   await seedOpsRepository(r,oldFixture,[],{omitStoreContacts:true});
+   const oldFixture=structuredClone(fixture); oldFixture.technicianProfiles=[];oldFixture.internalSchedules=[];for(const job of oldFixture.workOrders){delete job.internalScheduleId;delete job.shortName;}
+   if(d1)await bulkSeedD1(d1,oldFixture,{omitStoreContacts:true});else await seedOpsRepository(r,oldFixture,[],{omitStoreContacts:true});
    for(const file of files.filter(f=>f>=boundary))for(const sql of readFileSync(folder+"/"+file,"utf8").split("--> statement-breakpoint").map(s=>s.trim()).filter(Boolean))await execute(sql);
    await seedOpsRepository(r,fixture);
   }

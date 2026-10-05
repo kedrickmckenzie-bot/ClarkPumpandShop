@@ -26,7 +26,7 @@ describe("Dispatch redesign boundaries and user choices",()=>{
   function asTechnician(){session={...session,role:"technician",membershipId:dispatchTech[0],userId:"user-northline-tech-1"};}
   it("opens Plan with readable incoming work and six technicians",async()=>{
     const html=renderToStaticMarkup(await renderDispatchBoard({}));
-    for(const label of ["Plan by day", "Needs a tech", "Today", "This week", "Next week", "time unknown", "Alex Morgan", "Riley Chen"])expect(html).toContain(label);
+    for(const label of ["Drag a job to move it", "Needs a tech", ">Day<", ">Week<", "This week", "Next week", "time unknown", "Alex Morgan", "Riley Chen"])expect(html).toContain(label);
     expect(html).toContain("The back-room floor drain is backing up and water is approaching stored cartons. The manager needs help today.");
     expect(html).not.toContain("Weekly store walk");expect(html).not.toContain("recordedCostMinor");
     expect(html).toContain('draggable="true"');expect(html).not.toContain('>0 jobs<');

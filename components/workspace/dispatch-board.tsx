@@ -197,7 +197,7 @@ export function Sheet({ title, onClose, children, wide = false }: { wide?: boole
   </div>;
 }
 
-export function JobSheet({ selection, manager, organizationZone, week, onClose, onSaved }: { selection: { job: DispatchJob; mode?: string; day?: string; person?: Person }; manager: boolean; organizationZone: string; week: string; onClose: () => void; onSaved: (note: string, week?: string, receipt?: DispatchSaveReceipt) => void }) {
+export function JobSheet({ selection, manager, organizationZone, week, onClose, onSaved, quickMoves }: { selection: { job: DispatchJob; mode?: string; day?: string; person?: Person }; manager: boolean; organizationZone: string; week: string; onClose: () => void; onSaved: (note: string, week?: string, receipt?: DispatchSaveReceipt) => void; /** One-tap moves offered by the Plan board. */ quickMoves?: React.ReactNode }) {
   const router = useRouter();
   const [detail, setDetail] = useState<Detail>();
   const [error, setError] = useState("");
@@ -233,6 +233,7 @@ export function JobSheet({ selection, manager, organizationZone, week, onClose, 
           {canPlan && !job.hasOpenFollowUp && !job.visitHoldPosture ? <button type="button" onClick={() => setMode("assign")}>{job.internalAssigneeName ? "Reassign" : "Assign"}</button> : null}
           <Link href={`/app/work-orders/${encodeURIComponent(job.id)}?view=${job.status === "completed_pending_review" ? "overview" : "service"}`}>{job.status === "completed_pending_review" ? "Check the work" : "Open full job"}</Link>
         </div>}
+        {canPlan && !mode && quickMoves ? <div className={styles.actions} aria-label="Quick moves">{quickMoves}</div> : null}
         <section className={styles.history}><h3>Recent updates</h3>{detail.history.length ? <ol>{detail.history.map((item, index) => <li key={`${item.at}:${index}`}><strong>{item.label}</strong>{item.name ? <span>{item.name}</span> : null}<time>{dispatchTime(item.at, job.storeZone ?? organizationZone, organizationZone)}</time>{item.notes ? <p>{item.notes}</p> : null}</li>)}</ol> : <p>No results recorded yet. <Link href={`/app/work-orders/${encodeURIComponent(job.id)}?view=activity`}>Open full history</Link></p>}</section>
       </>}
     </div>

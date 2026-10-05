@@ -684,6 +684,7 @@ export const opsAssetComponents = pgTable("ops_asset_components", {
 ]);
 
 export const opsWorkOrders = pgTable("ops_work_orders", {
+  shortName: text("short_name"),
   technicianNotes: text("technician_notes"),
   estimatedMinutes: integer("estimated_minutes"),
   confirmationDelay: text("confirmation_delay"),

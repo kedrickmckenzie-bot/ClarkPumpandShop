@@ -1,12 +1,17 @@
 "use client";
 import { useState } from "react";
+import { suggestShortName } from "@/lib/ops/short-name";
 
 export function JobPreparationFields({
+  shortName,
+  problem,
   notes,
   minutes,
   confirmationDelay,
   allowConfirmation = true,
 }: {
+  shortName?: string;
+  problem?: string;
   notes?: string;
   minutes?: number;
   confirmationDelay?: string;
@@ -17,6 +22,16 @@ export function JobPreparationFields({
   );
   return (
     <>
+      <label>
+        Short name
+        <input
+          name="shortName"
+          maxLength={40}
+          defaultValue={shortName ?? (problem ? suggestShortName(problem) : "")}
+          placeholder="For example: Floor drain"
+        />
+        <small>A few words shown on the Plan board.</small>
+      </label>
       <fieldset>
         <legend>
           Time estimate <small>Optional</small>
