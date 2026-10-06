@@ -4,6 +4,21 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Vendor scorecards reshaped for companies with one vendor per trade — October 6, 2026
+
+The owner pointed out that many chains have one vendor for each type of work, so a page built around side-by-side comparison would fail most customers. Decisions: no targets or expectations in the app (show the facts and let the manager judge), no grades, no comparison with the in-house team (it covers different stores, and in-house labor cost is not tracked; payroll is outside the app).
+
+- **All vendors (main view):** one row per vendor across all their work, with their main types of work (two named, "+N more"), the same nine measures, and arrows against the previous period. No Best/Weakest here, because the vendors do different work. Choosing a type of work narrows the table to it and adds Best/Weakest, since that is like for like; with one vendor it says so and points to the vendor's own history.
+- **Vendor scorecard (tap a vendor):** "This period" tiles; **Over time** (up to six past periods, never more than two years back; dates for short periods, months with years for long ones; the current period highlighted); **By district**; **By type of work**; link to the vendor's contacts, coverage and documents. Every number, including each past period, opens its exact jobs. A vendor from another organization never gets a card.
+- **Side by side** appears only when two or more vendors did the same type of work (unclassified work never counts).
+- One read per page: all vendors for this period and the previous one, or one vendor over its history range (vendor filter added to the fact query in fixture and SQL). Facts now carry the store's district.
+- Phone: tiles in two columns; "Over time" lists each measure's periods newest first, label left and value right; the page is 390 px wide.
+- Tests: the all-vendors table adds up to the page totals and every cell opens a job list of matching length and hit count; for three vendors, the scorecard's "This period" equals their row, equals the newest "Over time" column, districts and types of work add up to the vendor's jobs, and every summary, district, type-of-work and past-period cell opens matching jobs; foreign vendors are refused; a chosen type of work adds Best/Weakest only there; region scope cannot be widened; fixture, SQLite and PostgreSQL facts still match.
+
+Browser check (facilities, 1440 px and 390 px): all-vendors table of 5 vendors / 109 jobs (90 days); ColdLine scorecard at 6 months: 14 jobs, Over time 19 → 4 → 2 → 14 jobs, 3 districts, refrigeration only; opening a past period's "Fixed first visit" listed its jobs; no horizontal scrolling and no page errors.
+
+Validation: `db:seed`, `typecheck`, `lint`, `npm test` with PostgreSQL (1538 passed, 16 skipped), `test:e2e`, `build` and `build:render` passed.
+
 ### Reports step 1: Vendor scorecards page — October 6, 2026
 
 Owner-approved reporting plan (this conversation): eight role-scoped reports (Overview, Spending, Vendor scorecards, Store comparison, Equipment, PM and compliance, In-house team, Late and stuck work), one owner-level Overview that summarizes the others, scheduled reports once email delivery is live, and no letter grades. Build order: 1 scorecards, 2 report framework + Overview, 3 Spending/Store comparison/Equipment, 4 PM and compliance/In-house team/Late and stuck work, 5 schedules. This entry is step 1.

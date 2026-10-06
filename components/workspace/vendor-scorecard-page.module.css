@@ -172,3 +172,44 @@
 }
 .rowTrade { display: block; margin-top: 3px; color: var(--muted); font-size: 13px; font-weight: 500; }
 .drillTable td[data-label="Store"], .drillTable td[data-label="Sent"] { white-space: nowrap; }
+
+/* Row names, back link and section titles */
+.rowLink { display: inline-flex; align-items: center; gap: 4px; color: var(--ink); font-weight: 650; text-decoration: none; line-height: 1.35; }
+.rowLink:hover { color: var(--action); text-decoration: underline; text-underline-offset: 3px; }
+.rowLink svg { flex-shrink: 0; color: var(--muted); }
+.rowName { font-weight: 650; }
+.back { display: inline-flex; align-items: center; gap: 6px; width: fit-content; min-height: 40px; color: var(--action); font-weight: 600; text-decoration: none; }
+.back:hover { text-decoration: underline; text-underline-offset: 3px; }
+.inlineLink { display: inline-flex; align-items: center; gap: 4px; color: var(--action); font-weight: 600; text-decoration: none; white-space: nowrap; }
+.inlineLink:hover { text-decoration: underline; text-underline-offset: 3px; }
+.sectionTitle { margin: 8px 0 -6px; font-size: 18px; color: var(--copy); }
+
+/* One vendor: this period as tiles */
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); border-top: 1px solid var(--line); }
+.tile { display: grid; align-content: start; border-right: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); }
+.tileLabel { padding: 14px 16px 0; color: var(--muted); font-size: 13px; font-weight: 650; }
+.tile .cellLink { padding: 4px 16px 14px; }
+.tile .value { font-size: 24px; }
+
+/* Over time */
+.history thead th { white-space: nowrap; }
+.currentColumn { background: #f3f6fd; }
+.table thead th.currentColumn { background: #e9effb; color: var(--ink); }
+.nowTag { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; background: var(--action); color: #fff; font-size: 11px; font-weight: 700; vertical-align: 1px; }
+
+@media (max-width: 760px) {
+  .tiles { grid-template-columns: 1fr 1fr; }
+  .tile.noData { display: none; }
+  .tile .value { font-size: 20px; }
+  /* Over time on a phone: each measure lists its periods, current first, one per line. */
+  .history tbody tr { grid-template-columns: 1fr; }
+  .history td { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .history tbody th { order: -1; }
+  .history td::before { padding: 0 0 0 16px; text-transform: none; letter-spacing: 0; font-size: 14px; font-weight: 600; color: var(--copy); }
+  .history td .cellLink { display: flex; align-items: baseline; justify-content: flex-end; gap: 8px; min-height: 48px; padding: 12px 16px; text-align: right; }
+  .history td .value { font-size: 17px; }
+}
+@media print {
+  .back { display: none !important; }
+  .tile .value { font-size: 14px; }
+}

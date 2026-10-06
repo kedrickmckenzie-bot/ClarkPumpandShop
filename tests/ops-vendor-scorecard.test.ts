@@ -7,7 +7,7 @@ import { buildOpsSeedStatements, seedOpsRepository } from "@/lib/ops/seed";
 import { createOpsSqlRepository } from "@/lib/ops/sql-repository";
 import { createOpsFixtureRepository } from "@/lib/ops/fixture-repository";
 import { createOpsPostgresRepository } from "@/lib/ops/postgres-repository";
-import { MEASURES, SMALL_SAMPLE, buildScorecard, jobResult, scorecardWindows, summarizeMeasure, vendorJobFactsFromFixture, type VendorJobFact } from "@/lib/ops/vendor-scorecard";
+import { SMALL_SAMPLE, buildScorecard, jobResult, scorecardWindows, summarizeMeasure, vendorJobFactsFromFixture, type VendorJobFact } from "@/lib/ops/vendor-scorecard";
 import type { OpsRepository } from "@/lib/ops/repository";
 import type { OpsSqlDriver, SqlRow } from "@/lib/ops/sql-driver";
 import type { OpsFixture } from "@/lib/ops/types";
@@ -92,32 +92,59 @@ describe("vendor scorecard page", () => {
   const f = fixture(), repository = createOpsFixtureRepository(f);
   const session: OperatorSession = { organizationId: f.organizations[0]!.id, organizationName: "Clark Pump and Shop", userId: "u", membershipId: "m", displayName: "Jordan", email: "j@example.test", scopeLabel: "All stores", role: "facilities", demoEdition: "complete" };
 
-  it("opens exactly the jobs behind every number", async () => {
-    const page = await buildVendorScorecardPage(repository, session, { period: "365" }, f.asOf);
-    const rows = [...page.groups.flatMap(g => g.rows), ...page.solo];
-    expect(rows.length).toBeGreaterThan(3);
-    let checked = 0;
-    for (const row of rows) for (const cell of row.cells) {
-      const query = Object.fromEntries(new URL(cell.href, "https://test.invalid").searchParams);
-      const drilled = await buildVendorScorecardPage(repository, session, query, f.asOf);
-      expect(drilled.drill, `${row.vendorName} ${cell.measure}`).toBeDefined();
-      expect(drilled.drill!.rows).toHaveLength(cell.summary.counted);
+  const drilled = async (href: string) => (await buildVendorScorecardPage(repository, session, Object.fromEntries(new URL(href, "https://test.invalid").searchParams), f.asOf)).drill;
+  async function expectCellsMatch(cells: Array<{ href: string; measure: string; summary: { counted: number; hits: number } }>, label: string) {
+    for (const cell of cells) {
+      const drill = await drilled(cell.href);
+      expect(drill, `${label} ${cell.measure}`).toBeDefined();
+      expect(drill!.rows, `${label} ${cell.measure}`).toHaveLength(cell.summary.counted);
       if (["declined", "invoice", "onTime", "firstFix", "fixHeld", "callbacks"].includes(cell.measure)) {
         const hitTone = ["onTime", "firstFix", "fixHeld"].includes(cell.measure) ? "good" : "bad";
-        expect(drilled.drill!.rows.filter(r => r.tone === hitTone)).toHaveLength(cell.summary.hits);
+        expect(drill!.rows.filter(r => r.tone === hitTone), `${label} ${cell.measure}`).toHaveLength(cell.summary.hits);
       }
-      checked++;
     }
-    expect(checked).toBe(rows.length * MEASURES.length);
-  }, 60000);
+  }
 
-  it("keeps single-vendor and unclassified work out of comparisons, and filters by type and region", async () => {
+  it("opens exactly the jobs behind every number on the all-vendors view", async () => {
     const page = await buildVendorScorecardPage(repository, session, { period: "365" }, f.asOf);
-    for (const group of page.groups) { expect(group.rows.length).toBeGreaterThan(1); expect(group.trade).not.toBe("unclassified"); }
+    expect(page.view).toBe("all");
+    expect(page.vendors.length).toBe(page.totals.vendors);
+    expect(page.vendors.reduce((sum, row) => sum + row.cells[0]!.summary.counted, 0)).toBe(page.totals.jobs);
+    for (const row of [...page.vendors, ...page.comparisons.flatMap(g => g.rows)]) await expectCellsMatch(row.cells, row.label);
+  }, 120000);
+
+  it("gives each vendor a scorecard whose every number opens its jobs", async () => {
+    const page = await buildVendorScorecardPage(repository, session, { period: "90" }, f.asOf);
+    for (const row of page.vendors.slice(0, 3)) {
+      const card = (await buildVendorScorecardPage(repository, session, Object.fromEntries(new URL(row.href!, "https://test.invalid").searchParams), f.asOf));
+      expect(card.view).toBe("vendor");
+      const vendor = card.vendor!;
+      expect(vendor.name).toBe(row.label);
+      expect(vendor.jobs).toBe(row.cells[0]!.summary.counted);
+      // This period equals the vendor's row on the all-vendors view, and the newest "over time" column.
+      expect(vendor.summary.map(c => c.value)).toEqual(row.cells.map(c => c.value));
+      expect(vendor.history.columns.at(-1)!.current).toBe(true);
+      expect(vendor.history.rows.map(r => r.cells.at(-1)!.counted)).toEqual(vendor.summary.map(c => c.summary.counted));
+      // Districts and types of work add up to the vendor's jobs.
+      expect(vendor.byDistrict.reduce((sum, r) => sum + r.cells[0]!.summary.counted, 0)).toBe(vendor.jobs);
+      expect(vendor.byTrade.reduce((sum, r) => sum + r.cells[0]!.summary.counted, 0)).toBe(vendor.jobs);
+      await expectCellsMatch(vendor.summary, `${vendor.name} summary`);
+      for (const r of [...vendor.byDistrict, ...vendor.byTrade]) await expectCellsMatch(r.cells, `${vendor.name} ${r.label}`);
+      for (const r of vendor.history.rows) for (const cell of r.cells) expect((await drilled(cell.href))!.rows, `${vendor.name} ${r.measure} history`).toHaveLength(cell.counted);
+    }
+  }, 120000);
+
+  it("refuses another organization's vendor and keeps comparisons like for like", async () => {
+    const foreign = await buildVendorScorecardPage(repository, session, { vendor: "vendor-from-elsewhere" }, f.asOf);
+    expect(foreign.view).toBe("all");
+    const page = await buildVendorScorecardPage(repository, session, { period: "365" }, f.asOf);
+    for (const group of page.comparisons) { expect(group.rows.length).toBeGreaterThan(1); expect(group.trade).not.toBe("unclassified"); }
+    expect(page.vendors.some(row => row.cells.some(c => c.summary.rank))).toBe(false);
     const trade = page.trades[0]!.value;
     const one = await buildVendorScorecardPage(repository, session, { period: "365", trade }, f.asOf);
-    expect(one.groups.map(g => g.trade)).toEqual([trade]);
-    expect(one.solo).toEqual([]);
+    expect(one.comparisons).toEqual([]);
+    expect(one.totals.jobs).toBe(page.totals.jobs);
+    expect(one.vendors.reduce((sum, row) => sum + row.cells[0]!.summary.counted, 0)).toBe(page.trades[0]!.jobs);
     const region = f.regions[0]!.id;
     const regional = await buildVendorScorecardPage(repository, session, { period: "365", region }, f.asOf);
     expect(regional.totals.jobs).toBeLessThan(page.totals.jobs);
@@ -126,7 +153,7 @@ describe("vendor scorecard page", () => {
     const district = { ...session, role: "regional" as const, regionIds: [region] };
     const other = await buildVendorScorecardPage(repository, district, { period: "365", region: f.regions[1]!.id }, f.asOf);
     expect(other.totals.jobs).toBe(regional.totals.jobs);
-  }, 30000);
+  }, 60000);
 
   it("is for owners, facilities and district managers only", () => {
     expect(canViewVendorScorecards({ role: "facilities" })).toBe(true);

@@ -9,7 +9,7 @@ import type { OpsFixture } from "./types";
  * number opens the exact rows behind it, so a summary can never disagree with its jobs.
  */
 
-export interface ScorecardWindow { from: string; to: string }
+export interface ScorecardWindow { from: string; to: string; /** Only this vendor's jobs. */ vendorId?: string }
 
 /** One job sent to one vendor in the window. */
 export interface VendorJobFact {
@@ -19,6 +19,8 @@ export interface VendorJobFact {
   storeId: string;
   storeNumber: string;
   storeName: string;
+  regionId?: string;
+  regionName?: string;
   vendorId: string;
   vendorName: string;
   trade: string;
@@ -74,7 +76,8 @@ export function vendorJobFactsFromFixture(fixture: OpsFixture, scope: Organizati
   const stores = new Map(fixture.stores.filter(s => s.organizationId === org
     && (scope.storeIds === undefined || scope.storeIds.includes(s.id))
     && (scope.regionIds === undefined || Boolean(s.regionId && scope.regionIds.includes(s.regionId)))).map(s => [s.id, s]));
-  const vendors = new Map(fixture.vendors.filter(v => v.organizationId === org).map(v => [v.id, v]));
+  const vendors = new Map(fixture.vendors.filter(v => v.organizationId === org && (!window.vendorId || v.id === window.vendorId)).map(v => [v.id, v]));
+  const regions = new Map(fixture.regions.filter(r => r.organizationId === org).map(r => [r.id, r]));
   const work = new Map(fixture.workOrders.filter(w => w.organizationId === org).map(w => [w.id, w]));
   const assignments = fixture.assignments.filter(a => a.organizationId === org && a.kind === "outside_vendor" && a.vendorId);
   const assignmentVendor = new Map(assignments.map(a => [a.id, a.vendorId!]));
@@ -116,6 +119,7 @@ export function vendorJobFactsFromFixture(fixture: OpsFixture, scope: Organizati
     const allocatedInvoices = new Set(fixture.invoiceLineAllocations.filter(a => a.organizationId === org && a.workOrderId === w.id).map(a => lineInvoice.get(a.invoiceLineId)));
     facts.push({
       workOrderId: w.id, number: w.number, problem: w.problem, storeId: store.id, storeNumber: store.storeNumber, storeName: store.name,
+      regionId: store.regionId && regions.has(store.regionId) ? store.regionId : undefined, regionName: store.regionId ? regions.get(store.regionId)?.name : undefined,
       vendorId, vendorName: vendor.name, trade: w.categoryKey ?? "unclassified", assetId: w.assetId, sentAt,
       firstResponseAt: min(responses.map(r => r.respondedAt)),
       declined: responses.some(r => r.response === "declined"),
@@ -142,6 +146,7 @@ export async function queryVendorJobFacts(driver: OpsSqlDriver, scope: Organizat
   const params: unknown[] = [scope.organizationId];
   const scoped = scopeWhere(scope, "st", params);
   params.push(window.from, window.to);
+  if (window.vendorId) params.push(window.vendorId);
   const vendorVisit = `vs.organization_id = j.organization_id AND vs.vendor_id = j.vendor_id`;
   const soleProvider = `NOT EXISTS (SELECT 1 FROM ops_work_order_assignments oa WHERE oa.organization_id = j.organization_id AND oa.work_order_id = j.work_order_id AND (oa.kind = 'internal' OR (oa.kind = 'outside_vendor' AND oa.vendor_id <> j.vendor_id)))`;
   const vendorLink = `FROM ops_site_visit_work_orders x JOIN ops_visit_sessions vs ON vs.organization_id = x.organization_id AND vs.id = x.visit_id
@@ -153,12 +158,13 @@ export async function queryVendorJobFacts(driver: OpsSqlDriver, scope: Organizat
       GROUP BY a.organization_id, a.work_order_id, a.vendor_id
     ), jobs AS (
       SELECT s.organization_id, s.work_order_id, s.vendor_id, s.sent_at, w.number, w.problem, w.category_key, w.asset_id,
-        st.id AS store_id, st.store_number, st.name AS store_name, v.name AS vendor_name
+        st.id AS store_id, st.store_number, st.name AS store_name, rg.id AS region_id, rg.name AS region_name, v.name AS vendor_name
       FROM sent s
       JOIN ops_work_orders w ON w.organization_id = s.organization_id AND w.id = s.work_order_id
       JOIN ops_stores st ON st.organization_id = w.organization_id AND st.id = w.store_id
       JOIN ops_vendors v ON v.organization_id = s.organization_id AND v.id = s.vendor_id
-      WHERE ${scoped} AND w.status <> 'cancelled' AND s.sent_at >= ? AND s.sent_at < ?
+      LEFT JOIN ops_regions rg ON rg.organization_id = st.organization_id AND rg.id = st.region_id
+      WHERE ${scoped} AND w.status <> 'cancelled' AND s.sent_at >= ? AND s.sent_at < ?${window.vendorId ? " AND s.vendor_id = ?" : ""}
     ), facts AS (
       SELECT j.*,
         (SELECT MIN(r.responded_at) FROM ops_vendor_responses r JOIN ops_work_order_assignments ra ON ra.organization_id = r.organization_id AND ra.id = r.assignment_id
@@ -196,7 +202,7 @@ export async function queryVendorJobFacts(driver: OpsSqlDriver, scope: Organizat
   const text = (value: unknown) => value == null ? undefined : value instanceof Date ? value.toISOString() : String(value);
   return result.rows.map(r => ({
     workOrderId: String(r.work_order_id), number: String(r.number), problem: String(r.problem), storeId: String(r.store_id),
-    storeNumber: String(r.store_number), storeName: String(r.store_name), vendorId: String(r.vendor_id), vendorName: String(r.vendor_name),
+    storeNumber: String(r.store_number), storeName: String(r.store_name), regionId: text(r.region_id), regionName: text(r.region_name), vendorId: String(r.vendor_id), vendorName: String(r.vendor_name),
     trade: text(r.category_key) ?? "unclassified", assetId: text(r.asset_id), sentAt: text(r.sent_at)!,
     firstResponseAt: text(r.first_response_at), declined: Number(r.declined) === 1,
     appointmentAt: text(r.appointment_at), firstCheckInAt: text(r.first_check_in_at), firstOutcome: text(r.first_outcome),
@@ -259,8 +265,8 @@ export interface MeasureSummary {
   priorValue?: number;
 }
 
-export interface VendorRow { vendorId: string; vendorName: string; measures: Record<ScorecardMeasureKey, MeasureSummary> }
-export interface TradeGroup { trade: string; label: string; jobs: number; vendors: VendorRow[] }
+export interface ScoreRow { key: string; label: string; measures: Record<ScorecardMeasureKey, MeasureSummary> }
+export interface TradeGroup { trade: string; label: string; jobs: number; vendors: Array<{ vendorId: string; vendorName: string; measures: Record<ScorecardMeasureKey, MeasureSummary> }> }
 
 function median(values: number[]) {
   const sorted = [...values].sort((a, b) => a - b), middle = Math.floor(sorted.length / 2);
@@ -290,36 +296,59 @@ function trendOf(key: ScorecardMeasureKey, current: number, prior: number): "bet
   return (change < 0) === (direction === "lower") ? "better" : "worse";
 }
 
-export function buildScorecard(facts: VendorJobFact[], priorFacts: VendorJobFact[], now: string): TradeGroup[] {
-  const groups = new Map<string, VendorJobFact[]>();
-  for (const fact of facts) groups.set(fact.trade, [...(groups.get(fact.trade) ?? []), fact]);
-  return [...groups.entries()].map(([trade, tradeFacts]) => {
-    const byVendor = new Map<string, VendorJobFact[]>();
-    for (const fact of tradeFacts) byVendor.set(fact.vendorId, [...(byVendor.get(fact.vendorId) ?? []), fact]);
-    const vendors: VendorRow[] = [...byVendor.entries()].map(([vendorId, vendorFacts]) => {
-      const prior = priorFacts.filter(f => f.vendorId === vendorId && f.trade === trade);
-      const measures = Object.fromEntries(MEASURES.map(key => {
-        const summary = summarizeMeasure(vendorFacts, key, now);
-        const before = summarizeMeasure(prior, key, now);
-        if (summary.value !== undefined && !summary.tooFew && before.value !== undefined && !before.tooFew && before.counted) {
-          summary.priorValue = before.value;
-          summary.trend = trendOf(key, summary.value, before.value);
-        }
-        return [key, summary];
-      })) as Record<ScorecardMeasureKey, MeasureSummary>;
-      return { vendorId, vendorName: vendorFacts[0]!.vendorName, measures };
-    }).sort((a, b) => b.measures.jobs.counted - a.measures.jobs.counted || a.vendorName.localeCompare(b.vendorName));
-    // Best and worst only among vendors with enough jobs, and only when they actually differ.
-    for (const key of MEASURES) {
-      const direction = MEASURE_INFO[key].direction;
-      if (direction === "neutral" || key === "invoice") continue;
-      const ready = vendors.map(v => v.measures[key]).filter(m => m.value !== undefined && !m.tooFew);
-      if (ready.length < 2) continue;
-      const sorted = [...ready].sort((a, b) => direction === "higher" ? b.value! - a.value! : a.value! - b.value!);
-      if (sorted[0]!.value === sorted.at(-1)!.value) continue;
-      sorted[0]!.rank = "best";
-      sorted.at(-1)!.rank = "worst";
+/** All measures for one set of jobs, with arrows against the same set in the previous period. */
+export function summarizeAll(facts: VendorJobFact[], prior: VendorJobFact[], now: string) {
+  return Object.fromEntries(MEASURES.map(key => {
+    const summary = summarizeMeasure(facts, key, now);
+    const before = summarizeMeasure(prior, key, now);
+    if (summary.value !== undefined && !summary.tooFew && before.value !== undefined && !before.tooFew && before.counted) {
+      summary.priorValue = before.value;
+      summary.trend = trendOf(key, summary.value, before.value);
     }
-    return { trade, label: tradeLabel(trade), jobs: tradeFacts.length, vendors };
+    return [key, summary];
+  })) as Record<ScorecardMeasureKey, MeasureSummary>;
+}
+
+/** Rows grouped by any key (vendor, district, type of work). Largest first. */
+export function scoreRows(facts: VendorJobFact[], prior: VendorJobFact[], now: string, keyOf: (fact: VendorJobFact) => string, labelOf: (fact: VendorJobFact) => string): ScoreRow[] {
+  const groups = new Map<string, VendorJobFact[]>();
+  for (const fact of facts) groups.set(keyOf(fact), [...(groups.get(keyOf(fact)) ?? []), fact]);
+  return [...groups.entries()].map(([key, rows]) => ({ key, label: labelOf(rows[0]!), measures: summarizeAll(rows, prior.filter(f => keyOf(f) === key), now) }))
+    .sort((a, b) => b.measures.jobs.counted - a.measures.jobs.counted || a.label.localeCompare(b.label));
+}
+
+/** Best and Weakest, only among rows with enough jobs, and only when they actually differ. Use only for like-for-like work. */
+export function rankRows(rows: ScoreRow[]) {
+  for (const key of MEASURES) {
+    const direction = MEASURE_INFO[key].direction;
+    if (direction === "neutral" || key === "invoice") continue;
+    const ready = rows.map(v => v.measures[key]).filter(m => m.value !== undefined && !m.tooFew);
+    if (ready.length < 2) continue;
+    const sorted = [...ready].sort((a, b) => direction === "higher" ? b.value! - a.value! : a.value! - b.value!);
+    if (sorted[0]!.value === sorted.at(-1)!.value) continue;
+    sorted[0]!.rank = "best";
+    sorted.at(-1)!.rank = "worst";
+  }
+  return rows;
+}
+
+/** Vendors side by side within each type of work. */
+export function buildScorecard(facts: VendorJobFact[], priorFacts: VendorJobFact[], now: string): TradeGroup[] {
+  const trades = [...new Set(facts.map(f => f.trade))];
+  return trades.map(trade => {
+    const tradeFacts = facts.filter(f => f.trade === trade);
+    const rows = rankRows(scoreRows(tradeFacts, priorFacts.filter(f => f.trade === trade), now, f => f.vendorId, f => f.vendorName));
+    return { trade, label: tradeLabel(trade), jobs: tradeFacts.length, vendors: rows.map(row => ({ vendorId: row.key, vendorName: row.label, measures: row.measures })) };
   }).sort((a, b) => (a.trade === "unclassified" ? 1 : 0) - (b.trade === "unclassified" ? 1 : 0) || b.jobs - a.jobs || a.label.localeCompare(b.label));
 }
+
+/** Window `back` periods before the current one (0 = current). */
+export function scorecardWindowAt(now: string, days: ScorecardPeriod, back: number): ScorecardWindow {
+  const end = Date.parse(now) - back * days * DAY_MS;
+  return { from: new Date(end - days * DAY_MS).toISOString(), to: new Date(end).toISOString() };
+}
+
+/** How many periods the "over time" view shows: up to six, never more than two years back. */
+export function historyLength(days: ScorecardPeriod) { return Math.max(2, Math.min(6, Math.floor(730 / days))); }
+
+export const inWindow = (fact: VendorJobFact, window: ScorecardWindow) => fact.sentAt >= window.from && fact.sentAt < window.to;
