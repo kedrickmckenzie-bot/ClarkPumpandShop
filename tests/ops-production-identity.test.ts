@@ -283,11 +283,11 @@ describe("production identity and organization selection", () => {
     const queue=await loadListModel("action-center",{});
     expect(model.metrics.find(row => row.id === "open-exceptions")?.value).toBe(queue.metrics?.find(row=>row.id==="attention-mine")?.value);
     // Includes the one inspection whose results await review.
-    expect(model.metrics.find(row => row.id === "open-items")?.value).toBe("85");
+    expect(model.metrics.find(row => row.id === "open-items")?.value).toBe("88");
     expect(model.metrics.find(row => row.id === "open-exceptions")?.link?.href).toBe("/app/action-center?lane=mine");
     expect(model.spotlight?.facts.find(row => row.label === "Approved replacement")?.value).toBe("$32,800.00");
     expect(model.equipmentIssues?.rows).toHaveLength(5);
-    expect(model.equipmentIssues?.rows[0]).toMatchObject({ id: "asset-104-beer-cave", issueCount: 5, cost: "$24,110.00" });
+    expect(model.equipmentIssues?.rows[0]).toMatchObject({ id: "asset-104-beer-cave", issueCount: 6, cost: "$24,110.00" });
     expect(boundary.snapshot).not.toHaveBeenCalled();
   });
   it("loads access-only setup pages without loading tenant source records", async () => {

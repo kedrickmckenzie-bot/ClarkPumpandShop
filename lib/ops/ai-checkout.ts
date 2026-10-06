@@ -56,13 +56,15 @@ export async function checkoutChatTurn(ai: AiClient, input: CheckoutDraftInput &
     "",
     "Reply with your next turn.",
   ].filter(line => line !== undefined).join("\n");
-  const turn = await ai.json({ system: CHAT_SYSTEM, prompt, schema: checkoutChatTurnSchema, effort: "low", maxTokens: 2000 });
+  const turn = await ai.json({ system: CHAT_SYSTEM, prompt, schema: checkoutChatTurnSchema, effort: "low", maxTokens: 2000, tier: "fast" });
   const allowed = new Set(choices.map(([id]) => id));
   const outcome = allowed.has(turn.outcome) ? turn.outcome : (allowed.has("return_visit_required") ? "return_visit_required" : choices[0][0]);
   // Never claim "ready" while the form still lacks a required answer.
   const missingWorking = input.mode !== "problem" && turn.workingWhenLeft === "unknown";
   const missingNotes = outcome !== "completed" && !turn.notes.trim();
-  const ready = turn.ready && !missingWorking && !missingNotes;
+  // Smaller models sometimes write the confirming summary but forget the flag; the summary itself counts.
+  const asksToConfirm = /is that right\?\s*$/i.test(turn.reply.trim());
+  const ready = (turn.ready || asksToConfirm) && !missingWorking && !missingNotes;
   const reply = turn.ready && !ready ? (missingWorking ? "Was it working when you left?" : "What still needs to be done?") : turn.reply.trim().slice(0, 800);
   return { reply, ready, outcome, notes: turn.notes.trim().slice(0, 2900), workingWhenLeft: turn.workingWhenLeft };
 }

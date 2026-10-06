@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type SyntheticEvent } from "react";
 
 type ChatMessage = { from: "tech" | "ai"; text: string };
-type Source = { kind: "history" | "note" | "document" | "general"; label: string };
+type Source = { kind: "history" | "note" | "document" | "general" | "web"; label: string; url?: string };
 type Entry = ChatMessage & { sources?: Source[] };
 
 /** The job's troubleshooting chat is kept in this browser until checkout, which saves it with the job. */
@@ -19,8 +19,8 @@ export function clearDiagnoseChat(workOrderId: string) {
   try { window.localStorage.removeItem(diagnoseStorageKey(workOrderId)); } catch { /* storage unavailable */ }
 }
 
-const sourceText: Record<Source["kind"], string> = { history: "This unit's history", note: "Earlier repair notes", document: "On file", general: "General knowledge · double-check" };
-const sourceColor: Record<Source["kind"], string> = { history: "#17643a", note: "#17643a", document: "#2457d6", general: "#8a5a00" };
+const sourceText: Record<Source["kind"], string> = { history: "This unit's history", note: "Earlier repair notes", document: "On file", general: "General knowledge · double-check", web: "Web · double-check" };
+const sourceColor: Record<Source["kind"], string> = { history: "#17643a", note: "#17643a", document: "#2457d6", general: "#8a5a00", web: "#8a5a00" };
 
 /** Troubleshooting chat that reads this unit's history, repair notes and document titles. */
 export function AiDiagnoseChat({ workOrderId, assetId, title = "Troubleshoot with AI" }: { workOrderId?: string; assetId?: string; title?: string }) {
@@ -65,9 +65,9 @@ export function AiDiagnoseChat({ workOrderId, assetId, title = "Troubleshoot wit
         <li style={{ justifySelf: "start", maxWidth: "85%", padding: "8px 12px", borderRadius: 12, background: "white", border: "1px solid #dbe2ec" }}>{greeting}</li>
         {messages.map((message, index) => <li key={index} style={{ justifySelf: message.from === "tech" ? "end" : "start", maxWidth: "85%", display: "grid", gap: 4 }}>
           <span style={{ padding: "8px 12px", borderRadius: 12, background: message.from === "tech" ? "#2457d6" : "white", color: message.from === "tech" ? "white" : "#1d2b3e", border: message.from === "tech" ? 0 : "1px solid #dbe2ec", whiteSpace: "pre-wrap" }}>{message.text}</span>
-          {message.sources?.length ? <span style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{message.sources.map((source, i) => <small key={i} style={{ padding: "2px 8px", borderRadius: 10, border: `1px solid ${sourceColor[source.kind]}`, color: sourceColor[source.kind], background: "white" }}>{sourceText[source.kind]}: {source.label}</small>)}</span> : null}
+          {message.sources?.length ? <span style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{message.sources.map((source, i) => { const chip = { padding: "2px 8px", borderRadius: 10, border: `1px solid ${sourceColor[source.kind]}`, color: sourceColor[source.kind], background: "white", fontSize: 13 }; return source.url ? <a key={i} href={source.url} target="_blank" rel="noreferrer noopener" style={chip}>{sourceText[source.kind]}: {source.label} ↗</a> : <small key={i} style={chip}>{sourceText[source.kind]}: {source.label}</small>; })}</span> : null}
         </li>)}
-        {busy ? <li style={{ justifySelf: "start", color: "#5b6b80" }}>Looking at this unit&apos;s history…</li> : null}
+        {busy ? <li style={{ justifySelf: "start", color: "#5b6b80" }}>Looking at this unit&apos;s history and manuals…</li> : null}
       </ol>
       {error ? <p role="alert" style={{ margin: 0, color: "#8c3427" }}>{error}</p> : null}
       <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>

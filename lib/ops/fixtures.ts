@@ -2145,7 +2145,7 @@ export const NORTHLINE_PRESENTATION_FIXTURE: Readonly<OpsFixture> = addDispatchD
 export function buildSyntheticScaleFixture(storeCount = 65): OpsFixture {
   if (!Number.isInteger(storeCount) || storeCount < 1) throw new Error("storeCount must be a positive integer");
   const fixture = buildNorthlinePresentationFixture();
-  fixture.complianceSchedules=[]; fixture.inspections=[]; fixture.internalSchedules=[]; fixture.technicianProfiles=[]; fixture.workResults=[];
+  fixture.complianceSchedules=[]; fixture.inspections=[]; fixture.internalSchedules=[]; fixture.technicianProfiles=[]; fixture.workResults=[]; fixture.aiConversations=[]; fixture.equipmentNotes=[];
   const sourceStores = fixture.stores;
   fixture.stores = Array.from({ length: storeCount }, (_, index) => {
     const source = sourceStores[index % sourceStores.length];

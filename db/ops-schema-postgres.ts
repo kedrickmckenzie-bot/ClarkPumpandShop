@@ -2302,3 +2302,12 @@ export const opsEquipmentNotes = pgTable("ops_equipment_notes", {
   foreignKey({columns:[t.organizationId,t.workOrderId],foreignColumns:[opsWorkOrders.organizationId,opsWorkOrders.id]}),
   foreignKey({columns:[t.conversationId],foreignColumns:[opsAiConversations.id]}),
 ]);
+/** Text pulled from a knowledge-base document, page by page, so the AI can read and cite the relevant pages. Insert-only. Page 0 with empty text means no readable text was found. */
+export const opsEquipmentDocumentPages = pgTable("ops_equipment_document_pages", {
+  id: text("id").primaryKey(), organizationId: text("organization_id").notNull(), documentId: text("document_id").notNull(),
+  pageNumber: integer("page_number").notNull(), pageLabel: text("page_label").notNull(), text: text("text").notNull(), createdAt: text("created_at").notNull(),
+},t=>[
+  uniqueIndex("uq_ops_equipment_document_pages").on(t.organizationId,t.documentId,t.pageNumber),
+  foreignKey({columns:[t.organizationId],foreignColumns:[opsOrganizations.id]}),
+  foreignKey({columns:[t.documentId],foreignColumns:[opsEquipmentDocuments.id]}),
+]);

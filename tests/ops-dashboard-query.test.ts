@@ -28,7 +28,7 @@ describe("dashboard activity and paginated source groups", () => {
     const window = { asOf: fixture.asOf, costFrom: "2026-08-25", costTo: "2026-08-25", currency: "USD" };
     expect(await repository.getDashboardActivity(scope, window)).toMatchObject({
       recordedCostMinor: 12345, costWorkOrders: 1, costLines: 2,
-      unclassifiedCostMinor: 12345, unclassifiedCostWorkOrders: 1, openWork: 10,
+      unclassifiedCostMinor: 12345, unclassifiedCostWorkOrders: 1, openWork: 11,
     });
     const group = await repository.listDashboardBreakdown(scope, window, { kind: "cost_category", limit: 1 });
     expect(group.items).toEqual([{ id: "unclassified", label: "unclassified", value: 12345 }]);

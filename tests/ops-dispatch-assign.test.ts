@@ -7,11 +7,11 @@ import {dispatchJob as projection} from "@/lib/ops/dispatch-board";
 import {dispatchOrg} from "./helpers/internal-dispatch-regression";
 
 describe("Approved Assign dataset and insert-only release",()=>{
-  it("has six technicians and 36 internal team jobs with varied commitments",async()=>{
+  it("has six technicians and 39 internal team jobs (36 planning jobs plus 3 equipment jobs for the AI demo) with varied commitments",async()=>{
     const fixture=buildShowcaseFixture("2026-10-07");
     const repository=createOpsFixtureRepository(fixture);
     const page=await repository.listWorkOrders({organizationId:dispatchOrg},{internalOnly:true,maintenanceTeamOnly:true,statuses:["accepted","approved","in_progress","waiting_on_parts","completed_pending_review","scheduled","resolved"],limit:100});
-    expect(page.totalCount).toBe(36);
+    expect(page.totalCount).toBe(39);
     expect((await repository.getDispatchFilters({organizationId:dispatchOrg})).people).toHaveLength(6);
     const assigned=page.items.filter(j=>j.internalMembershipId);
     const loads=new Map<string,number>();for(const job of assigned)loads.set(job.internalMembershipId!,1+(loads.get(job.internalMembershipId!)??0));
@@ -29,7 +29,7 @@ describe("Approved Assign dataset and insert-only release",()=>{
     const first=await repository.listWorkOrders({organizationId:dispatchOrg},query);
     const next=await repository.listWorkOrders({organizationId:dispatchOrg},{...query,cursor:first.nextCursor});
     const jobs=[...first.items,...next.items];expect(new Set(jobs.map(j=>j.id)).size).toBe(4);
-    const keys=jobs.map(j=>`${j.schedule!.day}|${j.schedule!.startsAt??"9999"}|${({emergency:0,urgent:1,routine:2,planned:3})[j.priority]}|${j.id}`);
+    const keys=jobs.map(j=>`${j.schedule!.day}|${String(j.schedule!.stopOrder??1000000).padStart(8,"0")}|${j.schedule!.startsAt??"9999"}|${j.id}`);
     expect(keys).toEqual([...keys].sort());
   });
   it("limits the backfill to inserts of the new dispatch identities",async()=>{

@@ -546,6 +546,11 @@ class SqlOpsRepository implements OpsRepository {
     const rows=await this.all(`SELECT * FROM ops_equipment_documents WHERE organization_id=? AND removed_at IS NULL AND (asset_id=?${model?" OR (asset_id IS NULL AND model_key=? AND (manufacturer_key IS NULL OR manufacturer_key=?))":""}) ORDER BY created_at DESC,id LIMIT 200`,model?[org,asset.id,model,maker??""]:[org,asset.id]);
     return rows.map(r=>this.equipmentDocument(r));
   }
+  async listDocumentPages(org:string,documentIds:readonly string[]) {
+    if (!documentIds.length) return [];
+    const ids=[...new Set(documentIds)].slice(0,200);
+    return (await this.all(`SELECT document_id,page_number,page_label,text FROM ops_equipment_document_pages WHERE organization_id=? AND document_id IN (${ids.map(()=>"?").join(",")}) ORDER BY document_id,page_number`,[org,...ids])).map(r=>({documentId:text(r,"document_id"),pageNumber:Number(r.page_number),pageLabel:text(r,"page_label"),text:text(r,"text")}));
+  }
   async listEquipmentNotes(org:string,assetId:string,limit:number) {
     return (await this.all("SELECT n.* FROM ops_equipment_notes n JOIN ops_work_orders w ON w.organization_id=n.organization_id AND w.id=n.work_order_id WHERE n.organization_id=? AND w.asset_id=? ORDER BY n.created_at DESC,n.id LIMIT ?",[org,assetId,Math.max(1,Math.min(limit,200))])).map(r=>({...JSON.parse(text(r,"note_json")) as import("./equipment-notes").EquipmentNoteBody,id:text(r,"id"),organizationId:text(r,"organization_id"),workOrderId:text(r,"work_order_id"),conversationId:text(r,"conversation_id"),provider:maybeText(r,"provider"),model:maybeText(r,"model"),createdByMembershipId:maybeText(r,"created_by_membership_id"),createdByName:text(r,"created_by_name"),createdAt:text(r,"created_at")}));
   }

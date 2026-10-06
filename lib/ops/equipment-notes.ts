@@ -43,6 +43,7 @@ const NOTE_SYSTEM = `You write repair notes about a piece of equipment from a te
 
 Write about the equipment, never about people:
 - No names, no "the tech", no praise or blame. Never write "missed", "should have", "failed to", "forgot" or similar.
+- Never record what an earlier visit did not find, notice or catch. Record only work that was done and what was found on this visit. If an earlier visit's work is mentioned, record the work itself, not a judgment of it.
 - Use only facts said in the chat. Never invent readings, parts, causes or results. Leave a field empty or the list empty when nothing was said.
 - Keep numbers, units, part numbers and model numbers exactly as said.
 - "tried": one entry per thing done or checked. result is "fixed" if it solved the problem, "helped" if it improved it, "no_change" if it made no difference, "unknown" if not said. Put the conditions in "detail" (what it was doing at the time) so a later reader can tell whether a new problem is the same or different.
@@ -59,7 +60,7 @@ export async function writeEquipmentNote(ai: AiClient, input: { problem: string;
     "Chat:",
     ...input.messages.map(message => `${message.from === "tech" ? "Technician" : "Assistant"}: ${message.text}`),
   ].join("\n");
-  const note = await ai.json({ system: NOTE_SYSTEM, prompt, schema: equipmentNoteSchema, effort: "low", maxTokens: 3000 });
+  const note = await ai.json({ system: NOTE_SYSTEM, prompt, schema: equipmentNoteSchema, effort: "low", maxTokens: 3000, tier: "fast" });
   const short = (value: string, max = 600) => value.trim().slice(0, max);
   return {
     symptoms: short(note.symptoms),

@@ -10,7 +10,7 @@ export async function dispatchBackfillRegression(repository:OpsRepository){
   const second=await repository.listWorkOrders(scope,{...plannedQuery,cursor:planned.nextCursor});
   expect(second.items).toHaveLength(2);
   expect(new Set([...planned.items,...second.items].map(row=>row.id)).size).toBe(4);
-  const ordered=[...planned.items,...second.items].map(row=>`${row.schedule!.day}|${row.schedule!.startsAt??"9999"}|${({emergency:0,urgent:1,routine:2,planned:3})[row.priority]}|${row.id}`);
+  const ordered=[...planned.items,...second.items].map(row=>`${row.schedule!.day}|${String(row.schedule!.stopOrder??1000000).padStart(8,"0")}|${row.schedule!.startsAt??"9999"}|${row.id}`);
   expect(ordered).toEqual([...ordered].sort());
   expect((await repository.listWorkOrders({organizationId:dispatchOrg,storeIds:[]},plannedQuery)).items).toEqual([]);
   const original=(await repository.getWorkOrder(dispatchOrg,"dispatch-study-job-25"))!;

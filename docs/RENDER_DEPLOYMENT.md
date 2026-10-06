@@ -70,11 +70,21 @@ and says that driving routes are not set up. Drive times are for a typical day,
 not live traffic.
 
 AI help is optional. Set `OPS_AI_PROVIDER=anthropic` and `ANTHROPIC_API_KEY` (from
-console.anthropic.com) to show **Fill it in for me** on technician checkout forms.
-`OPS_AI_MODEL` overrides the default model (`claude-opus-5-5`). Keep the key only in
-Render's Environment settings, set a monthly spend limit in the Anthropic console,
-and rotate the key if it is ever exposed. Without these settings the checkout forms
-work exactly as before. The AI only fills the form; the technician reviews and submits.
+console.anthropic.com) to turn on checkout by chat, AI troubleshooting and AI repair notes.
+Without these settings every form works by hand exactly as before.
+
+Models (cheapest that passed the tricky-case tests in `tests/ai-eval.test.ts`):
+
+- `OPS_AI_FAST_MODEL` — checkout chat and repair notes. Default `claude-haiku-4-5`.
+- `OPS_AI_MODEL` — troubleshooting. Default `claude-sonnet-5-5`.
+- `OPS_AI_WEB_SEARCH=off` turns off internet look-ups (on by default; at most two searches
+  per question, only when the records and manuals don't cover a model-specific code, part or spec).
+
+Before changing a model or the AI instructions, rerun the tricky cases (a few cents to about a dollar):
+`OPS_AI_EVAL=1 OPS_AI_PROVIDER=anthropic ANTHROPIC_API_KEY=... npm run ai:eval`.
+Keep the key only in Render's Environment settings, set a monthly spend limit in the Anthropic
+console, and rotate the key if it is ever exposed. The AI never saves a result on its own: the
+technician confirms the summary, and the normal form is submitted.
 
 For uploaded evidence, create a separate private S3-compatible bucket and set
 the `S3_*` variables from `.env.render.example`. Do not use Render's ephemeral

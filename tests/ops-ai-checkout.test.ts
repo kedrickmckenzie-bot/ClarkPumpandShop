@@ -31,6 +31,9 @@ it("never claims ready while the form still needs an answer", async () => {
   expect(noNotes).toMatchObject({ ready: false, reply: "What still needs to be done?" });
   // Flag a problem does not ask whether it was working.
   expect((await checkoutChatTurn(fakeAi(turn({ outcome: checkoutChoices("problem")[0][0], workingWhenLeft: "unknown", notes: "Need a cartridge" })).ai, { ...base, mode: "problem" })).ready).toBe(true);
+  // A confirming summary counts as ready even if the model forgot the flag, but never while something is missing.
+  expect((await checkoutChatTurn(fakeAi(turn({ ready: false })).ai, { ...base, mode: "job" })).ready).toBe(true);
+  expect((await checkoutChatTurn(fakeAi(turn({ ready: false, workingWhenLeft: "unknown" })).ai, { ...base, mode: "job" })).ready).toBe(false);
   // A question passes straight through.
   expect(await checkoutChatTurn(fakeAi(turn({ ready: false, reply: "Did the drip stop?" })).ai, { ...base, mode: "job" })).toMatchObject({ ready: false, reply: "Did the drip stop?" });
 });

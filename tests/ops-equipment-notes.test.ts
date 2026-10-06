@@ -56,13 +56,14 @@ it("only a top admin can open the notes, and opening is recorded", async () => {
   const fixture = buildShowcaseFixture(now);
   const work = fixture.workOrders.find(w => w.organizationId === org && w.assetId)!;
   const repository = createOpsFixtureRepository(fixture);
+  const demoNotes = (await repository.listEquipmentNotes(org, work.assetId!, 100)).length;
   await seedNote(repository, work.id, 1);
   const services = { repository, clock: { now: () => now }, ids: { next: (p: string) => `${p}-open` } };
   for (const actorId of ["membership-northline-tech-1", "membership-northline-field-manager"])
     await expect(openEquipmentNotes(services, { organizationId: org, actor: { ...tech, actorId }, assetId: work.assetId! })).rejects.toThrow(/top admin/);
   expect(repository.snapshot().auditEvents.some(e => e.eventType === "equipment_notes.opened")).toBe(false);
   const opened = await openEquipmentNotes(services, { organizationId: org, actor: { ...tech, actorId: "membership-northline-facilities", actorName: "Admin" }, assetId: work.assetId! });
-  expect(opened.notes).toHaveLength(1);
+  expect(opened.notes).toHaveLength(demoNotes + 1);
   expect(repository.snapshot().auditEvents.find(e => e.eventType === "equipment_notes.opened")).toMatchObject({ aggregateId: work.assetId, actorId: "membership-northline-facilities" });
 });
 
@@ -78,15 +79,16 @@ it("gives the troubleshooting AI this unit's history, notes and documents, with 
   const { diagnoseTurn } = await import("@/lib/ops/ai-diagnose");
   const { AiUnavailableError } = await import("@/lib/ops/ai");
   const calls: { system: string; prompt: string }[] = [];
-  const ai: AiClient = { provider: "test", model: "m", async json(request) { calls.push(request); return request.schema.parse({ reply: " Check the coil first. ", sources: [{ kind: "note", label: "2026-08-18" }, { kind: "note", label: "2026-08-18" }, { kind: "general", label: " " }] }); } };
-  const context = { problem: "Box warm", store: "104 Elm", equipment: "Beer cave · Copeland · M4FH-A050", history: "2026-08-18: Box warm at 48°F · closed · in-house", notes: notesForAi([{ ...note, id: "n", organizationId: org, workOrderId: "w", conversationId: "c", createdByName: "Maria", createdAt: "2026-08-18T10:00:00.000Z" }]), documents: ["Beer cave troubleshooting guide (demo)"] };
+  const ai: AiClient = { provider: "test", model: "m", async json(request) { calls.push(request); return request.schema.parse({ reply: " Check the coil first. ", webQuery: "Copeland M4FH fault", sources: [{ kind: "note", label: "2026-08-18" }, { kind: "note", label: "2026-08-18" }, { kind: "general", label: " " }] }); } };
+  const context = { problem: "Box warm", store: "104 Elm", equipment: "Beer cave · Copeland · M4FH-A050", history: "2026-08-18: Box warm at 48°F · closed · in-house", notes: notesForAi([{ ...note, id: "n", organizationId: org, workOrderId: "w", conversationId: "c", createdByName: "Maria", createdAt: "2026-08-18T10:00:00.000Z" }]), documents: ["Beer cave troubleshooting guide (demo)"], excerpts: [{ title: "Beer cave troubleshooting guide (demo)", pageLabel: "Page 10", text: "Check the compressor terminal box for loose connections." }] };
   await expect(diagnoseTurn(ai, context, [{ from: "ai", text: "What's it doing?" }])).rejects.toBeInstanceOf(AiUnavailableError);
   expect(calls).toHaveLength(0);
   const turn = await diagnoseTurn(ai, context, [{ from: "tech", text: "47F and short cycling" }]);
-  expect(turn).toEqual({ reply: "Check the coil first.", sources: [{ kind: "note", label: "2026-08-18" }] });
-  for (const text of ["2026-08-18: Box warm at 48°F", "Fixed by: Cleaning the coil", "Beer cave troubleshooting guide (demo)", "Technician: 47F and short cycling"]) expect(calls[0].prompt).toContain(text);
+  expect(turn).toEqual({ reply: "Check the coil first.", webQuery: "", sources: [{ kind: "note", label: "2026-08-18" }] });
+  expect(calls[0].prompt).toContain("Web search is not available");
+  for (const text of ["2026-08-18: Box warm at 48°F", "Fixed by: Cleaning the coil", "Beer cave troubleshooting guide (demo)", "Technician: 47F and short cycling", "[Beer cave troubleshooting guide (demo), Page 10]", "loose connections"]) expect(calls[0].prompt).toContain(text);
   expect(calls[0].prompt).not.toContain("Maria");
-  for (const rule of ["History is a clue, never a rule", "Never say something is \"ruled out\"", "Never mention or guess who did past work", "lockout/tagout", "cannot read inside the documents"]) expect(calls[0].system).toContain(rule);
+  for (const rule of ["History is a clue, never a rule", "Never say something is \"ruled out\"", "Never mention or guess who did past work", "lockout/tagout", "Never claim a document says something"]) expect(calls[0].system).toContain(rule);
 });
 
 it("lets the checkout chat see the earlier troubleshooting chat", async () => {
@@ -96,4 +98,46 @@ it("lets the checkout chat see the earlier troubleshooting chat", async () => {
   await checkoutChatTurn(ai, { mode: "job", problem: "Fan grinding", store: "104", messages: [{ from: "tech", text: "done" }], earlier: [{ from: "tech", text: "bearings shot on the evap fan" }] });
   expect(calls[0].prompt).toContain("Earlier troubleshooting chat");
   expect(calls[0].prompt).toContain("bearings shot on the evap fan");
+});
+
+it("runs a capped web search only when the AI asks, and labels web sources from the real search", async () => {
+  const { diagnoseTurn, searchWebForDiagnosis } = await import("@/lib/ops/ai-diagnose");
+  const prompts: string[] = [], searches: { prompt: string; maxSearches: number }[] = [];
+  const answers = [
+    { reply: "Let me look that up.", webQuery: "Copeland M4FH-A050 2 flash code", sources: [] },
+    { reply: "The web says 2 flashes is a low-pressure lockout.", webQuery: "another search", sources: [{ kind: "web", label: "made-up.example" }, { kind: "general", label: "lockouts" }] },
+  ];
+  const ai: AiClient = {
+    provider: "test", model: "m",
+    async json(request) { prompts.push(request.prompt); return request.schema.parse(answers[prompts.length - 1]); },
+    async webSearch(request) { searches.push(request); return { text: "- 2 flashes: low-pressure lockout", sources: [{ title: "Bulletin", url: "https://www.example.com/bulletin" }, { title: "Bad", url: "javascript:alert(1)" }] }; },
+  };
+  const context = { equipment: "Beer cave · Copeland · M4FH-A050", history: "", notes: "", documents: [], excerpts: [] };
+  const first = await diagnoseTurn(ai, context, [{ from: "tech", text: "board flashes 2 times" }], { canSearch: true });
+  expect(first.webQuery).toBe("Copeland M4FH-A050 2 flash code");
+  const web = await searchWebForDiagnosis(ai, first.webQuery, context.equipment);
+  expect(searches).toEqual([{ system: expect.stringContaining("manufacturer"), prompt: expect.stringContaining("M4FH-A050"), maxSearches: 2 }]);
+  const second = await diagnoseTurn(ai, { ...context, web }, [{ from: "tech", text: "board flashes 2 times" }]);
+  expect(prompts[1]).toContain("2 flashes: low-pressure lockout");
+  expect(second.webQuery).toBe("");
+  expect(second.sources).toEqual([{ kind: "general", label: "lockouts" }, { kind: "web", label: "example.com", url: "https://www.example.com/bulletin" }]);
+  expect(await searchWebForDiagnosis({ ...ai, webSearch: undefined }, "x", "y")).toBeUndefined();
+});
+
+it("gives the AI each past job's close-out results, newest corrections only and without names", async () => {
+  const { closeOutLines } = await import("@/lib/server/ai-diagnose-context");
+  const fixture = buildShowcaseFixture(now);
+  const repository = createOpsFixtureRepository(fixture);
+  const internal = fixture.workResults!.find(r => r.outcomeNotes)!;
+  const internalLines = await closeOutLines(repository, org, internal.workOrderId);
+  expect(internalLines.join("\n")).toContain(internal.outcomeNotes!.slice(0, 40));
+  expect(internalLines.join("\n")).toContain(internal.outcome.replaceAll("_", " "));
+  expect(internalLines.join("\n")).not.toContain(internal.performerName);
+  const visit = fixture.siteVisitWorkOrders.find(v => v.outcome && v.outcomeNotes && !fixture.workResults!.some(r => r.siteVisitWorkOrderId === v.id))!;
+  expect((await closeOutLines(repository, org, visit.workOrderId)).join("\n")).toContain(visit.outcomeNotes!.replace(/\s+/g, " ").slice(0, 40));
+  // A correction replaces the result it corrects.
+  fixture.workResults!.push({ ...internal, id: "result-correction", supersedesResultId: internal.id, outcomeNotes: "Corrected: gasket replaced", source: "correction", outcomeRecordedAt: now });
+  const corrected = (await closeOutLines(createOpsFixtureRepository(fixture), org, internal.workOrderId)).join("\n");
+  expect(corrected).toContain("Corrected: gasket replaced");
+  expect(corrected).not.toContain(internal.outcomeNotes!.slice(0, 40));
 });
