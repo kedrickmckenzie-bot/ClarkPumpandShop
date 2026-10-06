@@ -171,6 +171,32 @@ export function EquipmentIssues({ model }: { model: NonNullable<DashboardPageVie
   </section>;
 }
 
+/** What changed since this person last pressed "Mark as seen". Each count opens exactly its jobs. */
+export function SinceLastLooked({ model }: { model: NonNullable<DashboardPageViewModel["sinceLastLooked"]> }) {
+  const changed = model.parts.filter(part => part.count > 0);
+  return <section id="since-last-looked" className={styles.sinceBar} aria-labelledby="since-last-looked-title">
+    <div className={styles.sinceCopy}>
+      <h2 id="since-last-looked-title">Since you last looked</h2>
+      <p className={styles.sinceWhen}>{model.sinceLabel}</p>
+      {changed.length ? <p className={styles.sinceParts}>{changed.map((part, index) => <span key={part.kind}>{index ? <span aria-hidden="true" className={styles.sinceDot}>·</span> : null}<Link href={part.href} className={part.kind === "fixed" ? styles.sinceGood : styles.sinceAlert}><strong>{part.count}</strong> {part.label}</Link></span>)}</p>
+        : <p className={styles.sinceParts}>Nothing new.</p>}
+    </div>
+    <form method="post" action={model.markSeenAction}><button type="submit" className={styles.sinceButton}>Mark as seen</button></form>
+  </section>;
+}
+
+/** Repeat problems: equipment with several repair calls in a short window, using the issue-ranking rule. */
+export function RepeatProblems({ model }: { model: NonNullable<DashboardPageViewModel["repeatProblems"]> }) {
+  return <section id="repeat-problems" className={styles.section} aria-labelledby="repeat-problems-title">
+    <div className={styles.issueHeading}><div><h2 id="repeat-problems-title">Repeat problems</h2><p>{model.minIssues}+ repair calls in the last {model.days} days · {model.period}</p></div>{model.totalCount > model.rows.length ? <Link href={model.href} className={styles.textLink}>View all {model.totalCount} <ArrowRight size={16} aria-hidden="true" /></Link> : null}</div>
+    {model.rows.length ? <div className={styles.issueTable}><table><caption>Equipment with repeat repair calls</caption><thead><tr><th>Equipment</th><th>Store</th><th>Calls</th><th>Recorded work cost</th><th>Latest call</th></tr></thead><tbody>{model.rows.map(row => <tr key={row.id}>
+      <td><Link href={row.href}>{row.name}</Link><small>{row.assetTag}</small></td><td>{row.storeLabel}</td>
+      <td><Link href={row.href} aria-label={`${row.issueCount} repair calls for ${row.name} at ${row.storeLabel}`}>{row.issueCount}</Link></td>
+      <td>{row.cost}<small>{row.coverage}</small></td><td>{row.latestIssue}</td>
+    </tr>)}</tbody></table></div> : <p className={styles.issueNote}>No equipment has {model.minIssues} or more repair calls in the last {model.days} days.</p>}
+  </section>;
+}
+
 export function ControlTower({ model, capitalSummary, operatingSummary }: { model: DashboardPageViewModel; capitalSummary?: ReactNode; operatingSummary?: ReactNode }) {
   if (model.state.kind !== "ready") {
     return <div className={styles.workspace}><PageHeader model={model} /><StatePanel model={model} /></div>;
@@ -192,13 +218,15 @@ export function ControlTower({ model, capitalSummary, operatingSummary }: { mode
   ) : (
     <section className={styles.section}><div className={styles.empty}><BarChart3 size={24} aria-hidden="true" /><p>No insight records are available for this scope and period.</p></div></section>
   );
-  const metrics = <><MetricStrip metrics={model.metrics} />{operatingSummary}</>;
+  const since = model.sinceLastLooked ? <SinceLastLooked model={model.sinceLastLooked} /> : null;
+  const metrics = <>{since}<MetricStrip metrics={model.metrics} />{operatingSummary}</>;
   // Every role can reach the review queue from the Overview: a count tile when the layout has one, otherwise one link.
   const queueLink = model.metrics.some((metric) => metric.link.href.startsWith("/app/action-center")) ? null
     : <p className={styles.queueLink}><Link className={styles.textLink} href="/app/action-center">Open review queue<ArrowRight size={15} aria-hidden="true" /></Link></p>;
   const pipeline = <Pipeline model={model} />;
   const spotlight = model.spotlight ? <Spotlight model={model.spotlight} /> : null;
-  const equipment = model.equipmentIssues ? <EquipmentIssues model={model.equipmentIssues} /> : null;
+  const repeat = model.repeatProblems ? <RepeatProblems model={model.repeatProblems} /> : null;
+  const equipment = <>{repeat}{model.equipmentIssues ? <EquipmentIssues model={model.equipmentIssues} /> : null}</>;
   let content: ReactNode;
 
   switch (model.layout) {

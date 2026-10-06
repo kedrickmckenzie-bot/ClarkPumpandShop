@@ -5,6 +5,11 @@ import { rollingYearStart } from "@/lib/ops/dashboard-query";
 import { presentEquipmentIssues, buildEquipmentIssueRanking } from "./equipment-issues-presenter";
 import { attentionAccess } from "./attention-presenter";
 import { yourActionBreakdown } from "@/lib/ops/your-actions";
+import { FIRST_LOOK_DAYS, SINCE_KINDS, SINCE_LABELS, sinceHref, sinceStartFor } from "@/lib/ops/since-last-looked";
+import { REPEAT_DAYS, repeatProblemWindow } from "@/lib/ops/equipment-issues";
+import { REPEAT_WORK_MIN_JOBS } from "@/lib/ops/replacement-intelligence";
+import { formatOperationsDateTime } from "@/lib/ops/local-time";
+import type { OpsRepository, OrganizationScope } from "@/lib/ops/repository";
 import { buildReviewQueue, buildReviewSources } from "./review-queue-presenter";
 import { buildPmScheduleModel } from "./pm-schedule-presenter";
 import { buildPmSetupManagement, buildPmSetupSources } from "./pm-setup-presenter";
@@ -273,6 +278,8 @@ function enforceDashboardLinkPolicy<T extends DashboardPageViewModel>(model: T, 
     model.spotlight = undefined;
   }
   if (model.equipmentIssues && !roleCanOpenOperatorHref(role, model.equipmentIssues.href)) model.equipmentIssues = undefined;
+  if (model.repeatProblems && !roleCanOpenOperatorHref(role, model.repeatProblems.href)) model.repeatProblems = undefined;
+  if (model.sinceLastLooked && !model.sinceLastLooked.parts.every(part => roleCanOpenOperatorHref(role, part.href))) model.sinceLastLooked = undefined;
   return model;
 }
 
@@ -312,7 +319,7 @@ export async function loadListModel(route: ListRouteId, searchParams: OperatorSe
   const requestedKeys = Object.entries(searchParams).filter(([key, value]) => !["saved", "updated", "created", "success", "notice", "error", "layout"].includes(key) && Boolean(Array.isArray(value) ? value[0] : value)).map(([key]) => key);
   const supportedQueryKeys: Partial<Record<ListRouteId, ReadonlySet<string>>> = {
     requests: new Set(["q", "page", "status", "store", "selected"]),
-    "work-orders": new Set(["q", "page", "status", "stage", "store", "vendor", "region", "category", "path", "asset", "component", "hasCost", "createdFrom", "createdThrough", "costFrom", "costTo", "costMonth", "currency", "basis", "period", "selected", "visitPlan", "storeGroup", "appointment", "reviewWindow", "opportunity", "assignee"]),
+    "work-orders": new Set(["q", "page", "status", "stage", "store", "vendor", "region", "category", "path", "asset", "component", "hasCost", "createdFrom", "createdThrough", "costFrom", "costTo", "costMonth", "currency", "basis", "period", "selected", "visitPlan", "storeGroup", "appointment", "reviewWindow", "opportunity", "assignee", "change", "changedFrom", "changedTo"]),
     visits: new Set(["q", "page", "status", "store", "vendor", "review", "selected", "layout"]),
     stores: new Set(["q", "page", "selected"]),
     vendors: new Set(["q", "page", "selected"]),
@@ -400,6 +407,12 @@ export async function loadDashboardModel() {
   ]);
   const model = presentQueryDashboard({ activity, attention, charts, context, lifecycle }, session, window);
   model.equipmentIssues = presentEquipmentIssues(issues, window, session);
+  const [repeat, since] = await Promise.all([
+    loadRepeatProblems(repository, scope, session, asOf),
+    loadSinceLastLooked(repository, scope, session, asOf),
+  ]);
+  model.repeatProblems = repeat;
+  model.sinceLastLooked = since;
   // "Needs your action" says what its number is made of, so it never silently disagrees with Review.
   const yours = model.metrics?.find(metric => metric.id === "open-exceptions");
   if (yours && attention.mineCount) {
@@ -432,6 +445,27 @@ export async function loadDashboardModel() {
     model.metrics = [ownerSpendMetric(current, prior, windows), ...model.metrics.filter((metric) => metric.id !== "open-exceptions").map((metric) => metric.id === "recorded-cost" ? { ...metric, label: "Recorded work cost · last 12 months", supportingText: `${new Date(`${window.costFrom}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })} – ${new Date(`${window.costTo}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}` } : metric)];
   }
   return enforceDashboardLinkPolicy(model, session);
+}
+
+/** Repeat problems: 3+ repair calls on one unit in the last 60 days, from the same issue rule as the ranking. */
+async function loadRepeatProblems(repository: OpsRepository, scope: OrganizationScope, session: OperatorSession, asOf: string) {
+  if (!roleCanAccessProgramRoute(session.role, "equipment")) return undefined;
+  const window = repeatProblemWindow(asOf);
+  const result = await repository.listEquipmentIssues(scope, window, { limit: 5, minIssueCount: REPEAT_WORK_MIN_JOBS });
+  return { ...presentEquipmentIssues(result, window, session, REPEAT_WORK_MIN_JOBS), days: REPEAT_DAYS, minIssues: REPEAT_WORK_MIN_JOBS };
+}
+
+/** "Since you last looked": counted with the same list query each part opens, so the numbers match. */
+async function loadSinceLastLooked(repository: OpsRepository, scope: OrganizationScope, session: OperatorSession, asOf: string) {
+  if (!["executive", "facilities", "regional", "store_manager"].includes(session.role) || !session.membershipId) return undefined;
+  const lastSeen = await repository.getOverviewSeenAt(session.organizationId, session.membershipId);
+  const from = sinceStartFor(lastSeen, asOf);
+  const counts = await Promise.all(SINCE_KINDS.map(kind => repository.countWorkOrders(scope, { change: { kind, from, to: asOf } })));
+  return {
+    sinceLabel: lastSeen ? `Since ${formatOperationsDateTime(lastSeen)}` : `Last ${FIRST_LOOK_DAYS} days`,
+    parts: SINCE_KINDS.map((kind, index) => ({ kind, count: counts[index]!, label: SINCE_LABELS[kind][counts[index] === 1 ? "one" : "many"], href: sinceHref({ kind, from, to: asOf }) })),
+    markSeenAction: "/api/ops/overview/seen",
+  };
 }
 
 export async function loadEquipmentIssueRanking(query: OperatorSearchParameters) {

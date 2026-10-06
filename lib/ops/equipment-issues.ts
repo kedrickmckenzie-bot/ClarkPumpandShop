@@ -21,7 +21,10 @@ export function isEquipmentIssue(work: WorkOrder, window: DashboardWindow, pmWor
     && work.createdAt.slice(0, 10) >= window.costFrom && work.createdAt.slice(0, 10) <= window.costTo;
 }
 
-export function equipmentIssuesFromFixture(fixture: OpsFixture, scope: OrganizationScope, window: DashboardWindow, query: PageRequest = {}): EquipmentIssuePage {
+/** Query for the issue ranking; `minIssueCount` keeps only equipment with at least that many issues (repeat problems). */
+export type EquipmentIssueQuery = PageRequest & { minIssueCount?: number };
+
+export function equipmentIssuesFromFixture(fixture: OpsFixture, scope: OrganizationScope, window: DashboardWindow, query: EquipmentIssueQuery = {}): EquipmentIssuePage {
   validateDashboardWindow(window);
   const stores = new Map(fixture.stores.filter(s => s.organizationId === scope.organizationId
     && (scope.storeIds === undefined || scope.storeIds.includes(s.id))
@@ -30,7 +33,7 @@ export function equipmentIssuesFromFixture(fixture: OpsFixture, scope: Organizat
   const work = fixture.workOrders.filter(w => w.organizationId === scope.organizationId && stores.has(w.storeId) && isEquipmentIssue(w, window, pm));
   const rows = fixture.assets.filter(a => a.organizationId === scope.organizationId && stores.has(a.storeId)).flatMap(asset => {
     const issues = work.filter(w => w.assetId === asset.id && w.storeId === asset.storeId);
-    if (!issues.length) return [];
+    if (!issues.length || issues.length < (query.minIssueCount ?? 1)) return [];
     const ids = new Set(issues.map(w => w.id));
     const costs = fixture.costLines.filter(c => c.organizationId === scope.organizationId && ids.has(c.workOrderId)
       && c.serviceDate.slice(0, 10) >= window.costFrom && c.serviceDate.slice(0, 10) <= window.costTo && c.amount.currency === window.currency);
@@ -47,6 +50,16 @@ export function equipmentIssuesFromFixture(fixture: OpsFixture, scope: Organizat
 export function equipmentIssueHistoryHref(assetId: string, window: DashboardWindow) {
   return `/app/equipment/${encodeURIComponent(assetId)}?${new URLSearchParams({ cohort: "issues", history: "12", issueFrom: window.costFrom, issueTo: window.costTo, currency: window.currency })}#equipment-review`;
 }
-export function equipmentIssueRankingHref(window: DashboardWindow, page = 1) {
-  return `/app/equipment?${new URLSearchParams({ view: "issues", issueFrom: window.costFrom, issueTo: window.costTo, currency: window.currency, ...(page > 1 ? { page: String(page) } : {}) })}`;
+export function equipmentIssueRankingHref(window: DashboardWindow, page = 1, minIssues?: number) {
+  return `/app/equipment?${new URLSearchParams({ view: "issues", issueFrom: window.costFrom, issueTo: window.costTo, currency: window.currency, ...(minIssues && minIssues > 1 ? { minIssues: String(minIssues) } : {}), ...(page > 1 ? { page: String(page) } : {}) })}`;
+}
+
+/**
+ * Repeat problems: equipment with REPEAT_WORK_MIN_JOBS or more unplanned jobs in the last REPEAT_DAYS days.
+ * Same count of issues as the ranking; 3 matches the replacement rules' repeat-work threshold.
+ */
+export const REPEAT_DAYS = 60;
+export function repeatProblemWindow(asOf: string, currency = "USD"): DashboardWindow {
+  const to = asOf.slice(0, 10);
+  return { asOf, costFrom: new Date(Date.parse(`${to}T12:00:00Z`) - (REPEAT_DAYS - 1) * 86_400_000).toISOString().slice(0, 10), costTo: to, currency };
 }

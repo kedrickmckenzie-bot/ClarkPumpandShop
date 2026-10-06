@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import InternalJob from "@/app/app/my-work/[id]/page";
 import { createFollowUp } from "@/lib/ops/commands";
@@ -111,6 +111,9 @@ describe("P2 authenticated result, visit and file boundaries", () => {
   });
 
   it("checks out through the actual endpoint and rejects a stale job version without partial results", async () => {
+    // The job is created on the fixed demo clock; the route reads the real clock, so pin it near that moment.
+    vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(Date.parse(dispatchNow) + 60 * 60_000));
+    onTestFinished(() => { vi.useRealTimers(); });
     const job = await dispatchJob(r, "person"), checkin = await resultForm(job.id, { action: "check_in", workOrderId: job.id, storeId: job.storeId });
     const started = await visitPost(request("/api/ops/internal-visits", checkin)); expect(started.status).toBe(303);
     const visitId = started.headers.get("location")!.split("/").at(-1)!;

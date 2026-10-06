@@ -1,17 +1,16 @@
 import type { OrganizationScope } from "./repository";
 import type { OpsSqlDriver } from "./sql-driver";
-import type { PageRequest } from "./types";
 import { scopeWhere } from "./sql-scope";
 import { dashboardPageBounds, validateDashboardWindow, type DashboardWindow } from "./dashboard-query";
-import type { EquipmentIssuePage } from "./equipment-issues";
+import type { EquipmentIssuePage, EquipmentIssueQuery } from "./equipment-issues";
 
 /** Aggregate before joining costs; both the work count and cost coverage stay distinct. */
-export async function queryEquipmentIssues(driver: OpsSqlDriver, scope: OrganizationScope, window: DashboardWindow, query: PageRequest = {}): Promise<EquipmentIssuePage> {
+export async function queryEquipmentIssues(driver: OpsSqlDriver, scope: OrganizationScope, window: DashboardWindow, query: EquipmentIssueQuery = {}): Promise<EquipmentIssuePage> {
   validateDashboardWindow(window);
   const params: unknown[] = [];
   const scoped = scopeWhere(scope, "s", params);
   const { limit, offset } = dashboardPageBounds(query);
-  params.push(window.costFrom, window.costTo, window.costFrom, window.costTo, window.currency, limit, offset);
+  params.push(window.costFrom, window.costTo, window.costFrom, window.costTo, window.currency, Math.max(1, Math.floor(query.minIssueCount ?? 1)), limit, offset);
   const result = await driver.query({ sql: `WITH issues AS (
     SELECT w.id, w.organization_id, a.id AS asset_id, a.name, a.asset_tag, s.id AS store_id, s.store_number, s.name AS store_name, w.created_at
     FROM ops_stores s JOIN ops_work_orders w ON w.organization_id=s.organization_id AND w.store_id=s.id
@@ -28,6 +27,7 @@ export async function queryEquipmentIssues(driver: OpsSqlDriver, scope: Organiza
       COUNT(*) AS issue_count, MAX(i.created_at) AS latest_issue, COALESCE(SUM(c.amount),0) AS recorded_cost_minor, COUNT(c.work_order_id) AS cost_work_count
       FROM issues i LEFT JOIN costs c ON c.work_order_id=i.id
       GROUP BY i.asset_id,i.name,i.asset_tag,i.store_id,i.store_number,i.store_name
+      HAVING COUNT(*) >= ?
     ), totals AS (SELECT COUNT(*) AS total_count FROM ranked),
     visible AS (SELECT * FROM ranked ORDER BY issue_count DESC, asset_id ASC LIMIT ? OFFSET ?)
     SELECT visible.*, totals.total_count FROM totals LEFT JOIN visible ON 1=1 ORDER BY visible.issue_count DESC, visible.asset_id ASC`, params });

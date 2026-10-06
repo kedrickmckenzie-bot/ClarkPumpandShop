@@ -27,6 +27,7 @@ import { vendorResponseSql } from "./work-stage-sql";
 import { queryDashboardActivity, queryDashboardBreakdown } from "./dashboard-sql";
 import { queryDashboardContext } from "./dashboard-context-sql";
 import { queryEquipmentIssues } from "./equipment-issues-sql";
+import { sinceSql } from "./since-last-looked";
 import { queryDashboardLifecycle } from "./lifecycle-summary-sql";
 import { queryBriefSources } from "./owner-brief-sql";
 import { PENDING_REQUEST_STATUSES, WORK_STAGE_STATUSES } from "./dashboard-cohorts";
@@ -444,7 +445,7 @@ class SqlOpsRepository implements OpsRepository {
   async listAttentionSources(scope: OrganizationScope, access: import("./attention-query").AttentionAccess, query: import("./attention-query").AttentionQuery, itemId: string, page: import("./types").PageRequest) {
     return queryAttentionSources(this.driver, scope, access, query, itemId, page);
   }
-  async listEquipmentIssues(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow, query: PageRequest = {}) {
+  async listEquipmentIssues(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow, query: import("./equipment-issues").EquipmentIssueQuery = {}) {
     return queryEquipmentIssues(this.driver, scope, window, query);
   }
   async listUpcomingAppointments(scope: OrganizationScope, query: import("./upcoming-appointments").UpcomingAppointmentQuery) { return queryUpcomingAppointments(this.driver,scope,query); }
@@ -553,6 +554,14 @@ class SqlOpsRepository implements OpsRepository {
   }
   async listEquipmentNotes(org:string,assetId:string,limit:number) {
     return (await this.all("SELECT n.* FROM ops_equipment_notes n JOIN ops_work_orders w ON w.organization_id=n.organization_id AND w.id=n.work_order_id WHERE n.organization_id=? AND w.asset_id=? ORDER BY n.created_at DESC,n.id LIMIT ?",[org,assetId,Math.max(1,Math.min(limit,200))])).map(r=>({...JSON.parse(text(r,"note_json")) as import("./equipment-notes").EquipmentNoteBody,id:text(r,"id"),organizationId:text(r,"organization_id"),workOrderId:text(r,"work_order_id"),conversationId:text(r,"conversation_id"),provider:maybeText(r,"provider"),model:maybeText(r,"model"),createdByMembershipId:maybeText(r,"created_by_membership_id"),createdByName:text(r,"created_by_name"),createdAt:text(r,"created_at")}));
+  }
+  async countWorkOrders(scope: OrganizationScope, query: WorkOrderListQuery) {
+    const rows = await this.workOrderRows(scope, { ...query, cursor: undefined, offset: undefined, countOnly: true });
+    return Number(rows[0]?.total_count ?? 0);
+  }
+  async getOverviewSeenAt(org: string, membershipId: string) {
+    const row = await this.first("SELECT seen_at FROM ops_overview_seen_marks WHERE organization_id = ? AND membership_id = ? ORDER BY seen_at DESC, id DESC LIMIT 1", [org, membershipId]);
+    return row ? text(row, "seen_at") : undefined;
   }
   async listAiConversations(org:string,workOrderId:string) {
     return (await this.all("SELECT * FROM ops_ai_conversations WHERE organization_id=? AND work_order_id=? ORDER BY created_at DESC,id LIMIT 20",[org,workOrderId])).map(r=>({id:text(r,"id"),organizationId:text(r,"organization_id"),workOrderId:text(r,"work_order_id"),kind:text(r,"kind") as "checkout"|"diagnostic",messages:JSON.parse(text(r,"messages_json")) as import("./ai-conversations").AiChatMessage[],summary:maybeText(r,"summary"),provider:maybeText(r,"provider"),model:maybeText(r,"model"),createdByMembershipId:maybeText(r,"created_by_membership_id"),createdByName:text(r,"created_by_name"),createdAt:text(r,"created_at")}));
@@ -883,6 +892,7 @@ class SqlOpsRepository implements OpsRepository {
     if (query.dueBefore) { clauses.push("w.due_at <= ?"); params.push(query.dueBefore); }
     if (query.dueAfter) { clauses.push("w.due_at > ?"); params.push(query.dueAfter); }
     if (query.excludeHeld) clauses.push("NOT EXISTS (SELECT 1 FROM ops_work_order_visit_holds eh WHERE eh.organization_id=w.organization_id AND eh.work_order_id=w.id AND eh.status='active' AND w.status='approved')");
+    if (query.change) { const change = sinceSql(query.change); clauses.push(change.sql); params.push(...change.params); }
     if (query.heldOnly) clauses.push("w.status = 'approved' AND EXISTS (SELECT 1 FROM ops_work_order_visit_holds hw WHERE hw.organization_id = w.organization_id AND hw.work_order_id = w.id AND hw.status = 'active')");
     if (query.heldStoreGroup === "multiple") clauses.push("(SELECT COUNT(*) FROM ops_work_order_visit_holds hg JOIN ops_work_orders gw ON gw.organization_id = hg.organization_id AND gw.id = hg.work_order_id WHERE hg.organization_id = w.organization_id AND gw.store_id = w.store_id AND gw.status = 'approved' AND hg.status = 'active') >= 2");
     if (query.upcomingAppointmentAfter) { clauses.push("EXISTS (SELECT 1 FROM ops_service_appointments ua WHERE ua.organization_id = w.organization_id AND ua.work_order_id = w.id AND ua.status = 'confirmed' AND ua.starts_at >= ?)"); params.push(query.upcomingAppointmentAfter); }
@@ -945,7 +955,7 @@ class SqlOpsRepository implements OpsRepository {
   async listWorkOrders(scope: OrganizationScope, query: WorkOrderListQuery = {}) {
     const scheduleZoneDatesJson=query.scheduleAt && ["today","upcoming","replan"].includes(query.scheduleView??"") ? await this.scheduleZoneDates(scope,query.scheduleAt) : undefined;
     const nativeQuery={...query,scheduleZoneDatesJson};
-    const [rows,count] = await Promise.all([this.workOrderRows(scope, nativeQuery),query.internalOnly || query.activityOrder ? this.workOrderRows(scope,{...nativeQuery,countOnly:true}) : Promise.resolve(undefined)]); const max = limit(query.limit); const visibleRows = rows.slice(0, max); const items = visibleRows.map((row) => ({ ...this.workListRow(row), currency: query.currency ?? "USD" })); const last = visibleRows.at(-1); return { items, ...(count?{totalCount:Number(count[0]?.total_count??0)}:{}), nextCursor: rows.length > max && last ? query.dispatchPlanOrder ? encodeCursor(`${maybeText(last,"plan_day") ?? maybeText(last,"plan_week") ?? "9999"}|${String(Number(last.plan_stop_order??1000000)+1000000000).padStart(10,"0")}|${maybeText(last,"plan_start") ?? "9999"}`,text(last,"id")) : query.internalOnly && !query.activityOrder ? `${({emergency:3,urgent:2,routine:1,planned:0} as Record<string,number>)[text(last,"priority")]??0}|${encodeCursor(text(last, "created_at"), text(last, "id"))}` : encodeCursor(query.activityOrder ? maybeText(last,"updated_at") ?? text(last,"created_at") : text(last,"created_at"), text(last, "id")) : undefined };
+    const [rows,count] = await Promise.all([this.workOrderRows(scope, nativeQuery),query.internalOnly || query.activityOrder || query.change ? this.workOrderRows(scope,{...nativeQuery,countOnly:true}) : Promise.resolve(undefined)]); const max = limit(query.limit); const visibleRows = rows.slice(0, max); const items = visibleRows.map((row) => ({ ...this.workListRow(row), currency: query.currency ?? "USD" })); const last = visibleRows.at(-1); return { items, ...(count?{totalCount:Number(count[0]?.total_count??0)}:{}), nextCursor: rows.length > max && last ? query.dispatchPlanOrder ? encodeCursor(`${maybeText(last,"plan_day") ?? maybeText(last,"plan_week") ?? "9999"}|${String(Number(last.plan_stop_order??1000000)+1000000000).padStart(10,"0")}|${maybeText(last,"plan_start") ?? "9999"}`,text(last,"id")) : query.internalOnly && !query.activityOrder ? `${({emergency:3,urgent:2,routine:1,planned:0} as Record<string,number>)[text(last,"priority")]??0}|${encodeCursor(text(last, "created_at"), text(last, "id"))}` : encodeCursor(query.activityOrder ? maybeText(last,"updated_at") ?? text(last,"created_at") : text(last,"created_at"), text(last, "id")) : undefined };
   }
 
   async getDispatchDayCounts(scope: OrganizationScope, query: WorkOrderListQuery) {

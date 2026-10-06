@@ -3,7 +3,7 @@
 import { useState, useSyncExternalStore } from "react";
 import { WorkspaceSearch } from "./workspace-search";
 import Image from "next/image";
-import { NavigationTrail } from "@/components/workspace/navigation-trail";
+import { RevealHashTarget } from "@/components/workspace/reveal-hash-target";
 import { workspaceStartHref } from "@/lib/ops/navigation-trail";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -317,7 +317,7 @@ export function PlatformShell({ session, children, reviewCount }: PlatformShellP
           </header>
         </div>
 
-        <main className={styles.main} id="main-content" tabIndex={-1}><NavigationTrail scopeKey={JSON.stringify([session.organizationId, session.userId, session.role, session.storeIds, session.regionIds, session.effectiveCapabilities, session.demoEdition])} />{children}</main>
+        <main className={styles.main} id="main-content" tabIndex={-1}><RevealHashTarget />{children}</main>
       </div>
     </div>
   );

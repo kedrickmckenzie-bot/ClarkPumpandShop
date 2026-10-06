@@ -7,6 +7,7 @@ import { WORK_STAGE_STATUSES } from "@/lib/ops/dashboard-cohorts";
 import { workListNavigation } from "@/lib/ops/work-list-navigation";
 import { workCreatedRange } from "@/lib/ops/work-created-range";
 
+import { SINCE_LABELS, sinceWindowFromQuery } from "@/lib/ops/since-last-looked";
 import type {
   DashboardPageViewModel,
   ListPageViewModel,
@@ -129,7 +130,13 @@ function queryAppliedFilters(route: OperatorListRoute, query: OperatorSearchPara
     open_unlinked: "Open reports", under_review: "Reports under review", acknowledged_unlinked: "Acknowledged without linked work", converted: "Reports converted to work", unlinked: "Not linked",
   };
   return Object.entries(query).flatMap(([key, raw]) => {
-    if (["q", "page", "selected", "basis", "period", "currency", "saved", "updated", "notice", "error"].includes(key)) return [];
+    if (["q", "page", "selected", "basis", "period", "currency", "saved", "updated", "notice", "error", "changedFrom", "changedTo"].includes(key)) return [];
+    if (key === "change") {
+      const window = sinceWindowFromQuery(first(raw), first(query.changedFrom), first(query.changedTo));
+      if (!window) return [];
+      const removed = { ...query, change: undefined, changedFrom: undefined, changedTo: undefined };
+      return [{ id: key, label: `${SINCE_LABELS[window.kind].filter} · ${formatOperationsDateTime(window.from)} – ${formatOperationsDateTime(window.to)}`, removeHref: hrefWithFilter(route, removed, "change") }];
+    }
     const value = first(raw);
     if (!value) return [];
     // Open work is the list's default view and already shows as the selected "Active" button.
@@ -388,10 +395,16 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
       heldReviewDeadlineTo: heldPlan && heldReviewWindow === "30" ? new Date(Date.parse(getServerOpsReportingAsOf()) + 30 * 86_400_000).toISOString() : undefined,
       heldConfirmedOpportunityAfter: heldPlan && heldOpportunity === "confirmed" ? getServerOpsReportingAsOf() : undefined,
       upcomingAppointmentAfter: upcomingAppointments ? getServerOpsReportingAsOf() : undefined,
+      change: sinceWindowFromQuery(first(query.change), first(query.changedFrom), first(query.changedTo)),
     }), costEvidence ? Promise.resolve({ approvedWorkOrders: 0, storesWithApprovedWork: 0, storesWithMultipleApprovedJobs: 0 }) : repository.getHeldWorkPortfolioSummary(scope)]);
     result = work; rows = work.items.map(heldPlan ? heldWorkRow : (row) => ({ ...workRow(row), action: (row.status === "completed_pending_review" || row.needsConfirmation) && roleCan(session, "confirm_observable_result") ? { label: "Confirm work", href: `/app/work-orders/${row.id}?view=confirmation#work-verification` } : undefined })); title = heldPlan ? "Approved work waiting for a suitable visit" : upcomingAppointments ? "Work with a confirmed upcoming appointment" : "Work orders"; eyebrow = heldPlan ? "Held-work portfolio" : upcomingAppointments ? "Scheduled service" : "Maintenance work"; description = heldPlan ? "Review what is authorized, when each job must be reconsidered, and which stores can combine approved work without losing each job's outcome or cost trail." : upcomingAppointments ? "Every result has a vendor-confirmed appointment in the selected scope. Each work order appears once even if its schedule has revisions." : "See who is handling each job and what happens next."; placeholder = "Search number, problem, store, vendor, or category";
     const warranty = await workWarrantyMarkers(repository,scope,work.items.map(row=>row.id),getServerOpsReportingAsOf().slice(0,10));
     rows.forEach(row=>{if(warranty.get(row.id)){const cell=row.cells.find(c=>c.key==="work");if(cell)cell.secondary="May be covered by warranty";}});
+    const change = sinceWindowFromQuery(first(query.change), first(query.changedFrom), first(query.changedTo));
+    if (change) {
+      title = SINCE_LABELS[change.kind].filter;
+      description = "The exact jobs counted on your Overview.";
+    }
     const mine = first(query.assignee) === "me";
     if (mine) {
       title = "My work";

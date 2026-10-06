@@ -10,6 +10,9 @@ import type {
 
 const MILLIS_PER_YEAR = 365.2425 * 24 * 60 * 60 * 1_000;
 
+/** Repeat-work threshold: this many reactive jobs on one unit is a repeat problem (replacement review and the Overview alert). */
+export const REPEAT_WORK_MIN_JOBS = 3;
+
 export type ReplacementEstimateSource = "asset_override" | "profile_benchmark" | "legacy_asset" | "planning_excluded" | "unavailable";
 
 export interface ReplacementEstimateResolution {
@@ -298,7 +301,7 @@ export function buildLifecycleRecommendationDraft(
   ].filter((value): value is string => Boolean(value));
   const ageSignal = (ageRatio ?? 0) >= 0.85;
   const spendSignal = (spendRatio ?? 0) >= 0.25;
-  const repeatWorkSignal = trailingReactiveWorkOrders.length >= 3;
+  const repeatWorkSignal = trailingReactiveWorkOrders.length >= REPEAT_WORK_MIN_JOBS;
   const componentChurnSignal = componentReplacements24Months >= 2;
   const metThresholds = [
     ageSignal ? "Useful-life position is at or beyond 85% of expected life" : undefined,
@@ -314,7 +317,7 @@ export function buildLifecycleRecommendationDraft(
     warrantyDemoted = true;
   }
   const completeCoreInputs = [installedAt, expectedLifeYears, replacementEstimateMinor].filter((value) => value !== undefined).length;
-  let confidence: LifecycleRecommendationDraft["confidence"] = completeCoreInputs === 3 && trailingReactiveWorkOrders.length >= 3 ? "high" : completeCoreInputs >= 2 ? "medium" : "low";
+  let confidence: LifecycleRecommendationDraft["confidence"] = completeCoreInputs === 3 && trailingReactiveWorkOrders.length >= REPEAT_WORK_MIN_JOBS ? "high" : completeCoreInputs >= 2 ? "medium" : "low";
   if (confidence === "high" && profileMatch && profileMatch.classification !== "exact") confidence = "medium";
   const thresholdSentence = metThresholds.length
     ? ` Met thresholds: ${metThresholds.map((item) => `${item}.`).join(" ")}${warrantyDemoted ? " Active warranty coverage favors repair under warranty, so a human must review the capital case." : ""}`

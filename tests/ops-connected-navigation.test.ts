@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { buildNorthlinePresentationFixture, NORTHLINE_ORGANIZATION_ID } from "@/lib/ops/fixtures";
 import { createOpsFixtureRepository } from "@/lib/ops/fixture-repository";
-import { advanceNavigationTrail, workspaceStartHref } from "@/lib/ops/navigation-trail";
+import { workspaceStartHref } from "@/lib/ops/navigation-trail";
 import type { OperatorSession } from "@/components/ops/data-contract";
 import { buildQueryListModel } from "@/app/app/_data/operator-query-presenter";
 import { buildCreateWorkOrderModel, buildDetailModel, buildVendorPerformanceDetailModel } from "@/app/app/_data/operator-presenter";
@@ -61,21 +61,6 @@ describe("connected navigation", () => {
       expect(row.cells.find((cell) => cell.key === "store")?.link?.href).toBe("/app/stores/store-northline-104");
       expect(row.href).toMatch(/^\/app\/work-orders\//);
     }
-  });
-
-  it("returns through exact filtered and paginated views, retains an intentional revisit, and bounds the trail", () => {
-    const source = { href: "/app/trends?period=6&metric=recorded_cost&store=104&view=records&page=2", label: "Cost evidence" };
-    const work = { href: "/app/work-orders/wo-1?view=cost", label: "WO-1 costs" };
-    const vendor = { href: "/app/vendors/vendor-1", label: "Vendor" };
-    let trail = advanceNavigationTrail(advanceNavigationTrail([source], work), vendor);
-    expect(trail[0]).toEqual(source);
-    trail = advanceNavigationTrail(trail, work);
-    expect(trail).toEqual([source, work, vendor, work]);
-    expect(advanceNavigationTrail(trail, work)).toBe(trail);
-    expect(advanceNavigationTrail(trail, { href: "https://other.test", label: "External" })).toBe(trail);
-    expect(advanceNavigationTrail(trail, { href: "/application", label: "Other" })).toBe(trail);
-    for (let i = 0; i < 10; i++) trail = advanceNavigationTrail(trail, { href: `/app/stores/${i}`, label: `Store ${i}` });
-    expect(trail).toHaveLength(6);
   });
 
   it("lets a manager open the named store, provider, and cost evidence independently from a queue row", async () => {

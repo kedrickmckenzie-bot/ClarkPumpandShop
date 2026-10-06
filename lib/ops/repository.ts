@@ -161,6 +161,8 @@ export interface WorkOrderListQuery extends PageRequest {
   upcomingAppointmentAfter?: IsoDateTime;
   heldReviewDeadlineTo?: IsoDateTime;
   heldConfirmedOpportunityAfter?: IsoDateTime;
+  /** Jobs that changed in one "Since you last looked" way inside the window. */
+  change?: import("./since-last-looked").SinceWindow;
 }
 
 export interface HeldWorkPortfolioSummary {
@@ -230,6 +232,10 @@ export interface OpsRepository extends TaskRepository {
   /** Library documents for this unit: its own plus those for its make and model, newest first. */
   listEquipmentDocuments(organizationId:string,asset:{id:string;manufacturer?:string;model?:string}): Promise<import("./equipment-documents").EquipmentDocument[]>;
   /** Saved AI conversations for a job, newest first. */
+  /** Exact number of jobs matching the list query (same rules as listWorkOrders). */
+  countWorkOrders(scope: OrganizationScope, query: WorkOrderListQuery): Promise<number>;
+  /** The person's newest "Mark as seen" time on the Overview, if any. */
+  getOverviewSeenAt(organizationId: string, membershipId: string): Promise<string | undefined>;
   listAiConversations(organizationId:string,workOrderId:string): Promise<import("./ai-conversations").AiConversation[]>;
   /** AI repair notes for jobs on this unit, newest first. Read by the AI; opened by people only through openEquipmentNotes. */
   listEquipmentNotes(organizationId:string,assetId:string,limit:number): Promise<import("./equipment-notes").EquipmentNote[]>;
@@ -439,7 +445,7 @@ export interface OpsRepository extends TaskRepository {
   // Manager-first, server-scoped read models.
   listBriefSources(scope: OrganizationScope, period: import("./owner-brief-query").BriefPeriod, query: import("./owner-brief-query").BriefSourceQuery): Promise<import("./owner-brief-query").BriefSourcePage>;
   listRecordIntegrity(scope: OrganizationScope, asOf: string, query: import("./record-integrity-query").IntegrityQuery): Promise<import("./record-integrity-query").IntegrityPage>;
-  listEquipmentIssues(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow, query?: PageRequest): Promise<import("./equipment-issues").EquipmentIssuePage>;
+  listEquipmentIssues(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow, query?: import("./equipment-issues").EquipmentIssueQuery): Promise<import("./equipment-issues").EquipmentIssuePage>;
   getDashboardContext(scope: OrganizationScope): Promise<import("./dashboard-context").DashboardContext>;
   getDashboardLifecycle(scope: OrganizationScope, asOf: string): Promise<import("./lifecycle-summary").DashboardLifecycleSummary>;
   listUpcomingAppointments(scope: OrganizationScope, query: import("./upcoming-appointments").UpcomingAppointmentQuery): Promise<import("./types").Page<import("./upcoming-appointments").UpcomingAppointmentRow>>;

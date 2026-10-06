@@ -4,6 +4,27 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Since you last looked, repeat problems, and no more Recently viewed — October 6, 2026
+
+The owner asked to drop "Recently viewed", add a "what changed" tile for managers, and flag equipment that keeps breaking.
+
+- **Recently viewed removed** from every page. The per-tab path, its session storage and its styles are gone; the small helper that opens a collapsed section when a link points into it stays (`components/workspace/reveal-hash-target.tsx`).
+- **Since you last looked** (Overview, executive / facilities / regional / store manager): one line such as "13 new urgent · 1 vendor declined · 15 now overdue". Only parts with changes show; otherwise "Nothing new." Each part opens `/app/work-orders?change=…&changedFrom=…&changedTo=…`, titled e.g. "New urgent since you last looked". The count and the list use one rule (`lib/ops/since-last-looked.ts`) in the fixture and in SQL, and the count is the list query's own total, so they always agree. The window runs from just after the last look to the moment the Overview loaded:
+  - fixed: a "completed" outcome recorded (vendor visit or in-house result);
+  - new urgent: urgent or emergency job created;
+  - vendor declined: a vendor response of "declined";
+  - now overdue: a still-open job whose due time passed.
+  Cancelled jobs never count.
+- **Mark as seen** saves the time on the server per person (membership) in a new insert-only table `ops_overview_seen_marks` (migration 0083, D1 and PostgreSQL; the fixture repository stores the same rows). The newest row is the last look; earlier looks are kept. Just viewing the page changes nothing. Before the first press the tile covers the last 7 days.
+- **Repeat problems** (Overview, roles with Equipment): equipment with 3+ repair calls in the last 60 days, with call count, recorded cost and latest call. It reuses the "Most frequent equipment issues" rule (unplanned, non-PM, non-cancelled jobs, each counted once) with a new minimum-count option, and each row opens the equipment page filtered to exactly those jobs (which links on to the replacement review). The 3-job threshold is one shared constant with the replacement rules' repeat-work signal (`REPEAT_WORK_MIN_JOBS`). "View all" opens the ranking limited to repeat problems (`minIssues`).
+- Tests (`tests/ops-since-last-looked.test.ts`): every kind has source records, and the fixture, SQLite (D1) and PostgreSQL return the same jobs and counts for full, store, empty and foreign scopes; window ends (exactly at the last look = already seen, exactly now = new) and cancelled work; link round-trip and bad links ignored; Mark as seen is per person, insert-only, newest wins, organization-scoped, refused for other organizations or non-users; repeat problems equal the ranking filtered to 3+ in fixture and SQL. Migration chain now 84.
+
+Browser check (facilities, 1440 px and 390 px): "Last 7 days · 13 new urgent · 1 vendor declined · 15 now overdue"; each part opened a list of 13, 1 and 15 results. Mark as seen → "Since Oct 6, 2026, 5:18 PM EDT · Nothing new.", unchanged after reload. Repeat problems: Store 104 beer cave 6 calls ($9,385.00), Store 101 beer cave 3, Store 102 rooftop unit 3; the 6 opened the equipment page showing "Unplanned jobs opened 6". No "Recently viewed" after moving between pages; no page errors.
+
+Pre-existing date time-bomb fixed: `tests/ops-internal-execution-route.test.ts` created a job on the fixed demo clock (October 3) but checked in on the real clock, so from October 6 check-in made a task "due before it was created" (422). It failed the same way on f3a67e9. The test now pins only `Date` near the demo moment for that one case.
+
+Validation: `db:seed`, `typecheck`, `lint`, `npm test` with PostgreSQL (1532 passed, 16 skipped, clean run), `test:e2e`, `build` and `build:render` passed. One earlier full run overlapped with a build and timed out one scheduling test; it passed alone and in the clean full run.
+
 ### One set of numbers for "Needs your action" and Review — October 6, 2026
 
 The owner saw "20 needs your action" on Overview but 18 under Work → Review, and "110 open items" next to "108 need review". Causes found and fixed:

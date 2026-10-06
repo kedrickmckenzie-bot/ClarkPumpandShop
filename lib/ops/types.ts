@@ -2041,6 +2041,7 @@ export interface OpsFixture {
   routeLegs?: import("./route-legs").RouteLeg[];
   equipmentDocuments?: import("./equipment-documents").EquipmentDocument[];
   aiConversations?: import("./ai-conversations").AiConversation[];
+  overviewSeenMarks?: import("./since-last-looked").OverviewSeenMark[];
   equipmentNotes?: import("./equipment-notes").EquipmentNote[];
   equipmentDocumentPages?: Array<import("./document-pages").DocumentPage & { id: string; organizationId: string; createdAt: string }>;
   technicianProfiles?: TechnicianProfile[];

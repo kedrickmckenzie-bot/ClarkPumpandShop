@@ -2311,3 +2311,11 @@ export const opsEquipmentDocumentPages = pgTable("ops_equipment_document_pages",
   foreignKey({columns:[t.organizationId],foreignColumns:[opsOrganizations.id]}),
   foreignKey({columns:[t.documentId],foreignColumns:[opsEquipmentDocuments.id]}),
 ]);
+/** Each "Mark as seen" press on the Overview. Insert-only; the newest row per person is when they last looked. */
+export const opsOverviewSeenMarks = pgTable("ops_overview_seen_marks", {
+  id: text("id").primaryKey(), organizationId: text("organization_id").notNull(), membershipId: text("membership_id").notNull(), seenAt: text("seen_at").notNull(),
+},t=>[
+  index("idx_ops_overview_seen_marks_person").on(t.organizationId,t.membershipId,t.seenAt),
+  foreignKey({columns:[t.organizationId],foreignColumns:[opsOrganizations.id]}),
+  foreignKey({columns:[t.organizationId,t.membershipId],foreignColumns:[opsMemberships.organizationId,opsMemberships.id]}),
+]);

@@ -582,6 +582,13 @@
       "when": 1791241526228,
       "tag": "0082_spooky_whistler",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1791320850463,
+      "tag": "0083_first_husk",
+      "breakpoints": true
     }
   ]
 }

@@ -22,6 +22,7 @@ import { dashboardActivityFromFixture, dashboardBreakdownFromFixture } from "./d
 import { dashboardContextFromFixture } from "./dashboard-context";
 import { dashboardLifecycleFromFixture } from "./lifecycle-summary";
 import { equipmentIssuesFromFixture } from "./equipment-issues";
+import { matchesSince } from "./since-last-looked";
 import { briefSourcesFromFixture } from "./owner-brief-query";
 import type { JobRun, NotificationRecipient, NotificationRule, OrganizationWorkflowPolicy, OutboxMessage, PmOccurrence, PmPlan, RoleCapabilityOverride, SavedView, ServiceAppointment, VendorContinuation, VendorResponse } from "./types";
 import type { OutboxDeliveryOutcome } from "./repository";
@@ -193,6 +194,7 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
   if (table === "ops_route_legs") fixture.routeLegs ??= [];
   if (table === "ops_equipment_documents") fixture.equipmentDocuments ??= [];
   if (table === "ops_ai_conversations") fixture.aiConversations ??= [];
+  if (table === "ops_overview_seen_marks") fixture.overviewSeenMarks ??= [];
   if (table === "ops_equipment_notes") fixture.equipmentNotes ??= [];
   if (table === "ops_equipment_document_pages") fixture.equipmentDocumentPages ??= [];
   const mapping: Record<string, keyof OpsFixture> = {
@@ -204,7 +206,7 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
     ops_capital_plans: "capitalPlans", ops_store_vendor_preferences: "storeVendorPreferences", ops_vendor_coverage: "vendorCoverage", ops_vendor_qualifications: "vendorQualifications", ops_vendor_compliance_documents: "vendorComplianceDocuments",
     ops_vendor_contracts: "vendorContracts", ops_contract_versions: "contractVersions", ops_contract_scopes: "contractScopes",
     ops_rate_card_lines: "rateCardLines", ops_service_level_policies: "serviceLevelPolicies", ops_scheduling_policies: "schedulingPolicies", ops_vendor_capacity: "vendorCapacity",
-    ops_technician_statuses: "technicianStatuses", ops_route_legs: "routeLegs", ops_equipment_documents: "equipmentDocuments", ops_ai_conversations: "aiConversations", ops_equipment_notes: "equipmentNotes", ops_equipment_document_pages: "equipmentDocumentPages", ops_technician_profiles: "technicianProfiles", ops_organizations: "organizations", ops_internal_schedules: "internalSchedules", ops_requests: "requests", ops_request_impact_assessments: "requestImpactAssessments", ops_work_orders: "workOrders",
+    ops_technician_statuses: "technicianStatuses", ops_route_legs: "routeLegs", ops_equipment_documents: "equipmentDocuments", ops_ai_conversations: "aiConversations", ops_overview_seen_marks: "overviewSeenMarks", ops_equipment_notes: "equipmentNotes", ops_equipment_document_pages: "equipmentDocumentPages", ops_technician_profiles: "technicianProfiles", ops_organizations: "organizations", ops_internal_schedules: "internalSchedules", ops_requests: "requests", ops_request_impact_assessments: "requestImpactAssessments", ops_work_orders: "workOrders",
     ops_approval_policies: "approvalPolicies", ops_approval_requests: "approvalRequests", ops_approval_decisions: "approvalDecisions",
     ops_work_order_visit_holds: "workOrderVisitHolds", ops_work_order_assignments: "assignments", ops_work_order_issuances: "issuances",
     ops_vendor_responses: "vendorResponses", ops_work_order_estimate_requests: "estimateRequests",
@@ -628,7 +630,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async listAttentionSources(scope: OrganizationScope, access: import("./attention-query").AttentionAccess, query: import("./attention-query").AttentionQuery, itemId: string, page: import("./types").PageRequest) {
     return attentionSourcesFromFixture(this.fixture, scope, access, query, itemId, page);
   }
-  async listEquipmentIssues(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow, query: PageRequest = {}) {
+  async listEquipmentIssues(scope: OrganizationScope, window: import("./dashboard-query").DashboardWindow, query: import("./equipment-issues").EquipmentIssueQuery = {}) {
     return equipmentIssuesFromFixture(this.fixture, scope, window, query);
   }
   async listUpcomingAppointments(scope: OrganizationScope, query: import("./upcoming-appointments").UpcomingAppointmentQuery) { return upcomingAppointmentsFromFixture(this.fixture,scope,query); }
@@ -713,6 +715,12 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async listEquipmentDocuments(org:string,asset:{id:string;manufacturer?:string;model?:string}) { return clone((this.fixture.equipmentDocuments??[]).filter(d=>d.organizationId===org&&documentAppliesTo(d,asset)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)||a.id.localeCompare(b.id)).slice(0,200)); }
   async listDocumentPages(org:string,documentIds:readonly string[]) { const ids=new Set(documentIds); return clone((this.fixture.equipmentDocumentPages??[]).filter(p=>p.organizationId===org&&ids.has(p.documentId)).sort((a,b)=>a.documentId.localeCompare(b.documentId)||a.pageNumber-b.pageNumber).map(({documentId,pageNumber,pageLabel,text})=>({documentId,pageNumber,pageLabel,text}))); }
   async listEquipmentNotes(org:string,assetId:string,limit:number) { const jobs=new Set(this.fixture.workOrders.filter(w=>w.organizationId===org&&w.assetId===assetId).map(w=>w.id)); return clone((this.fixture.equipmentNotes??[]).filter(n=>n.organizationId===org&&jobs.has(n.workOrderId)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)||a.id.localeCompare(b.id)).slice(0,limit)); }
+  async countWorkOrders(scope: OrganizationScope, query: WorkOrderListQuery) {
+    return (await this.listWorkOrders(scope, { ...query, cursor: undefined, offset: undefined, limit: 1 })).totalCount ?? 0;
+  }
+  async getOverviewSeenAt(org: string, membershipId: string) {
+    return (this.fixture.overviewSeenMarks ?? []).filter(m => m.organizationId === org && m.membershipId === membershipId).map(m => m.seenAt).sort().at(-1);
+  }
   async listAiConversations(org:string,workOrderId:string) { return clone((this.fixture.aiConversations??[]).filter(c=>c.organizationId===org&&c.workOrderId===workOrderId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)||a.id.localeCompare(b.id)).slice(0,20)); }
   async getEquipmentDocument(org:string,id:string) { return clone((this.fixture.equipmentDocuments??[]).find(d=>d.organizationId===org&&d.id===id)??null); }
   async getTechnicianStatus(org:string,member:string) { return clone((this.fixture.technicianStatuses??[]).filter(s=>s.organizationId===org&&s.membershipId===member).sort((a,b)=>b.revision-a.revision)[0]??null); }
@@ -972,6 +980,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
         && (!query.dueAfter || Boolean(row.dueAt && row.dueAt > query.dueAfter))
         && (!query.excludeHeld || !(this.fixture.workOrderVisitHolds??[]).some(h=>h.organizationId===scope.organizationId&&h.workOrderId===row.id&&h.status==="active"&&row.status==="approved"))
         && (!query.heldOnly || activeHeldWork.has(row.id))
+        && matchesSince(this.fixture, row, query.change)
         && (!query.heldReviewDeadlineTo || (this.fixture.workOrderVisitHolds ?? []).some((hold) => hold.organizationId === scope.organizationId && hold.workOrderId === row.id && hold.status === "active" && hold.deadlineAt <= query.heldReviewDeadlineTo!))
         && (!query.heldConfirmedOpportunityAfter || (this.fixture.serviceAppointments ?? []).some((appointment) => {
           if (appointment.organizationId !== scope.organizationId || appointment.status !== "confirmed" || appointment.startsAt < query.heldConfirmedOpportunityAfter!) return false;

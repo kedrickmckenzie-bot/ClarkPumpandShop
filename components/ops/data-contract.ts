@@ -587,6 +587,14 @@ export interface DashboardPageViewModel {
     period: string; currency: string; totalCount: number; href: string;
     rows: Array<{ id: string; name: string; assetTag: string; storeLabel: string; issueCount: number; latestIssue: string; cost: string; coverage: string; href: string }>;
   };
+  /** Equipment with several repair calls in a short window; same rows and links as equipmentIssues. */
+  repeatProblems?: NonNullable<DashboardPageViewModel["equipmentIssues"]> & { days: number; minIssues: number };
+  /** What changed since this person last pressed "Mark as seen". Each part's count equals the list it opens. */
+  sinceLastLooked?: {
+    sinceLabel: string;
+    parts: Array<{ kind: string; count: number; label: string; href: string }>;
+    markSeenAction: string;
+  };
   state: DataState;
   page: PageContext;
   layout?: "executive" | "finance" | "operations" | "regional" | "store";

@@ -469,3 +469,21 @@
 
 .workspace details.section > summary { padding: 18px 24px; font-size: 16px; font-weight: 650; cursor: pointer; }
 .queueLink { margin: 0; }
+
+/* Since you last looked: one compact line of changes, each part a link to its exact jobs. */
+.sinceBar { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 20px; background:var(--enterprise-surface); border:1px solid var(--enterprise-line); border-left:4px solid var(--enterprise-action); border-radius:8px; }
+.sinceCopy { display:flex; flex-wrap:wrap; align-items:baseline; column-gap:12px; row-gap:4px; min-width:0; }
+.sinceCopy h2 { margin:0; font-size:17px; }
+.sinceWhen { margin:0; color:var(--enterprise-muted); font-size:14px; }
+.sinceParts { flex-basis:100%; margin:0; font-size:16px; line-height:1.6; color:var(--enterprise-copy); }
+.sinceParts a { text-decoration:underline; text-underline-offset:3px; display:inline-block; min-height:28px; }
+.sinceParts strong { font-variant-numeric:tabular-nums; }
+.sinceGood { color:var(--enterprise-positive); }
+.sinceAlert { color:var(--enterprise-critical); }
+.sinceDot { margin:0 8px; color:var(--enterprise-muted); }
+.sinceButton { min-height:44px; padding:0 16px; border:1px solid var(--enterprise-line-strong); border-radius:6px; background:var(--enterprise-surface); color:var(--enterprise-ink); font:inherit; font-size:15px; font-weight:600; cursor:pointer; white-space:nowrap; }
+.sinceButton:hover { border-color:var(--enterprise-action); color:var(--enterprise-action); }
+@media (max-width: 640px) {
+  .sinceBar { flex-direction:column; align-items:stretch; }
+  .sinceButton { width:100%; }
+}
