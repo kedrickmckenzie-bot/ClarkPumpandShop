@@ -4,6 +4,17 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### "Fixed" waits for limbo to end — October 6, 2026
+
+The owner pointed out that a job reported fixed is in limbo until checked when "Verify fix" is on, with an owner and a reminder time, and closes by itself when it is off. The first version of "Since you last looked" counted "fixed" as soon as a tech or vendor reported "completed", so a job still waiting for its check already read as fixed.
+
+- "Fixed" now counts a job only when it leaves limbo: its fix was confirmed (the job's resolved time), or, when no check is required, it closed by itself (in-house work records a resolved time, vendor work a closed time). It must be resolved or closed now and have a "completed" result. Corrections and rejected checks clear the resolved time, so those jobs drop out again. Limbo itself (owner, reminder time, Review) is unchanged. Same rule in fixture and SQL (`fixedAt`, `matchesSince`, `sinceSql`).
+- Tests: a job waiting for its check and a no-check job still waiting on a follow-up are not fixed; a confirmed job and a job that closed by itself are; fixture, SQLite (D1) and PostgreSQL agree.
+
+Browser check (1440 px and 390 px): "Last 7 days · 1 fixed · 13 new urgent · 1 vendor declined · 15 now overdue"; each part's list matched its count. The one fixed job is Store 111's restroom sink (fix confirmed, close-out paperwork left); the 5 jobs waiting for a check were not counted. Mark as seen still saved and held after reload; no page errors.
+
+Validation: `db:seed`, `typecheck`, `lint`, `npm test` with PostgreSQL (1532 passed, 16 skipped), `test:e2e`, `build` and `build:render` passed.
+
 ### Since you last looked, repeat problems, and no more Recently viewed — October 6, 2026
 
 The owner asked to drop "Recently viewed", add a "what changed" tile for managers, and flag equipment that keeps breaking.

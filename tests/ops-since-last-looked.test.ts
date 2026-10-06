@@ -7,7 +7,7 @@ import { buildOpsSeedStatements, seedOpsRepository } from "@/lib/ops/seed";
 import { createOpsSqlRepository } from "@/lib/ops/sql-repository";
 import { createOpsFixtureRepository } from "@/lib/ops/fixture-repository";
 import { createOpsPostgresRepository } from "@/lib/ops/postgres-repository";
-import { SINCE_KINDS, markOverviewSeen, matchesSince, sinceHref, sinceStartFor, sinceWindowFromQuery, type SinceWindow } from "@/lib/ops/since-last-looked";
+import { SINCE_KINDS, fixedAt, markOverviewSeen, matchesSince, sinceHref, sinceStartFor, sinceWindowFromQuery, type SinceWindow } from "@/lib/ops/since-last-looked";
 import { equipmentIssuesFromFixture, repeatProblemWindow, REPEAT_DAYS } from "@/lib/ops/equipment-issues";
 import { REPEAT_WORK_MIN_JOBS } from "@/lib/ops/replacement-intelligence";
 import type { OpsRepository, OrganizationScope } from "@/lib/ops/repository";
@@ -20,10 +20,10 @@ const iso = (ms: number) => new Date(ms).toISOString();
 /** The presentation data plus a vendor decline in the window (a source fact only, so seeding stays valid). */
 function changedFixture() {
   const f = buildNorthlinePresentationFixture();
-  // The window reaches back to the latest recorded "completed" outcome, so every kind has source records.
+  // The window reaches back to the latest job that left limbo, so every kind has source records.
   const to = f.asOf, inside = iso(Date.parse(to) - 2 * DAY);
-  const fixedAt = [...f.siteVisitWorkOrders, ...(f.workResults ?? [])].filter(l => l.outcome === "completed" && l.outcomeRecordedAt && l.outcomeRecordedAt <= to).map(l => l.outcomeRecordedAt!).sort().at(-1)!;
-  const from = iso(Math.min(Date.parse(to) - 30 * DAY, Date.parse(fixedAt) - DAY));
+  const done = f.workOrders.filter(w => matchesSince(f, w, { kind: "fixed", from: "2000-01-01T00:00:00.000Z", to })).map(w => fixedAt(w)!).sort().at(-1)!;
+  const from = iso(Math.min(Date.parse(to) - 30 * DAY, Date.parse(done) - DAY));
   const response = f.vendorResponses[0]!;
   f.vendorResponses.push({ ...response, id: "since-declined", response: "declined", respondedAt: inside, proposedAt: undefined });
   return { f, from, to };
@@ -41,7 +41,16 @@ function edgeFixture() {
   Object.assign(open[4]!, { dueAt: from });
   const cancelled = f.workOrders.find(w => w.status === "cancelled");
   if (cancelled) Object.assign(cancelled, { priority: "urgent", createdAt: iso(Date.parse(to) - DAY) });
-  return { f, from, to, edges: { inside: open[0]!.id, atNow: open[1]!.id, atLastLook: open[2]!.id, overdue: open[3]!.id, overdueAtLastLook: open[4]!.id, cancelled: cancelled?.id } };
+  // Fixed only once out of limbo. Each of these has a "completed" result reported inside the window.
+  const reported = (work: typeof open[number]) => { (f.workResults ??= []).push({ id: `result-${work.id}`, organizationId: work.organizationId, workOrderId: work.id, linkedAt: from, performerName: "Tech", source: "technician_report", outcome: "completed", outcomeRecordedAt: iso(Date.parse(to) - 3 * DAY), outcomeRecordedByActorType: "user", outcomeRecordedByActorName: "Tech", cycleVersion: 1 }); };
+  const limbo = open[5]!, confirmed = open[6]!, selfClosed = open[7]!, selfClosedWaiting = open[8]!;
+  [limbo, confirmed, selfClosed, selfClosedWaiting].forEach(reported);
+  Object.assign(limbo, { status: "completed_pending_review", requireConfirmation: true, resolvedAt: undefined, closedAt: undefined });
+  Object.assign(confirmed, { status: "resolved", requireConfirmation: true, resolvedAt: iso(Date.parse(to) - DAY), closedAt: undefined });
+  Object.assign(selfClosed, { status: "closed", requireConfirmation: false, resolvedAt: undefined, closedAt: iso(Date.parse(to) - DAY) });
+  Object.assign(selfClosedWaiting, { status: "resolved", requireConfirmation: false, resolvedAt: undefined, closedAt: undefined });
+  return { f, from, to, edges: { inside: open[0]!.id, atNow: open[1]!.id, atLastLook: open[2]!.id, overdue: open[3]!.id, overdueAtLastLook: open[4]!.id, cancelled: cancelled?.id,
+    limbo: limbo.id, confirmed: confirmed.id, selfClosed: selfClosed.id, selfClosedWaiting: selfClosedWaiting.id } };
 }
 
 async function compare(repository: OpsRepository, f: OpsFixture, scope: OrganizationScope, from: string, to: string) {
@@ -108,6 +117,12 @@ describe("Since you last looked", () => {
     const overdue = (await repository.listWorkOrders(scope, { change: { kind: "overdue", from, to }, limit: 100 })).items.map(w => w.id);
     expect(overdue).toContain(edges.overdue);
     expect(overdue).not.toContain(edges.overdueAtLastLook);
+    // "Fixed" waits for limbo to end: confirmed, or closed by itself when no check is required.
+    const fixed = (await repository.listWorkOrders(scope, { change: { kind: "fixed", from, to }, limit: 100 })).items.map(w => w.id);
+    expect(fixed).toContain(edges.confirmed);
+    expect(fixed).toContain(edges.selfClosed);
+    expect(fixed).not.toContain(edges.limbo);
+    expect(fixed).not.toContain(edges.selfClosedWaiting);
   });
 
   it("builds list links that read back to the same window, and ignores bad ones", () => {

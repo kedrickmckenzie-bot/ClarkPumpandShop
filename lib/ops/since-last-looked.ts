@@ -25,6 +25,14 @@ export const SINCE_LABELS: Record<SinceKind, { one: string; many: string; filter
 export const FIRST_LOOK_DAYS = 7;
 const DONE = ["completed_pending_review", "resolved", "closed", "cancelled"];
 
+/**
+ * When a job left limbo: the confirmation time ("resolved"), or, when no check was required, the time it
+ * closed by itself. Jobs waiting for a check have neither, so they are not fixed yet.
+ */
+export function fixedAt(work: WorkOrder) {
+  return work.resolvedAt ?? (work.requireConfirmation === false && work.status === "closed" ? work.closedAt : undefined);
+}
+
 export function isSinceKind(value: unknown): value is SinceKind { return typeof value === "string" && (SINCE_KINDS as readonly string[]).includes(value); }
 
 /** Reads ?change=&changedFrom=&changedTo= from a list URL; anything malformed is ignored. */
@@ -46,9 +54,12 @@ export function matchesSince(fixture: OpsFixture, work: WorkOrder, window: Since
   const inside = (at?: string) => Boolean(at && at > window.from && at <= window.to);
   const org = work.organizationId;
   switch (window.kind) {
-    case "fixed":
-      return fixture.siteVisitWorkOrders.some(link => link.organizationId === org && link.workOrderId === work.id && link.outcome === "completed" && inside(link.outcomeRecordedAt))
-        || (fixture.workResults ?? []).some(result => result.organizationId === org && result.workOrderId === work.id && result.outcome === "completed" && inside(result.outcomeRecordedAt));
+    case "fixed": {
+      // Fixed means out of limbo: confirmed (or closed by itself when no check is required), not just reported done.
+      const completed = fixture.siteVisitWorkOrders.some(link => link.organizationId === org && link.workOrderId === work.id && link.outcome === "completed")
+        || (fixture.workResults ?? []).some(result => result.organizationId === org && result.workOrderId === work.id && result.outcome === "completed");
+      return completed && (work.status === "resolved" || work.status === "closed") && inside(fixedAt(work));
+    }
     case "urgent":
       return (work.priority === "urgent" || work.priority === "emergency") && inside(work.createdAt);
     case "declined":
@@ -63,8 +74,9 @@ export function sinceSql(window: SinceWindow): { sql: string; params: unknown[] 
   const { from, to } = window;
   switch (window.kind) {
     case "fixed":
-      return { sql: `w.status <> 'cancelled' AND (EXISTS (SELECT 1 FROM ops_site_visit_work_orders sx WHERE sx.organization_id = w.organization_id AND sx.work_order_id = w.id AND sx.outcome = 'completed' AND sx.outcome_recorded_at > ? AND sx.outcome_recorded_at <= ?)
-        OR EXISTS (SELECT 1 FROM ops_work_results rx WHERE rx.organization_id = w.organization_id AND rx.work_order_id = w.id AND rx.outcome = 'completed' AND rx.outcome_recorded_at > ? AND rx.outcome_recorded_at <= ?))`, params: [from, to, from, to] };
+      return { sql: `w.status IN ('resolved','closed') AND COALESCE(w.resolved_at, CASE WHEN w.require_confirmation = 0 AND w.status = 'closed' THEN w.closed_at END) > ? AND COALESCE(w.resolved_at, CASE WHEN w.require_confirmation = 0 AND w.status = 'closed' THEN w.closed_at END) <= ?
+        AND (EXISTS (SELECT 1 FROM ops_site_visit_work_orders sx WHERE sx.organization_id = w.organization_id AND sx.work_order_id = w.id AND sx.outcome = 'completed')
+          OR EXISTS (SELECT 1 FROM ops_work_results rx WHERE rx.organization_id = w.organization_id AND rx.work_order_id = w.id AND rx.outcome = 'completed'))`, params: [from, to] };
     case "urgent":
       return { sql: "w.status <> 'cancelled' AND w.priority IN ('urgent','emergency') AND w.created_at > ? AND w.created_at <= ?", params: [from, to] };
     case "declined":
