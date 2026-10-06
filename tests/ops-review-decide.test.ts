@@ -68,7 +68,8 @@ it("keeps Needs your action, its breakdown and Review's sections in agreement", 
     const all = await repository.listAttention(scope, access, { asOf: fixture.asOf, limit: 1 });
     const breakdown = await yourActionBreakdown(repository, scope, access, fixture.asOf);
     // The parts of the breakdown add up to the "Needs your action" number.
-    expect([...breakdown.matchAll(/(\d+) /g)].reduce((n, m) => n + Number(m[1]), 0)).toBe(all.mineCount);
+    expect(breakdown.total).toBe(all.mineCount);
+    expect([...breakdown.text.matchAll(/(\d+) /g)].reduce((n, m) => n + Number(m[1]), 0)).toBe(breakdown.total);
     // "N to review" equals New + Stuck + Done on the Review page.
     const sections = await Promise.all((["new", "stuck", "done"] as const).map(stage => repository.listAttention(scope, access, { asOf: fixture.asOf, stage, limit: 1 })));
     expect((await repository.listAttention(scope, access, { asOf: fixture.asOf, stage: "decide", limit: 1 })).totalCount).toBe(sections.reduce((n, s) => n + s.totalCount, 0));
@@ -78,3 +79,44 @@ it("keeps Needs your action, its breakdown and Review's sections in agreement", 
     for (const row of mine.items.filter(r => ["review_issue", "choose_service_provider", "approve_quote", "review_warranty", "schedule_service", "schedule_return_visit", "verify_repair", "close_verified_work"].includes(r.taskType ?? ""))) expect(inReview.has(row.id)).toBe(true);
   }
 });
+
+it("counts every action past the first page, and keeps overdue confirmations to repair checks in the fixture and SQL", async () => {
+  const { createOpsFixtureRepository } = await import("@/lib/ops/fixture-repository");
+  const { yourActionBreakdown } = await import("@/lib/ops/your-actions");
+  const fixture = buildNorthlinePresentationFixture(), org = fixture.organizations[0].id;
+  const access = { role: "facilities_admin" as const, canOpenWarranty: true, canOpenRequest: true, membershipId: "membership-northline-facilities" }, scope = { organizationId: org };
+  const template = fixture.workflowTasks.find(t => t.status === "open" && t.workOrderId && t.assigneeType === "role" && t.assigneeRole === "facilities_admin")!;
+  expect(template).toBeDefined();
+  // 102 extra plain tasks: more than one 100-row page.
+  for (let i = 0; i < 102; i++) fixture.workflowTasks.push({ ...template, id: `extra-task-${i}`, taskType: "other", sourceFollowUpId: undefined, title: `Extra task ${i}`, blocking: false, requiredForProgress: false });
+  // A closeout task that is overdue must not count as an overdue confirmation.
+  // A finished job with no open follow-up, so the task lands in Done rather than Stuck.
+  const work = fixture.workOrders.find(w => ["resolved", "completed_pending_review"].includes(w.status) && !fixture.followUps.some(f => f.workOrderId === w.id && f.status === "open"))!;
+  expect(work).toBeDefined();
+  fixture.workflowTasks.push({ ...template, id: "overdue-closeout", workOrderId: work.id, taskType: "close_verified_work", blocking: false, requiredForProgress: false, createdAt: "2019-12-01T00:00:00.000Z", dueAt: "2020-01-01T00:00:00.000Z", sourceFollowUpId: undefined });
+  const repository = createOpsFixtureRepository(fixture);
+  const all = await repository.listAttention(scope, access, { asOf: fixture.asOf, limit: 1 });
+  const breakdown = await yourActionBreakdown(repository, scope, access, fixture.asOf);
+  const sum = (text: string) => [...text.matchAll(/(\d+) /g)].reduce((n, m) => n + Number(m[1]), 0);
+  expect(breakdown.total).toBe(all.mineCount);
+  expect(sum(breakdown.text)).toBe(breakdown.total);
+  expect(all.mineCount).toBeGreaterThan(102);
+  // Past the first 100 items outside Review, the rest are still counted.
+  expect(breakdown.text).toMatch(/\d+ other items?/);
+  // The closeout task is in the queue (Done · needs a check) but is not an overdue confirmation.
+  expect((await repository.listAttention(scope, access, { asOf: fixture.asOf, stage: "done", limit: 100 })).items.map(r => r.id)).toContain("overdue-closeout");
+  const fixtureOverdue = await repository.listAttention(scope, access, { asOf: fixture.asOf, stage: "confirmation_overdue", limit: 100 });
+  expect(fixtureOverdue.items.map(r => r.id)).not.toContain("overdue-closeout");
+  const db = new DatabaseSync(":memory:");
+  const driver: OpsSqlDriver = { dialect: "sqlite", async query<Row extends SqlRow>(statement: { sql: string; params: readonly unknown[] }) { return { rows: db.prepare(statement.sql).all(...statement.params as SQLInputValue[]) as Row[], affectedRows: 0 }; }, async atomic() { throw new Error("Read must not mutate"); } };
+  try {
+    for (const file of readdirSync("drizzle").filter(file => /^\d.*\.sql$/.test(file)).sort()) db.exec(readFileSync(`drizzle/${file}`, "utf8"));
+    for (const statement of buildOpsSeedStatements(fixture)) db.prepare(statement.sql).run(...statement.params.map(v => typeof v === "boolean" ? Number(v) : v ?? null) as SQLInputValue[]);
+    const sqlOverdue = await queryAttention(driver, scope, access, { asOf: fixture.asOf, stage: "confirmation_overdue", limit: 100 });
+    expect(sqlOverdue.items.map(r => r.id).sort()).toEqual(fixtureOverdue.items.map(r => r.id).sort());
+    // The hosted (SQL) breakdown matches the fixture's, item kinds included.
+    const { createOpsSqlRepository } = await import("@/lib/ops/sql-repository");
+    const sqlRepository = createOpsSqlRepository({ ...driver, async atomic() { throw new Error("Read must not mutate"); } }, "d1");
+    expect(await yourActionBreakdown(sqlRepository, scope, access, fixture.asOf)).toEqual(breakdown);
+  } finally { db.close(); }
+}, 120_000);

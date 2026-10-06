@@ -402,7 +402,11 @@ export async function loadDashboardModel() {
   model.equipmentIssues = presentEquipmentIssues(issues, window, session);
   // "Needs your action" says what its number is made of, so it never silently disagrees with Review.
   const yours = model.metrics?.find(metric => metric.id === "open-exceptions");
-  if (yours && attention.mineCount) yours.supportingText = await yourActionBreakdown(repository, scope, attentionAccess(session), asOf);
+  if (yours && attention.mineCount) {
+    const breakdown = await yourActionBreakdown(repository, scope, attentionAccess(session), asOf);
+    yours.value = String(breakdown.total);
+    yours.supportingText = breakdown.text;
+  }
   // The Overview keeps the "Needs your action" count tile (it opens the queue); the item list lives in the review queue only.
   if (session.role === "executive") {
     // A compact work-status line: where open work stands, each count opening its list.

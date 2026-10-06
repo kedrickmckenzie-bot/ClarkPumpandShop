@@ -67,6 +67,7 @@ export async function queryAttention(driver: OpsSqlDriver, scope: OrganizationSc
     : query.stage === "new" ? newSql
     : query.stage === "done" ? doneSql
     : query.stage === "decide" ? `(${stuckSql} OR ${newSql} OR ${doneSql})`
+    : query.stage === "outside_review" ? `NOT (${stuckSql} OR ${newSql} OR ${doneSql})`
     : "1=1";
   const filtered = `SELECT a.* FROM ordered a WHERE ${query.lane ? `a.lane=${bind(query.lane)}` : "1=1"} AND ${query.group ? `a.group_name=${bind(query.group)}` : "1=1"} AND ${typeWhere} AND ${stageWhere} AND ${query.priority ? query.priority === "urgent" ? urgentWhere : `NOT (${urgentWhere})` : "1=1"} AND ${query.itemIds ? query.itemIds.length ? `a.id IN (${query.itemIds.map(id => bind(id)).join(",")})` : "1=0" : "1=1"} AND ${search ? `LOWER(${searchText}) LIKE ${bind(`%${search}%`)} ESCAPE '\\'` : "1=1"}`;
   const cursor = readAttentionCursor(query.cursor);
