@@ -237,6 +237,7 @@ export function roleCanOpenOperatorHref(role: OperatorRole, href: string) {
   }
   if (area === "vendors") {
     if (record === "new") return roleCan(role, "onboard_vendor");
+    if (record === "scorecards") return ["executive", "facilities", "regional"].includes(role);
     return record ? roleCanAccessDetailRoute(role, "vendor") : roleCanAccessListRoute(role, "vendors");
   }
   if (area === "invoices") {

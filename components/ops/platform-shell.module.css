@@ -1110,3 +1110,10 @@
 .navChildren a:hover,.navChildren .navChildActive {background:#233247;color:#fff!important;}
 .navChildren .navChildActive {box-shadow:inset 3px 0 #2457d6;}
 .navSection button:focus-visible,.navChildren a:focus-visible {outline:3px solid #88a9ff;outline-offset:2px;}
+
+/* Printing a page or report prints only the page, not the workspace frame. */
+@media print {
+  .sidebar, .topbarFrame { display: none !important; }
+  .shell { display: block !important; background: #fff !important; }
+  .main { max-width: none !important; padding: 0 !important; margin: 0 !important; }
+}

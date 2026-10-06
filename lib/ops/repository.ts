@@ -232,6 +232,8 @@ export interface OpsRepository extends TaskRepository {
   /** Library documents for this unit: its own plus those for its make and model, newest first. */
   listEquipmentDocuments(organizationId:string,asset:{id:string;manufacturer?:string;model?:string}): Promise<import("./equipment-documents").EquipmentDocument[]>;
   /** Saved AI conversations for a job, newest first. */
+  /** One fact row per job sent to a vendor in the window; the vendor scorecard is built from these. */
+  listVendorJobFacts(scope: OrganizationScope, window: import("./vendor-scorecard").ScorecardWindow): Promise<import("./vendor-scorecard").VendorJobFact[]>;
   /** Exact number of jobs matching the list query (same rules as listWorkOrders). */
   countWorkOrders(scope: OrganizationScope, query: WorkOrderListQuery): Promise<number>;
   /** The person's newest "Mark as seen" time on the Overview, if any. */

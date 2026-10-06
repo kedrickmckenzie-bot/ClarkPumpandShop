@@ -28,6 +28,7 @@ import { queryDashboardActivity, queryDashboardBreakdown } from "./dashboard-sql
 import { queryDashboardContext } from "./dashboard-context-sql";
 import { queryEquipmentIssues } from "./equipment-issues-sql";
 import { sinceSql } from "./since-last-looked";
+import { queryVendorJobFacts } from "./vendor-scorecard";
 import { queryDashboardLifecycle } from "./lifecycle-summary-sql";
 import { queryBriefSources } from "./owner-brief-sql";
 import { PENDING_REQUEST_STATUSES, WORK_STAGE_STATUSES } from "./dashboard-cohorts";
@@ -554,6 +555,9 @@ class SqlOpsRepository implements OpsRepository {
   }
   async listEquipmentNotes(org:string,assetId:string,limit:number) {
     return (await this.all("SELECT n.* FROM ops_equipment_notes n JOIN ops_work_orders w ON w.organization_id=n.organization_id AND w.id=n.work_order_id WHERE n.organization_id=? AND w.asset_id=? ORDER BY n.created_at DESC,n.id LIMIT ?",[org,assetId,Math.max(1,Math.min(limit,200))])).map(r=>({...JSON.parse(text(r,"note_json")) as import("./equipment-notes").EquipmentNoteBody,id:text(r,"id"),organizationId:text(r,"organization_id"),workOrderId:text(r,"work_order_id"),conversationId:text(r,"conversation_id"),provider:maybeText(r,"provider"),model:maybeText(r,"model"),createdByMembershipId:maybeText(r,"created_by_membership_id"),createdByName:text(r,"created_by_name"),createdAt:text(r,"created_at")}));
+  }
+  async listVendorJobFacts(scope: OrganizationScope, window: import("./vendor-scorecard").ScorecardWindow) {
+    return queryVendorJobFacts(this.driver, scope, window);
   }
   async countWorkOrders(scope: OrganizationScope, query: WorkOrderListQuery) {
     const rows = await this.workOrderRows(scope, { ...query, cursor: undefined, offset: undefined, countOnly: true });

@@ -73,7 +73,7 @@ export const operatorNavigation: NavigationItem[] = [
     id: "vendors",
     label: "Vendors",
     href: "/app/vendors",
-    matchPrefixes: ["/app/vendors"], contextGroup:"vendors",
+    matchPrefixes: ["/app/vendors", "/app/vendors/scorecards"], contextGroup:"vendors",
   },
   {
     id: "planning",
@@ -86,7 +86,7 @@ export const operatorNavigation: NavigationItem[] = [
 
 export const contextualNavigation: ContextualNavigationGroup[] = [
   {id:"stores",label:"Stores",items:[{id:"stores",label:"Stores",href:"/app/stores"}]},
-  {id:"vendors",label:"Vendors",items:[{id:"vendors",label:"Vendors",href:"/app/vendors"}]},
+  {id:"vendors",label:"Vendors",items:[{id:"vendors",label:"Vendors",href:"/app/vendors"},{id:"vendor-scorecards",label:"Scorecards",href:"/app/vendors/scorecards"}]},
   {
     id: "work",
     label: "Work",
@@ -126,6 +126,7 @@ export const contextualNavigation: ContextualNavigationGroup[] = [
 
 export function pathMatches(pathname: string, href: string) {
   if(href === "/app/reports" && pathname.startsWith("/app/reports/value")) return false;
+  if(href === "/app/vendors" && pathname.startsWith("/app/vendors/scorecards")) return false;
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -162,7 +163,7 @@ function roleCanSeeNavigationItem(role: OperatorRole, item: NavigationItem) {
 
 function roleCanSeeContextItem(role: OperatorRole, groupId: NavigationGroupId, item: ContextualNavigationItem) {
   if(groupId==="stores")return roleCanAccessListRoute(role,"stores");
-  if(groupId==="vendors")return roleCanAccessListRoute(role,"vendors");
+  if(groupId==="vendors")return item.id==="vendor-scorecards" ? ["executive","facilities","regional"].includes(role) : roleCanAccessListRoute(role,"vendors");
   if (groupId === "work") {
     if(item.id==="compliance")return ["facilities","regional","executive","finance"].includes(role);
     return roleCanSeeWorkNavigation(role, item.id as OperatorWorkNavigationId);

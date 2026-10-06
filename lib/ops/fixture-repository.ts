@@ -23,6 +23,7 @@ import { dashboardContextFromFixture } from "./dashboard-context";
 import { dashboardLifecycleFromFixture } from "./lifecycle-summary";
 import { equipmentIssuesFromFixture } from "./equipment-issues";
 import { matchesSince } from "./since-last-looked";
+import { vendorJobFactsFromFixture } from "./vendor-scorecard";
 import { briefSourcesFromFixture } from "./owner-brief-query";
 import type { JobRun, NotificationRecipient, NotificationRule, OrganizationWorkflowPolicy, OutboxMessage, PmOccurrence, PmPlan, RoleCapabilityOverride, SavedView, ServiceAppointment, VendorContinuation, VendorResponse } from "./types";
 import type { OutboxDeliveryOutcome } from "./repository";
@@ -715,6 +716,9 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async listEquipmentDocuments(org:string,asset:{id:string;manufacturer?:string;model?:string}) { return clone((this.fixture.equipmentDocuments??[]).filter(d=>d.organizationId===org&&documentAppliesTo(d,asset)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)||a.id.localeCompare(b.id)).slice(0,200)); }
   async listDocumentPages(org:string,documentIds:readonly string[]) { const ids=new Set(documentIds); return clone((this.fixture.equipmentDocumentPages??[]).filter(p=>p.organizationId===org&&ids.has(p.documentId)).sort((a,b)=>a.documentId.localeCompare(b.documentId)||a.pageNumber-b.pageNumber).map(({documentId,pageNumber,pageLabel,text})=>({documentId,pageNumber,pageLabel,text}))); }
   async listEquipmentNotes(org:string,assetId:string,limit:number) { const jobs=new Set(this.fixture.workOrders.filter(w=>w.organizationId===org&&w.assetId===assetId).map(w=>w.id)); return clone((this.fixture.equipmentNotes??[]).filter(n=>n.organizationId===org&&jobs.has(n.workOrderId)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)||a.id.localeCompare(b.id)).slice(0,limit)); }
+  async listVendorJobFacts(scope: OrganizationScope, window: import("./vendor-scorecard").ScorecardWindow) {
+    return vendorJobFactsFromFixture(this.fixture, scope, window);
+  }
   async countWorkOrders(scope: OrganizationScope, query: WorkOrderListQuery) {
     return (await this.listWorkOrders(scope, { ...query, cursor: undefined, offset: undefined, limit: 1 })).totalCount ?? 0;
   }

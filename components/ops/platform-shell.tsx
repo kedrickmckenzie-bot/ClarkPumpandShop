@@ -168,7 +168,7 @@ function PrimaryNavigation({
   const [expanded,setExpanded]=useState<string[]>([]);
   return <nav aria-label="Primary navigation" className={styles.navGroups}>
     {navigationForRole(session.role,edition).map(item=>{
-      const children=navigationChildren(session.role,item,edition), active=navigationItemIsActive(item,pathname), open=active||expanded.includes(item.id), Icon=iconByNavigationId[item.id];
+      const children=navigationChildren(session.role,item,edition).filter(child=>!(child.id==="vendor-scorecards"&&session.persona==="field_manager")), active=navigationItemIsActive(item,pathname), open=active||expanded.includes(item.id), Icon=iconByNavigationId[item.id];
       if(!children.length)return <NavigationLink key={item.id} item={item} pathname={pathname}/>;
       return <div key={item.id} className={styles.navSection}>
         <button type="button" aria-expanded={open} className={`${styles.navLink} ${active?styles.navLinkActive:""}`} onClick={()=>{if(!active)setExpanded(values=>values.includes(item.id)?values.filter(id=>id!==item.id):[...values,item.id]);}}><Icon aria-hidden="true" size={19}/><span>{item.label}</span><ChevronDown aria-hidden="true" size={16} className={open?styles.navChevronOpen:""}/></button>
