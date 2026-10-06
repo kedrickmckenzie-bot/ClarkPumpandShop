@@ -6,13 +6,17 @@ import type { DecideRow, DecideSection, DecideStage } from "@/lib/server/review-
 import styles from "./review-decide.module.css";
 
 const copy: Record<DecideStage, { title: string; hint: string; empty: string }> = {
-  new: { title: "New · needs a decision", hint: "Send to our team, a vendor, or the next visit.", empty: "Nothing new to decide." },
+  new: { title: "New · needs a decision", hint: "Decide who handles it, pick a quote or vendor, or set a date.", empty: "Nothing new to decide." },
   stuck: { title: "Stuck", hint: "Waiting on parts, help or a decision.", empty: "Nothing is stuck." },
-  done: { title: "Done · needs a check", hint: "The tech says it's fixed. Confirm it still works.", empty: "Nothing is waiting for a check." },
+  done: { title: "Done · needs a check", hint: "Reported fixed. Confirm it works, then close it.", empty: "Nothing is waiting for a check." },
 };
+
+/** New items that are a specific decision rather than "who handles this" open their own page. */
+const decisionButton: Record<string, string> = { approve_quote: "Review quote", review_warranty: "Check warranty", schedule_service: "Set the date", schedule_return_visit: "Open job" };
 
 function Row({ row, stage, asOf, canRoute }: { row: DecideRow; stage: DecideStage; asOf: string; canRoute: boolean }) {
   const recordId = row.workOrderId ?? row.serviceRequestId;
+  const decision = stage === "new" ? decisionButton[row.taskType ?? ""] : undefined;
   const kind = row.workOrderId ? "work" : "request";
   const late = row.dueAt && row.dueAt < asOf;
   const urgent = row.priority === "critical" || row.priority === "high";
@@ -22,7 +26,7 @@ function Row({ row, stage, asOf, canRoute }: { row: DecideRow; stage: DecideStag
         {row.problem ?? row.title}
         {urgent ? <span className={styles.urgent}>Urgent</span> : null}
       </p>
-      {stage !== "new" ? <p className={styles.need}>{[row.title, ...(row.alsoNeeds ?? [])].map(plainNextAction).join(" · ")}</p> : null}
+      {stage !== "new" || decision ? <p className={styles.need}>{[row.title, ...(row.alsoNeeds ?? [])].map(plainNextAction).join(" · ")}</p> : null}
       <p className={styles.meta}>
         {row.storeLabel ?? "Companywide"}
         {row.workNumber ?? row.requestReference ? ` · ${row.workNumber ?? row.requestReference}` : ""}
@@ -31,12 +35,12 @@ function Row({ row, stage, asOf, canRoute }: { row: DecideRow; stage: DecideStag
       </p>
     </div>
     <div className={styles.actions}>
-      {stage === "done"
-        ? <Link className={`${styles.btn} ${styles.btnPrimary}`} href={row.linkHref}>Check it</Link>
+      {stage === "done" || decision
+        ? <Link className={`${styles.btn} ${styles.btnPrimary}`} href={row.linkHref}>{decision ?? (row.taskType === "close_verified_work" ? "Close it" : "Check it")}</Link>
         : canRoute && recordId
           ? <ReviewRouteButton id={recordId} kind={kind} label={stage === "new" ? "Decide" : "Review"} primary/>
           : <Link className={`${styles.btn} ${styles.btnPrimary}`} href={row.linkHref}>Open</Link>}
-      {stage !== "done" && canRoute && recordId ? <Link className={styles.btn} href={row.linkHref}>Details</Link> : null}
+      {stage !== "done" && !decision && canRoute && recordId ? <Link className={styles.btn} href={row.linkHref}>Details</Link> : null}
     </div>
   </li>;
 }

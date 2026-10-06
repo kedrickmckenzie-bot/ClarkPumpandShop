@@ -13,12 +13,14 @@ export async function WorkflowSummary({
 }) {
   if (!["facilities", "regional", "executive"].includes(session.role))
     return null;
-  const scope = await internalDispatchScope(repository, session),
+  // Review counts use the same scope as the Review page and Overview tiles, so the numbers agree.
+  const scope = { organizationId: session.organizationId, storeIds: session.storeIds, regionIds: session.regionIds },
+    dispatchScope = await internalDispatchScope(repository, session),
     asOf = new Date().toISOString(),
     access = attentionAccess(session);
   const [review, needs, stuck, overdue] = await Promise.all([
-    repository.listAttention(scope, access, { asOf, limit: 1 }),
-    repository.listWorkOrders(scope, {
+    repository.listAttention(scope, access, { asOf, stage: "decide", limit: 1 }),
+    repository.listWorkOrders(dispatchScope, {
       internalOnly: true,
       maintenanceTeamOnly: true,
       dispatchQueue: true,
@@ -36,8 +38,8 @@ export async function WorkflowSummary({
   ]);
   return (
     <nav aria-label="Work to arrange" className={styles.lines}>
-      <Link href="/app/action-center?lane=all">
-        <strong>{review.totalCount}</strong> need review <span>Review →</span>
+      <Link href="/app/action-center">
+        <strong>{review.totalCount}</strong> to review <span>Review →</span>
       </Link>
       <Link href="/app/dispatch?view=plan">
         <strong>{needs.totalCount ?? 0}</strong> need a tech{" "}

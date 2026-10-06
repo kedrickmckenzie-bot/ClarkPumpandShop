@@ -4,6 +4,7 @@ import { approvalRequestState } from "@/lib/ops/approval-governance";
 import { rollingYearStart } from "@/lib/ops/dashboard-query";
 import { presentEquipmentIssues, buildEquipmentIssueRanking } from "./equipment-issues-presenter";
 import { attentionAccess } from "./attention-presenter";
+import { yourActionBreakdown } from "@/lib/ops/your-actions";
 import { buildReviewQueue, buildReviewSources } from "./review-queue-presenter";
 import { buildPmScheduleModel } from "./pm-schedule-presenter";
 import { buildPmSetupManagement, buildPmSetupSources } from "./pm-setup-presenter";
@@ -399,6 +400,9 @@ export async function loadDashboardModel() {
   ]);
   const model = presentQueryDashboard({ activity, attention, charts, context, lifecycle }, session, window);
   model.equipmentIssues = presentEquipmentIssues(issues, window, session);
+  // "Needs your action" says what its number is made of, so it never silently disagrees with Review.
+  const yours = model.metrics?.find(metric => metric.id === "open-exceptions");
+  if (yours && attention.mineCount) yours.supportingText = await yourActionBreakdown(repository, scope, attentionAccess(session), asOf);
   // The Overview keeps the "Needs your action" count tile (it opens the queue); the item list lives in the review queue only.
   if (session.role === "executive") {
     // A compact work-status line: where open work stands, each count opening its list.

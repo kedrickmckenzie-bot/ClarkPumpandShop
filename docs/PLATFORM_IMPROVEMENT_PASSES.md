@@ -4,6 +4,19 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### One set of numbers for "Needs your action" and Review — October 6, 2026
+
+The owner saw "20 needs your action" on Overview but 18 under Work → Review, and "110 open items" next to "108 need review". Causes found and fixed:
+
+- **Different meanings, unexplained.** "Needs your action" counts items assigned to you; Review counts its New/Stuck/Done sections, which include team and vendor-waiting items. The owner agreed the tile should stay the bigger bucket (tasks, inspection sign-offs and verifications can need you without being job review). The tile now says what its number is made of, e.g. "14 in Review" or "8 in Review · 1 task · 1 inspection sign-off"; the parts always add up to the tile (`lib/ops/your-actions.ts`).
+- **Job decisions missing from Review.** Review's "New · needs a decision" only held issue triage and vendor choice; quote approval, warranty diagnosis checks, vendor-proposed dates and return visits assigned to you never appeared, and "Close verified work" was missing from "Done · needs a check". They are now included in both the fixture and SQL rules (`REVIEW_DECISION_TASKS`, `REVIEW_CHECK_TASKS`). These rows get their own button that opens the right page ("Review quote", "Check warranty", "Set the date", "Open job", "Close it") instead of the who-handles-it chooser, and show what is needed.
+- **"N need review" link.** The Overview summary line counted everything open but excluded companywide items because it used the dispatch store scope, so it disagreed with "Open items" by 2, and its label was wrong. It now reads "N to review", uses the same scope as Review, counts New + Stuck + Done, and opens Review.
+- Test: for facilities, regional and store-manager roles, the breakdown adds up to "Needs your action", "to review" equals New + Stuck + Done, and every job decision assigned to you appears in Review; the existing SQL/fixture parity test covers the new section rules.
+
+Browser check (1440 px): facilities: Needs your action 14 · "14 in Review"; "23 to review" = New 10 + Stuck 9 + Done 4. Regional: Needs your action 1 · "1 inspection sign-off"; "7 to review" = 2 + 4 + 1. Every new decision button opened its matching page; no page errors.
+
+Validation: `db:seed`, `typecheck`, `lint`, `test:e2e` (68 passed), `build` and `build:render` passed. `npm test` passed except the four PostgreSQL suites, which could not connect because the local PostgreSQL stopped during the run; after restarting it those four files passed (188 passed, 15 skipped).
+
 ### AI reads manuals, searches the web, cheaper models and a tricky-case test set — October 5, 2026
 
 The owner asked for the three open items from the troubleshooting pass (reading inside manuals, internet look-ups, demo jobs on equipment), asked for the cheapest models that do the job, and agreed that a few good demo answers are not proof, so a repeatable test set against the real AI was added.

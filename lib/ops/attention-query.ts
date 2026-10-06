@@ -58,7 +58,10 @@ export function readAttentionCursor(value?: string): ReturnType<typeof attention
   throw new RangeError("This page link is invalid. Open the first page.");
 }
 /** Task types that mean "someone must decide how this work is handled". */
-export const REVIEW_DECISION_TASKS: readonly string[] = ["review_issue", "choose_service_provider"];
+/** Review "New · needs a decision": how a job gets handled, which vendor, which quote, warranty, and when service happens. */
+export const REVIEW_DECISION_TASKS: readonly string[] = ["review_issue", "choose_service_provider", "approve_quote", "review_warranty", "schedule_service", "schedule_return_visit"];
+/** Review "Done · needs a check": work reported finished that a manager confirms or closes. */
+export const REVIEW_CHECK_TASKS: readonly string[] = ["verify_repair", "close_verified_work"];
 
 export function validateAttentionQuery(query: AttentionQuery) {
   if (!Number.isFinite(Date.parse(query.asOf))) throw new RangeError("Choose a valid review date.");
@@ -92,7 +95,7 @@ export function attentionFromFixture(fixture: OpsFixture, scope: OrganizationSco
       if (!query.stage) return true;
       const stuck = Boolean(row.workOrderId && fixture.followUps.some(f=>f.organizationId===scope.organizationId&&f.workOrderId===row.workOrderId&&f.status==="open"));
       const isNew = REVIEW_DECISION_TASKS.includes(row.taskType ?? "");
-      const done = row.taskType === "verify_repair";
+      const done = REVIEW_CHECK_TASKS.includes(row.taskType ?? "");
       if (query.stage === "stuck") return stuck;
       if (query.stage === "new") return isNew && !stuck;
       if (query.stage === "done") return done && !stuck;

@@ -7,7 +7,7 @@ import { WARRANTY_REVIEW_TITLE } from "./warranty-review";
 import { INSPECTION_RESULT_TASK_TYPES, INSPECTION_REVIEW_REASON, INSPECTION_REVIEW_ROLES, inspectionReviewLane, inspectionReviewTitle, quoteRoundCopy } from "./attention-projection";
 import { reviewQueueExceptionCopy } from "./attention-copy";
 import { attentionScope } from "./attention-query";
-import { ACCOUNTABILITY_EXCEPTION_KINDS, REVIEW_DECISION_TASKS, attentionCursor, readAttentionCursor, validateAttentionQuery, type AttentionAccess, type AttentionPage, type AttentionQuery, type AttentionQueueRow } from "./attention-query";
+import { ACCOUNTABILITY_EXCEPTION_KINDS, REVIEW_CHECK_TASKS, REVIEW_DECISION_TASKS, attentionCursor, readAttentionCursor, validateAttentionQuery, type AttentionAccess, type AttentionPage, type AttentionQuery, type AttentionQueueRow } from "./attention-query";
 
 /** Six source populations are grouped and scoped before counting or selecting a page. */
 export async function queryAttention(driver: OpsSqlDriver, scope: OrganizationScope, access: AttentionAccess, query: AttentionQuery): Promise<AttentionPage> {
@@ -61,7 +61,7 @@ export async function queryAttention(driver: OpsSqlDriver, scope: OrganizationSc
   // Literal, not bind(): this text is reused and lands after later binds, so positional parameters would shift.
   const stuckSql = `EXISTS (SELECT 1 FROM ops_follow_ups f WHERE f.organization_id=${literal(scope.organizationId)} AND f.work_order_id=a.work_order_id AND f.status='open')`;
   const taskIs = (types: readonly string[]) => `EXISTS (SELECT 1 FROM visible_tasks vt WHERE vt.id=a.id AND vt.task_type IN (${types.map(type => literal(type)).join(",")}))`;
-  const newSql = `(${taskIs(REVIEW_DECISION_TASKS)} AND NOT ${stuckSql})`, doneSql = `(${taskIs(["verify_repair"])} AND NOT ${stuckSql})`;
+  const newSql = `(${taskIs(REVIEW_DECISION_TASKS)} AND NOT ${stuckSql})`, doneSql = `(${taskIs(REVIEW_CHECK_TASKS)} AND NOT ${stuckSql})`;
   const stageWhere = query.stage === "stuck" ? stuckSql
     : query.stage === "confirmation_overdue" ? `a.overdue_order=0 AND ${taskIs(["verify_repair"])}`
     : query.stage === "new" ? newSql

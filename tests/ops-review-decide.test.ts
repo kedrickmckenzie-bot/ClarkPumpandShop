@@ -58,3 +58,23 @@ it("shows each Review section with one clear decision button", () => {
   for (const text of ["New · needs a decision (1)", "Nothing is stuck.", "Done · needs a check (12)", "Problem 1", "Urgent", "Check it", "Show all 12", "See everything open (40)"]) expect(html).toContain(text);
   expect(html).toContain("stage=done");
 });
+
+it("keeps Needs your action, its breakdown and Review's sections in agreement", async () => {
+  const { createOpsFixtureRepository } = await import("@/lib/ops/fixture-repository");
+  const { yourActionBreakdown } = await import("@/lib/ops/your-actions");
+  const fixture = buildNorthlinePresentationFixture(), org = fixture.organizations[0].id, repository = createOpsFixtureRepository(fixture);
+  for (const [role, membershipId] of [["facilities_admin", "membership-northline-facilities"], ["regional_manager", "membership-northline-regional-1"], ["store_manager", "membership-northline-store-101"]] as const) {
+    const scope = { organizationId: org }, access = { role, canOpenWarranty: true, canOpenRequest: true, membershipId };
+    const all = await repository.listAttention(scope, access, { asOf: fixture.asOf, limit: 1 });
+    const breakdown = await yourActionBreakdown(repository, scope, access, fixture.asOf);
+    // The parts of the breakdown add up to the "Needs your action" number.
+    expect([...breakdown.matchAll(/(\d+) /g)].reduce((n, m) => n + Number(m[1]), 0)).toBe(all.mineCount);
+    // "N to review" equals New + Stuck + Done on the Review page.
+    const sections = await Promise.all((["new", "stuck", "done"] as const).map(stage => repository.listAttention(scope, access, { asOf: fixture.asOf, stage, limit: 1 })));
+    expect((await repository.listAttention(scope, access, { asOf: fixture.asOf, stage: "decide", limit: 1 })).totalCount).toBe(sections.reduce((n, s) => n + s.totalCount, 0));
+    // Every job decision assigned to you shows in Review.
+    const mine = await repository.listAttention(scope, access, { asOf: fixture.asOf, lane: "mine", limit: 200 });
+    const inReview = new Set((await repository.listAttention(scope, access, { asOf: fixture.asOf, lane: "mine", stage: "decide", limit: 200 })).items.map(r => r.id));
+    for (const row of mine.items.filter(r => ["review_issue", "choose_service_provider", "approve_quote", "review_warranty", "schedule_service", "schedule_return_visit", "verify_repair", "close_verified_work"].includes(r.taskType ?? ""))) expect(inReview.has(row.id)).toBe(true);
+  }
+});
