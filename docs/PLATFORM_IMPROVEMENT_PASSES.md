@@ -4,6 +4,16 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Send a planned job back to Needs a tech — October 7, 2026
+
+Owner question: what if a job is dragged onto a tech by accident and should stay unassigned? Undo worked only right after the move. "Take off the plan" removed the date but left the job with that tech, and nothing happened when a job was dragged back onto Needs a tech.
+
+- **Drag back:** dragging a planned job onto the **Needs a tech** panel now unassigns and unschedules it in one save. The panel shows a dashed blue outline while it will accept the drop.
+- **Button:** the job panel's quick moves add **Back to Needs a tech**, next to Take off the plan.
+- **How it saves:** both use the existing Undo path (`saveInternalPlanBatch` with `restoreUnscheduled` → `changeInternalDispatch` assign to `pool`), so the date removal and assignment change commit together and are audited. The batch now records the given reason ("Moved back to Needs a tech") instead of always "Undo last Plan change".
+- **Who can use it:** managers only, for planable person-assigned jobs.
+- **Tests and browser check:** `ops-internal-scheduling` proves the job ends with no person, no date and in the team pool, on the fixture, D1 and PostgreSQL. In the browser, the drag took Needs a tech from 11 to 12, the button from 12 to 13, with no page errors.
+
 ### Dispatch week always shows the weekend — October 7, 2026
 
 Owner feedback: the week board showed only Monday to Friday, and stores get weekend maintenance. Before this change, Saturday and Sunday appeared only when someone already had work planned on them, so a job could not be dragged onto an empty weekend.

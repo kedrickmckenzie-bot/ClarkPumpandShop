@@ -28,6 +28,8 @@ type Move = {
   order?: number;
   restore?: boolean;
   plan?: DispatchJob["schedule"];
+  /** Recorded on the job's history when the move changes who handles it. */
+  reason?: string;
 };
 type Undo = { before: DispatchJob; after: DispatchJob }[];
 type Scale = "day" | "week" | "map";
@@ -293,7 +295,7 @@ export function DispatchPlan(initial: Board) {
             stopOrder: m.order ?? m.job.schedule?.stopOrder,
             keepConflicts: late.length > 0,
             restoreUnscheduled: m.restore,
-            reviewReason: undo ? "Undo last Plan change" : undefined,
+            reviewReason: undo ? "Undo last Plan change" : m.reason,
           })),
         }),
       });
@@ -582,8 +584,33 @@ export function DispatchPlan(initial: Board) {
       </>
     );
   };
+  /** Unassign and unschedule in one step: the job returns to Needs a tech. */
+  const canSendBack = (job?: DispatchJob) => Boolean(manager && job && job.internalTarget === "person" && canPlanJob(job));
+  const backToQueue = (job: DispatchJob) => {
+    if (!canSendBack(job)) return;
+    setDetail(undefined);
+    void move([{ job: { ...job, internalTarget: "pool", internalMembershipId: undefined }, restore: true, reason: "Moved back to Needs a tech" }]);
+  };
   const queue = (
-    <aside className={styles.queue} aria-label="Jobs that need a tech">
+    <aside
+      className={`${styles.queue} ${dropTarget === "queue" ? styles.queueDrop : ""}`}
+      aria-label="Jobs that need a tech"
+      onDragOver={(e) => {
+        if (pending || !canSendBack(drag.current)) return;
+        e.preventDefault();
+        if (dropTarget !== "queue") setDropTarget("queue");
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropTarget(undefined);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        const job = drag.current;
+        drag.current = undefined;
+        setDropTarget(undefined);
+        if (job) backToQueue(job);
+      }}
+    >
       <h2>
         Needs a tech{" "}
         <span>{data.queue.totalCount ?? data.queue.items.length}</span>
@@ -1179,6 +1206,7 @@ export function DispatchPlan(initial: Board) {
               job={detail}
               from={detail.schedule?.day ?? focusDay}
               onMove={quickMove}
+              onBack={canSendBack(detail) ? () => backToQueue(detail) : undefined}
             />
           }
           onClose={() => setDetail(undefined)}
@@ -1217,10 +1245,12 @@ function QuickMoves({
   job,
   from,
   onMove,
+  onBack,
 }: {
   job: DispatchJob;
   from: string;
   onMove: (moves: Move[]) => void;
+  onBack?: () => void;
 }) {
   return (
     <>
@@ -1233,6 +1263,7 @@ function QuickMoves({
       {job.schedule ? (
         <button onClick={() => onMove([{ job }])}>Take off the plan</button>
       ) : null}
+      {onBack ? <button onClick={onBack}>Back to Needs a tech</button> : null}
     </>
   );
 }

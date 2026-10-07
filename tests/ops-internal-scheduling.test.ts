@@ -12,6 +12,7 @@ import { seedOpsRepository } from "@/lib/ops/seed";
 import { buildSyntheticScaleFixture } from "@/lib/ops/fixtures";
 import { buildWorkflowTaskRecord,buildCreateTaskStatements,buildWorkflowTaskProjectionStatement } from "@/lib/ops/workflow-task-commands";
 import { saveInternalSchedule,setInternalCompletionTarget,type ScheduleInput } from "@/lib/ops/internal-scheduling";
+import { saveInternalPlanBatch } from "@/lib/ops/internal-plan-batch";
 import { calendarDate,exactStoreInstant,mondayOf } from "@/lib/ops/dispatch-calendar";
 import { insertDispatchRecord } from "@/lib/ops/internal-dispatch";
 import { createNotificationEmailTransport,type TransactionalEmail } from "@/lib/ops/email-delivery";
@@ -53,6 +54,17 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
  async function input(workId:string,extra:Partial<ScheduleInput>={}):Promise<ScheduleInput> {const w=(await r.getWorkOrder(dispatchOrg,workId))!,a=(await r.getActiveAssignment(dispatchOrg,workId))!;return {organizationId:dispatchOrg,workOrderId:workId,actor:dispatchActor(),expectedVersion:w.version??0,expectedAssignmentId:a.id,expectedScheduleId:w.internalScheduleId??null,key:crypto.randomUUID(),precision:"day",date:"2026-10-08",...extra};}
  const save=async(id:string,extra:Partial<ScheduleInput>={})=>saveInternalSchedule(dispatchServices(r),await input(id,extra));
  it("preserves shared preparation, atomic bulk planning, status revisions and delayed confirmation",async()=>{await workflowRedesignRegression(r);});
+ it("sends a planned job back to Needs a tech: no person, no date, reason kept",async()=>{
+  const job=await dispatchJob(r,"person");
+  await save(job.id);
+  expect((await r.getWorkOrder(dispatchOrg,job.id))?.internalScheduleId).toBeTruthy();
+  await saveInternalPlanBatch(dispatchServices(r),[{...await input(job.id,{precision:"removed",target:"pool",membershipId:undefined,reviewReason:"Moved back to Needs a tech"}),restoreUnscheduled:true}]);
+  const assignment=await r.getActiveAssignment(dispatchOrg,job.id);
+  expect(assignment).toMatchObject({internalTarget:"pool"});
+  expect(assignment?.internalMembershipId).toBeUndefined();
+  expect((await r.getWorkOrder(dispatchOrg,job.id))?.internalScheduleId).toBeUndefined();
+  expect((await r.listWorkOrders({organizationId:dispatchOrg},{internalOnly:true,internalTarget:"pool",search:job.problem})).items.map(w=>w.id)).toEqual([job.id]);
+ });
  it("upgrades existing populated data without inferred plans or repair targets",async()=>{
   const w=await r.getWorkOrder(dispatchOrg,"showcase-work-walk-101");
   expect(w?.internalScheduleId).toBeUndefined();expect(w?.targetCompletionAt).toBeUndefined();

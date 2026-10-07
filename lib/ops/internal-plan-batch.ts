@@ -58,7 +58,7 @@ export async function saveInternalPlanBatch(
               target: input.target ?? "pool",
               membershipId: input.membershipId,
               managerId: input.managerId,
-              reason: "Undo last Plan change",
+              reason: input.reviewReason?.trim() || "Undo last Plan change",
             },
           )
         : await saveInternalSchedule(
