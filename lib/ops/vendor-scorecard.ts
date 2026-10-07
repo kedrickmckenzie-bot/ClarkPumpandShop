@@ -94,43 +94,59 @@ export function vendorJobFactsFromFixture(fixture: OpsFixture, scope: Organizati
   }
   const min = (values: Array<string | undefined>) => values.filter((v): v is string => Boolean(v)).sort()[0];
   const max = (values: Array<string | undefined>) => values.filter((v): v is string => Boolean(v)).sort().at(-1);
+  // Index once by job, so a large demo stays fast.
+  const byWork = <T extends { workOrderId?: string; organizationId: string }>(rows: T[]) => {
+    const map = new Map<string, T[]>();
+    for (const row of rows) if (row.organizationId === org && row.workOrderId) map.set(row.workOrderId, [...(map.get(row.workOrderId) ?? []), row]);
+    return map;
+  };
+  const responsesByWork = byWork(fixture.vendorResponses), linksByWork = byWork(links), verificationsByWork = byWork(fixture.workOrderVerifications);
+  const costsByWork = byWork(fixture.costLines), appointmentsByWork = byWork(fixture.serviceAppointments ?? []), allocationsByWork = byWork(fixture.invoiceLineAllocations);
+  const assignmentsByWork = byWork(fixture.assignments);
+  const visitsByWork = new Map<string, typeof visits>();
+  for (const v of visits) {
+    const ids = new Set([v.workOrderId, ...links.filter(l => l.visitId === v.id).map(l => l.workOrderId)].filter((x): x is string => Boolean(x)));
+    for (const workId of ids) visitsByWork.set(workId, [...(visitsByWork.get(workId) ?? []), v]);
+  }
+  const workByAsset = new Map<string, typeof fixture.workOrders>();
+  for (const o of fixture.workOrders) if (o.organizationId === org && o.assetId && o.status !== "cancelled" && o.priority !== "planned" && !pmWork.has(o.id)) workByAsset.set(o.assetId, [...(workByAsset.get(o.assetId) ?? []), o]);
+  const invoiceVendor = new Map(fixture.invoices.filter(i => i.organizationId === org).map(i => [i.id, i.vendorId]));
+  const lineInvoice = new Map(fixture.invoiceLines.filter(l => l.organizationId === org).map(l => [l.id, l.invoiceId]));
+  const openExceptionInvoices = new Set(fixture.invoiceExceptions.filter(e => e.organizationId === org && e.status === "open").map(e => e.invoiceId));
   const facts: VendorJobFact[] = [];
   for (const { workOrderId, vendorId, sentAt } of sent.values()) {
     const w = work.get(workOrderId), store = w && stores.get(w.storeId), vendor = vendors.get(vendorId);
     if (!w || !store || !vendor || w.status === "cancelled" || sentAt < window.from || sentAt >= window.to) continue;
-    const responses = fixture.vendorResponses.filter(r => r.organizationId === org && r.workOrderId === w.id && assignmentVendor.get(r.assignmentId) === vendorId);
-    const vendorVisits = visits.filter(v => v.vendorId === vendorId && (v.workOrderId === w.id || links.some(l => l.visitId === v.id && l.workOrderId === w.id)));
-    const vendorLinks = links.filter(l => l.workOrderId === w.id && visitById.get(l.visitId)?.vendorId === vendorId);
+    const responses = (responsesByWork.get(w.id) ?? []).filter(r => assignmentVendor.get(r.assignmentId) === vendorId);
+    const vendorVisits = (visitsByWork.get(w.id) ?? []).filter(v => v.vendorId === vendorId);
+    const vendorLinks = (linksByWork.get(w.id) ?? []).filter(l => visitById.get(l.visitId)?.vendorId === vendorId);
     const withOutcome = vendorLinks.filter(l => l.outcome).sort((a, b) => (a.outcomeRecordedAt ?? "").localeCompare(b.outcomeRecordedAt ?? "") || a.id.localeCompare(b.id));
     const completedAt = max(vendorLinks.filter(l => l.outcome === "completed").map(l => l.outcomeRecordedAt));
-    const decision = fixture.workOrderVerifications
-      .filter(v => v.organizationId === org && v.workOrderId === w.id && (v.decision === "verified" || v.decision === "rejected")
+    const decision = (verificationsByWork.get(w.id) ?? [])
+      .filter(v => (v.decision === "verified" || v.decision === "rejected")
         && Boolean(v.siteVisitWorkOrderId && visitById.get(linkById.get(v.siteVisitWorkOrderId)?.visitId ?? "")?.vendorId === vendorId))
       .sort((a, b) => b.decidedAt.localeCompare(a.decidedAt) || b.id.localeCompare(a.id))[0];
-    const callback = completedAt && w.assetId ? fixture.workOrders
-      .filter(o => o.organizationId === org && o.id !== w.id && o.assetId === w.assetId && o.status !== "cancelled" && o.priority !== "planned" && !pmWork.has(o.id) && o.createdAt > completedAt)
+    const callback = completedAt && w.assetId ? (workByAsset.get(w.assetId) ?? [])
+      .filter(o => o.id !== w.id && o.createdAt > completedAt)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))[0] : undefined;
     // Older cost records may not name a provider; they count only when this vendor is the job's sole provider.
-    const soleProvider = !fixture.assignments.some(a => a.organizationId === org && a.workOrderId === w.id && (a.kind === "internal" || (a.kind === "outside_vendor" && a.vendorId !== vendorId)));
-    const costs = fixture.costLines.filter(c => c.organizationId === org && c.workOrderId === w.id && c.amount.currency === "USD"
-      && (c.vendorId === vendorId || (!c.vendorId && !c.providerType && soleProvider)));
-    const invoiceIds = new Set(fixture.invoices.filter(i => i.organizationId === org && i.vendorId === vendorId).map(i => i.id));
-    const lineInvoice = new Map(fixture.invoiceLines.filter(l => l.organizationId === org).map(l => [l.id, l.invoiceId]));
-    const allocatedInvoices = new Set(fixture.invoiceLineAllocations.filter(a => a.organizationId === org && a.workOrderId === w.id).map(a => lineInvoice.get(a.invoiceLineId)));
+    const soleProvider = !(assignmentsByWork.get(w.id) ?? []).some(a => a.kind === "internal" || (a.kind === "outside_vendor" && a.vendorId !== vendorId));
+    const costs = (costsByWork.get(w.id) ?? []).filter(c => c.amount.currency === "USD" && (c.vendorId === vendorId || (!c.vendorId && !c.providerType && soleProvider)));
+    const allocatedInvoices = new Set((allocationsByWork.get(w.id) ?? []).map(a => lineInvoice.get(a.invoiceLineId)));
     facts.push({
       workOrderId: w.id, number: w.number, problem: w.problem, storeId: store.id, storeNumber: store.storeNumber, storeName: store.name,
       regionId: store.regionId && regions.has(store.regionId) ? store.regionId : undefined, regionName: store.regionId ? regions.get(store.regionId)?.name : undefined,
       vendorId, vendorName: vendor.name, trade: w.categoryKey ?? "unclassified", assetId: w.assetId, sentAt,
       firstResponseAt: min(responses.map(r => r.respondedAt)),
       declined: responses.some(r => r.response === "declined"),
-      appointmentAt: min((fixture.serviceAppointments ?? []).filter(ap => ap.organizationId === org && ap.workOrderId === w.id && ap.status === "confirmed" && assignmentVendor.get(ap.assignmentId) === vendorId).map(ap => ap.startsAt)),
+      appointmentAt: min((appointmentsByWork.get(w.id) ?? []).filter(ap => ap.status === "confirmed" && assignmentVendor.get(ap.assignmentId) === vendorId).map(ap => ap.startsAt)),
       firstCheckInAt: min(vendorVisits.map(v => v.checkedInAt)),
       firstOutcome: withOutcome[0]?.outcome,
       completedAt,
       checkDecision: decision?.decision as VendorJobFact["checkDecision"],
       callbackWorkOrderId: callback?.id, callbackAt: callback?.createdAt,
       costMinor: costs.reduce((sum, c) => sum + c.amount.amountMinor, 0), costLineCount: costs.length,
-      invoiceIssue: fixture.invoiceExceptions.some(e => e.organizationId === org && e.status === "open" && invoiceIds.has(e.invoiceId) && allocatedInvoices.has(e.invoiceId)),
+      invoiceIssue: [...allocatedInvoices].some(invoiceId => invoiceId !== undefined && invoiceVendor.get(invoiceId) === vendorId && openExceptionInvoices.has(invoiceId)),
     });
   }
   return facts.sort(compareFacts);
@@ -147,10 +163,7 @@ export async function queryVendorJobFacts(driver: OpsSqlDriver, scope: Organizat
   const scoped = scopeWhere(scope, "st", params);
   params.push(window.from, window.to);
   if (window.vendorId) params.push(window.vendorId);
-  const vendorVisit = `vs.organization_id = j.organization_id AND vs.vendor_id = j.vendor_id`;
-  const soleProvider = `NOT EXISTS (SELECT 1 FROM ops_work_order_assignments oa WHERE oa.organization_id = j.organization_id AND oa.work_order_id = j.work_order_id AND (oa.kind = 'internal' OR (oa.kind = 'outside_vendor' AND oa.vendor_id <> j.vendor_id)))`;
-  const vendorLink = `FROM ops_site_visit_work_orders x JOIN ops_visit_sessions vs ON vs.organization_id = x.organization_id AND vs.id = x.visit_id
-      WHERE x.organization_id = j.organization_id AND x.work_order_id = j.work_order_id AND ${vendorVisit}`;
+  // Each fact is worked out once for all jobs in the window (no per-job lookups), so this stays fast at chain scale.
   const result = await driver.query({ sql: `WITH sent AS (
       SELECT a.organization_id, a.work_order_id, a.vendor_id, MIN(a.assigned_at) AS sent_at
       FROM ops_work_order_assignments a
@@ -165,40 +178,84 @@ export async function queryVendorJobFacts(driver: OpsSqlDriver, scope: Organizat
       JOIN ops_vendors v ON v.organization_id = s.organization_id AND v.id = s.vendor_id
       LEFT JOIN ops_regions rg ON rg.organization_id = st.organization_id AND rg.id = st.region_id
       WHERE ${scoped} AND w.status <> 'cancelled' AND s.sent_at >= ? AND s.sent_at < ?${window.vendorId ? " AND s.vendor_id = ?" : ""}
-    ), facts AS (
-      SELECT j.*,
-        (SELECT MIN(r.responded_at) FROM ops_vendor_responses r JOIN ops_work_order_assignments ra ON ra.organization_id = r.organization_id AND ra.id = r.assignment_id
-          WHERE r.organization_id = j.organization_id AND r.work_order_id = j.work_order_id AND ra.vendor_id = j.vendor_id) AS first_response_at,
-        CASE WHEN EXISTS (SELECT 1 FROM ops_vendor_responses r JOIN ops_work_order_assignments ra ON ra.organization_id = r.organization_id AND ra.id = r.assignment_id
-          WHERE r.organization_id = j.organization_id AND r.work_order_id = j.work_order_id AND ra.vendor_id = j.vendor_id AND r.response = 'declined') THEN 1 ELSE 0 END AS declined,
-        (SELECT MIN(ap.starts_at) FROM ops_service_appointments ap JOIN ops_work_order_assignments aa ON aa.organization_id = ap.organization_id AND aa.id = ap.assignment_id
-          WHERE ap.organization_id = j.organization_id AND ap.work_order_id = j.work_order_id AND ap.status = 'confirmed' AND aa.vendor_id = j.vendor_id) AS appointment_at,
-        (SELECT MIN(vs.checked_in_at) FROM ops_visit_sessions vs WHERE ${vendorVisit}
-          AND (vs.work_order_id = j.work_order_id OR EXISTS (SELECT 1 FROM ops_site_visit_work_orders y WHERE y.organization_id = vs.organization_id AND y.visit_id = vs.id AND y.work_order_id = j.work_order_id))) AS first_check_in_at,
-        (SELECT x.outcome ${vendorLink} AND x.outcome IS NOT NULL ORDER BY x.outcome_recorded_at ASC, x.id ASC LIMIT 1) AS first_outcome,
-        (SELECT MAX(x.outcome_recorded_at) ${vendorLink} AND x.outcome = 'completed') AS completed_at,
-        (SELECT ver.decision FROM ops_work_order_verifications ver
-          JOIN ops_site_visit_work_orders x ON x.organization_id = ver.organization_id AND x.id = ver.site_visit_work_order_id
-          JOIN ops_visit_sessions vs ON vs.organization_id = x.organization_id AND vs.id = x.visit_id
-          WHERE ver.organization_id = j.organization_id AND ver.work_order_id = j.work_order_id AND ver.decision IN ('verified','rejected') AND ${vendorVisit}
-          ORDER BY ver.decided_at DESC, ver.id DESC LIMIT 1) AS check_decision,
-        (SELECT COALESCE(SUM(c.amount_minor), 0) FROM ops_cost_lines c WHERE c.organization_id = j.organization_id AND c.work_order_id = j.work_order_id AND c.currency = 'USD' AND (c.vendor_id = j.vendor_id OR (c.vendor_id IS NULL AND c.provider_type IS NULL AND ${soleProvider}))) AS cost_minor,
-        (SELECT COUNT(*) FROM ops_cost_lines c WHERE c.organization_id = j.organization_id AND c.work_order_id = j.work_order_id AND c.currency = 'USD' AND (c.vendor_id = j.vendor_id OR (c.vendor_id IS NULL AND c.provider_type IS NULL AND ${soleProvider}))) AS cost_line_count,
-        CASE WHEN EXISTS (SELECT 1 FROM ops_invoice_exceptions e JOIN ops_invoices i ON i.organization_id = e.organization_id AND i.id = e.invoice_id
-          WHERE e.organization_id = j.organization_id AND e.status = 'open' AND i.vendor_id = j.vendor_id
-            AND EXISTS (SELECT 1 FROM ops_invoice_lines il JOIN ops_invoice_line_allocations la ON la.organization_id = il.organization_id AND la.invoice_line_id = il.id
-              WHERE il.organization_id = i.organization_id AND il.invoice_id = i.id AND la.work_order_id = j.work_order_id)) THEN 1 ELSE 0 END AS invoice_issue
+    ), responses AS (
+      SELECT r.work_order_id, ra.vendor_id, MIN(r.responded_at) AS first_response_at, MAX(CASE WHEN r.response = 'declined' THEN 1 ELSE 0 END) AS declined
+      FROM ops_vendor_responses r
+      JOIN ops_work_order_assignments ra ON ra.organization_id = r.organization_id AND ra.id = r.assignment_id
+      JOIN jobs j ON j.organization_id = r.organization_id AND j.work_order_id = r.work_order_id AND j.vendor_id = ra.vendor_id
+      GROUP BY r.work_order_id, ra.vendor_id
+    ), appointments AS (
+      SELECT ap.work_order_id, aa.vendor_id, MIN(ap.starts_at) AS appointment_at
+      FROM ops_service_appointments ap
+      JOIN ops_work_order_assignments aa ON aa.organization_id = ap.organization_id AND aa.id = ap.assignment_id
+      JOIN jobs j ON j.organization_id = ap.organization_id AND j.work_order_id = ap.work_order_id AND j.vendor_id = aa.vendor_id
+      WHERE ap.status = 'confirmed'
+      GROUP BY ap.work_order_id, aa.vendor_id
+    ), links AS (
+      SELECT x.id AS link_id, x.work_order_id, vs.vendor_id, vs.checked_in_at, x.outcome, x.outcome_recorded_at
+      FROM ops_site_visit_work_orders x
+      JOIN ops_visit_sessions vs ON vs.organization_id = x.organization_id AND vs.id = x.visit_id
+      JOIN jobs j ON j.organization_id = x.organization_id AND j.work_order_id = x.work_order_id AND j.vendor_id = vs.vendor_id
+    ), check_ins AS (
+      SELECT work_order_id, vendor_id, MIN(checked_in_at) AS first_check_in_at FROM (
+        SELECT work_order_id, vendor_id, checked_in_at FROM links
+        UNION ALL
+        SELECT vs.work_order_id, vs.vendor_id, vs.checked_in_at FROM ops_visit_sessions vs
+        JOIN jobs j ON j.organization_id = vs.organization_id AND j.work_order_id = vs.work_order_id AND j.vendor_id = vs.vendor_id
+      ) visits GROUP BY work_order_id, vendor_id
+    ), outcomes AS (
+      SELECT work_order_id, vendor_id, outcome, ROW_NUMBER() OVER (PARTITION BY work_order_id, vendor_id ORDER BY outcome_recorded_at ASC, link_id ASC) AS n
+      FROM links WHERE outcome IS NOT NULL
+    ), completions AS (
+      SELECT work_order_id, vendor_id, MAX(outcome_recorded_at) AS completed_at FROM links WHERE outcome = 'completed' GROUP BY work_order_id, vendor_id
+    ), decisions AS (
+      SELECT l.work_order_id, l.vendor_id, ver.decision, ROW_NUMBER() OVER (PARTITION BY l.work_order_id, l.vendor_id ORDER BY ver.decided_at DESC, ver.id DESC) AS n
+      FROM ops_work_order_verifications ver
+      JOIN links l ON l.link_id = ver.site_visit_work_order_id AND l.work_order_id = ver.work_order_id
+      WHERE ver.organization_id = ? AND ver.decision IN ('verified','rejected')
+    ), others AS (
+      SELECT j.work_order_id, j.vendor_id FROM jobs j
+      WHERE EXISTS (SELECT 1 FROM ops_work_order_assignments oa WHERE oa.organization_id = j.organization_id AND oa.work_order_id = j.work_order_id
+        AND (oa.kind = 'internal' OR (oa.kind = 'outside_vendor' AND oa.vendor_id <> j.vendor_id)))
+    ), costs AS (
+      SELECT j.work_order_id, j.vendor_id, SUM(c.amount_minor) AS cost_minor, COUNT(*) AS cost_line_count
       FROM jobs j
+      JOIN ops_cost_lines c ON c.organization_id = j.organization_id AND c.work_order_id = j.work_order_id AND c.currency = 'USD'
+      LEFT JOIN others o ON o.work_order_id = j.work_order_id AND o.vendor_id = j.vendor_id
+      WHERE c.vendor_id = j.vendor_id OR (c.vendor_id IS NULL AND c.provider_type IS NULL AND o.work_order_id IS NULL)
+      GROUP BY j.work_order_id, j.vendor_id
+    ), invoice_issues AS (
+      SELECT DISTINCT la.work_order_id, i.vendor_id
+      FROM ops_invoice_exceptions e
+      JOIN ops_invoices i ON i.organization_id = e.organization_id AND i.id = e.invoice_id
+      JOIN ops_invoice_lines il ON il.organization_id = i.organization_id AND il.invoice_id = i.id
+      JOIN ops_invoice_line_allocations la ON la.organization_id = il.organization_id AND la.invoice_line_id = il.id
+      WHERE e.organization_id = ? AND e.status = 'open'
+    ), facts AS (
+      SELECT j.*, r.first_response_at, COALESCE(r.declined, 0) AS declined, ap.appointment_at, ci.first_check_in_at, oc.outcome AS first_outcome,
+        cp.completed_at, d.decision AS check_decision, COALESCE(c.cost_minor, 0) AS cost_minor, COALESCE(c.cost_line_count, 0) AS cost_line_count,
+        CASE WHEN ii.work_order_id IS NULL THEN 0 ELSE 1 END AS invoice_issue
+      FROM jobs j
+      LEFT JOIN responses r ON r.work_order_id = j.work_order_id AND r.vendor_id = j.vendor_id
+      LEFT JOIN appointments ap ON ap.work_order_id = j.work_order_id AND ap.vendor_id = j.vendor_id
+      LEFT JOIN check_ins ci ON ci.work_order_id = j.work_order_id AND ci.vendor_id = j.vendor_id
+      LEFT JOIN outcomes oc ON oc.work_order_id = j.work_order_id AND oc.vendor_id = j.vendor_id AND oc.n = 1
+      LEFT JOIN completions cp ON cp.work_order_id = j.work_order_id AND cp.vendor_id = j.vendor_id
+      LEFT JOIN decisions d ON d.work_order_id = j.work_order_id AND d.vendor_id = j.vendor_id AND d.n = 1
+      LEFT JOIN costs c ON c.work_order_id = j.work_order_id AND c.vendor_id = j.vendor_id
+      LEFT JOIN invoice_issues ii ON ii.work_order_id = j.work_order_id AND ii.vendor_id = j.vendor_id
+    ), callbacks AS (
+      SELECT f.work_order_id, f.vendor_id, o.id AS callback_work_order_id, o.created_at AS callback_at,
+        ROW_NUMBER() OVER (PARTITION BY f.work_order_id, f.vendor_id ORDER BY o.created_at ASC, o.id ASC) AS n
+      FROM facts f
+      JOIN ops_work_orders o ON o.organization_id = f.organization_id AND o.asset_id = f.asset_id AND o.id <> f.work_order_id AND o.created_at > f.completed_at
+      WHERE f.completed_at IS NOT NULL AND o.status <> 'cancelled' AND o.priority <> 'planned'
+        AND NOT EXISTS (SELECT 1 FROM ops_pm_occurrences p WHERE p.organization_id = o.organization_id AND p.work_order_id = o.id)
     )
-    SELECT f.*,
-      (SELECT o.id FROM ops_work_orders o WHERE o.organization_id = f.organization_id AND o.asset_id = f.asset_id AND o.id <> f.work_order_id AND o.status <> 'cancelled' AND o.priority <> 'planned' AND o.created_at > f.completed_at
-        AND NOT EXISTS (SELECT 1 FROM ops_pm_occurrences p WHERE p.organization_id = o.organization_id AND p.work_order_id = o.id)
-        ORDER BY o.created_at ASC, o.id ASC LIMIT 1) AS callback_work_order_id,
-      (SELECT o.created_at FROM ops_work_orders o WHERE o.organization_id = f.organization_id AND o.asset_id = f.asset_id AND o.id <> f.work_order_id AND o.status <> 'cancelled' AND o.priority <> 'planned' AND o.created_at > f.completed_at
-        AND NOT EXISTS (SELECT 1 FROM ops_pm_occurrences p WHERE p.organization_id = o.organization_id AND p.work_order_id = o.id)
-        ORDER BY o.created_at ASC, o.id ASC LIMIT 1) AS callback_at
+    SELECT f.*, cb.callback_work_order_id, cb.callback_at
     FROM facts f
-    ORDER BY f.sent_at ASC, f.work_order_id ASC, f.vendor_id ASC`, params });
+    LEFT JOIN callbacks cb ON cb.work_order_id = f.work_order_id AND cb.vendor_id = f.vendor_id AND cb.n = 1
+    ORDER BY f.sent_at ASC, f.work_order_id ASC, f.vendor_id ASC`, params: [...params, scope.organizationId, scope.organizationId] });
   const text = (value: unknown) => value == null ? undefined : value instanceof Date ? value.toISOString() : String(value);
   return result.rows.map(r => ({
     workOrderId: String(r.work_order_id), number: String(r.number), problem: String(r.problem), storeId: String(r.store_id),

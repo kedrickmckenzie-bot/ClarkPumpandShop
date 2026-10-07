@@ -198,7 +198,19 @@ const demoShortNames: Record<string, string> = {
   "The rear delivery door weather strip is ": "Rear door weather strip",
 };
 
-export function addDispatchDemo(f: OpsFixture): OpsFixture {
+/**
+ * Home districts. In the seeded showcase the in-house team is based near the Central shop
+ * (four techs), with one tech each in North and South for small jobs.
+ */
+const CENTRAL_TEAM_HOMES = ["region-northline-central", "region-northline-central", "region-northline-north", "region-northline-central", "region-northline-central", "region-northline-south"];
+
+/** Central-team showcase: most open in-house jobs sit at Central stores; the Store 104/101 refrigeration stories stay put. */
+function centralStore(store: number, index: number) {
+  if (store >= 106 && store <= 110 || store === 104 || store === 101) return store;
+  return index % 3 === 0 ? store : 106 + index % 5;
+}
+
+export function addDispatchDemo(f: OpsFixture, options: { centralTeam?: boolean } = {}): OpsFixture {
   const org=f.organizations[0].id, date=f.asOf.slice(0,10), createdAt=`${addCalendarDays(date,-1)}T12:00:00.000Z`;
   const facility="membership-northline-facilities", manager="membership-northline-field-manager";
   const managerName=f.users.find(u=>u.id===f.memberships.find(m=>m.id===manager)?.userId)!.displayName;
@@ -211,12 +223,12 @@ export function addDispatchDemo(f: OpsFixture): OpsFixture {
       f.memberships.push({id:membershipId,organizationId:org,userId,role:"internal_technician",status:"active",createdAt});
       f.scopeGrants.push({id:`dispatch-study-grant-${i+1}`,organizationId:org,membershipId,scopeKind:"organization",scopeId:org,permission:"ops:write",createdAt});
     }
-    (f.technicianProfiles??=[]).push({id:`dispatch-study-profile-${i+1}`,organizationId:org,membershipId,homeRegionId:f.regions[i%f.regions.length].id,skillsJson:JSON.stringify(skills)});
+    (f.technicianProfiles??=[]).push({id:`dispatch-study-profile-${i+1}`,organizationId:org,membershipId,homeRegionId:options.centralTeam&&f.regions.some(r=>r.id===CENTRAL_TEAM_HOMES[i])?CENTRAL_TEAM_HOMES[i]:f.regions[i%f.regions.length].id,skillsJson:JSON.stringify(skills)});
   });
   const allocation=[0,0,0,0,0,1,1,1,1,1,2,2,2,2,3,3,3,4,4,5,5,5,5,5];
   examples.forEach((e,i)=>{
     const tech=allocation[i], membershipId=tech===undefined?undefined:`membership-northline-tech-${tech+1}`;
-    const id=`dispatch-study-job-${i+1}`, assignmentId=`${id}-assignment`, storeId=`store-northline-${e.store}`;
+    const id=`dispatch-study-job-${i+1}`, assignmentId=`${id}-assignment`, storeId=`store-northline-${options.centralTeam?centralStore(e.store,i):e.store}`;
     const waiting=e.status==="Waiting on parts", held=e.status==="Next visit", started=e.status==="Work started";
     const who=tech===undefined?managerName:people[tech][0];
     const day=addCalendarDays(date,started?0:i%4===0?0:i%5===0?2:i%3===0?1:0);

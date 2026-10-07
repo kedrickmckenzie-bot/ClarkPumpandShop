@@ -1,3 +1,4 @@
+import { buildOperatingHistory, retimeRecurringResponses } from "./demo-operating-history";
 import { addDispatchDemo } from "./dispatch-demo-fixture";
 import { attestDemoRecordingCoverage } from "./recording-coverage";
 import type {
@@ -240,7 +241,12 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-function buildFixture(): OpsFixture {
+interface BuildOptions {
+  /** The seeded showcase: two years of everyday operating history around the hand-built stories. */
+  operatingHistory?: boolean;
+}
+
+function buildFixture(options: BuildOptions = {}): OpsFixture {
   const organization = { id: NORTHLINE_ORGANIZATION_ID, name: DEMO_ORGANIZATION_NAME, slug: "clark-pump-shop-demo", timeZone: "America/New_York", workOrderPrefix: DEMO_WORK_ORDER_PREFIX, createdAt: at(1, 2, 14) };
   const divisions: Division[] = [{ id: "division-northline-retail", organizationId: organization.id, code: "retail", name: "Convenience Retail", createdAt: organization.createdAt }];
   const regions = regionSeeds.map(([code, name]) => ({ id: `region-northline-${code}`, organizationId: organization.id, divisionId: divisions[0].id, code, name, createdAt: organization.createdAt }));
@@ -831,6 +837,20 @@ function buildFixture(): OpsFixture {
       }
     });
   });
+
+  if (options.operatingHistory) {
+    const storeManagerNames = Object.fromEntries(memberships.filter((m) => m.role === "store_manager").map((m) => [m.id, users.find((u) => u.id === m.userId)?.displayName ?? "Store manager"]));
+    const history = buildOperatingHistory({
+      organization, stores, vendors, assets, asOf: NORTHLINE_AS_OF, storeManagerNames, facilitiesMembershipId: "membership-northline-facilities",
+      // Techs 3–6 join in the dispatch layer; their names are fixed there too.
+      technicianNames: { "membership-northline-tech-1": "Maria Santos", "membership-northline-tech-2": "Devon Price", "membership-northline-tech-3": "Alex Morgan", "membership-northline-tech-4": "Jordan Brooks", "membership-northline-tech-5": "Sam Patel", "membership-northline-tech-6": "Riley Chen" },
+    });
+    workOrders.push(...history.workOrders); assignments.push(...history.assignments); issuances.push(...history.issuances);
+    vendorResponses.push(...history.vendorResponses); serviceAppointments.push(...history.serviceAppointments); visits.push(...history.visits);
+    visitEvidence.push(...history.visitEvidence); followUps.push(...history.followUps); workOrderVerifications.push(...history.workOrderVerifications);
+    costLines.push(...history.costLines); invoiceReferences.push(...history.invoiceReferences); invoiceAllocations.push(...history.invoiceAllocations);
+    retimeRecurringResponses(vendorResponses, issuances, visits, assignments);
+  }
 
   // A separate, current Store 104 authorization powers the account-free
   // accept/decline/propose/question flow without rewriting the closed
@@ -2102,22 +2122,30 @@ function buildFixture(): OpsFixture {
   return { asOf: NORTHLINE_AS_OF, organizations: [organization], divisions, regions, taxonomyNodes, equipmentTemplates, componentTemplates, stores, users, memberships, scopeGrants, roleCapabilityOverrides, workflowPolicies, vendors, vendorReminders, vendorSpecialties, vendorCoverage, vendorQualifications, vendorComplianceDocuments, vendorComplianceAlerts, vendorContracts, contractVersions, contractScopes, rateCardLines, serviceLevelPolicies, schedulingPolicies, vendorCapacity, requests, requestImpactAssessments, workOrders, workOrderVisitHolds, approvalPolicies, approvalRequests, approvalDecisions, assignments, issuances, vendorResponses, serviceAppointments, vendorContinuations, estimateRequests, estimateProposals, visits, siteVisitWorkOrders, workOrderVerifications, visitEvidence, files, entityFiles, followUps, workflowTasks, workflowTaskSlaPauses, workflowTaskSlaResumes, exceptions, assets, replacementProfiles, replacementBenchmarks, assetReplacementOverrides, replacementEvents, lifecycleRecommendations, components, componentLifecycleEvents, maintenancePrograms, checklistTemplates, pmPlans, pmOccurrences, pmWorkItems, checklistResponses, serviceRuns, routeStops, serviceRunWorkOrders, serviceRunResponses, vendorWarrantyProfiles, warrantyRules, warrantyCoverageLines, repairItems, appliedWarranties, warrantyAmendments, manufacturerWarranties, warrantyCases, quotes, authorizations, invoices, invoiceLines, invoiceLineAllocations, invoiceExceptions, invoiceAdjustments, serviceDiscrepancies, valueEvents, costLines, invoiceReferences, invoiceAllocations, auditEvents, notificationRules, outboxMessages, publicTokens };
 }
 
-const presentationFixture = buildFixture();
+function finishPresentation(fixture: OpsFixture) {
 // Fictional example schedules; these are not jurisdiction-specific legal requirements.
-presentationFixture.complianceSchedules = [
+fixture.complianceSchedules = [
  ["extinguisher","Fire extinguisher check","2026-09-24","store-northline-104","internal",undefined,"Inspection checklist / photos"],
  ["fuel","Fuel-system inspection","2026-10-14","store-northline-105","vendor","vendor-northline-pump-pro","Test report"],
  ["food","Food-service inspection","2026-09-25","store-northline-108","internal",undefined,"Inspection report"],
  ["permit","Permit renewal review","2026-10-20","store-northline-112","internal",undefined,"Renewal confirmation"],
  ["safety","Site safety inspection","2026-09-26","store-northline-114","internal",undefined,"Photos and findings"],
-].map(([key,name,date,storeId,handler,,evidenceLabel])=>({id:`compliance-demo-${key}`,organizationId:NORTHLINE_ORGANIZATION_ID,storeId:storeId!,name:name!,instructions:"Example inspection schedule. Confirm the applicable requirements with your responsible team.",requirementSource:"Fictional company schedule",evidenceLabel:evidenceLabel!,kind:key==="permit"?"permit" as const:"inspection" as const,firstDueDate:date!,intervalUnit:"months" as const,intervalCount:key==="extinguisher"?1:12,leadDays:30,handler:handler as "internal"|"vendor",vendorId:handler==="vendor"?presentationFixture.vendors.find(v=>v.name.includes("PumpPro"))!.id:undefined,membershipId:handler==="internal"?"membership-northline-facilities":undefined,evidenceRequired:1,escalationDays:3,escalationTo:"Facilities coordinator",status:"active" as const,createdAt:"2026-09-01T12:00:00.000Z"}));
-presentationFixture.inspections = presentationFixture.complianceSchedules.map((s,index)=>({id:`inspection-${s.id}-${s.firstDueDate}`,organizationId:s.organizationId,scheduleId:s.id,storeId:s.storeId,dueDate:s.firstDueDate,status:index===2?"performed" as const:index===4?"action_needed" as const:"pending" as const,completedAt:index===2?"2026-09-25":index===4?"2026-09-26":undefined,resultNote:index===2?"Inspection performed; report requested.":index===4?"Damaged exit light found. Corrective work needs assignment.":undefined,version:0,createdAt:s.createdAt}));
-attestDemoRecordingCoverage(presentationFixture, "2024-08-01", NORTHLINE_AS_OF.slice(0, 10));
+].map(([key,name,date,storeId,handler,,evidenceLabel])=>({id:`compliance-demo-${key}`,organizationId:NORTHLINE_ORGANIZATION_ID,storeId:storeId!,name:name!,instructions:"Example inspection schedule. Confirm the applicable requirements with your responsible team.",requirementSource:"Fictional company schedule",evidenceLabel:evidenceLabel!,kind:key==="permit"?"permit" as const:"inspection" as const,firstDueDate:date!,intervalUnit:"months" as const,intervalCount:key==="extinguisher"?1:12,leadDays:30,handler:handler as "internal"|"vendor",vendorId:handler==="vendor"?fixture.vendors.find(v=>v.name.includes("PumpPro"))!.id:undefined,membershipId:handler==="internal"?"membership-northline-facilities":undefined,evidenceRequired:1,escalationDays:3,escalationTo:"Facilities coordinator",status:"active" as const,createdAt:"2026-09-01T12:00:00.000Z"}));
+fixture.inspections = fixture.complianceSchedules.map((s,index)=>({id:`inspection-${s.id}-${s.firstDueDate}`,organizationId:s.organizationId,scheduleId:s.id,storeId:s.storeId,dueDate:s.firstDueDate,status:index===2?"performed" as const:index===4?"action_needed" as const:"pending" as const,completedAt:index===2?"2026-09-25":index===4?"2026-09-26":undefined,resultNote:index===2?"Inspection performed; report requested.":index===4?"Damaged exit light found. Corrective work needs assignment.":undefined,version:0,createdAt:s.createdAt}));
+  attestDemoRecordingCoverage(fixture, "2024-08-01", NORTHLINE_AS_OF.slice(0, 10));
+  return fixture;
+}
+const presentationFixture = finishPresentation(buildFixture());
+let historyFixture: OpsFixture | undefined;
+/** Built only when the seeded showcase asks for it, so tests that use the base demo pay nothing. */
+function operatingHistoryFixture() { return historyFixture ??= finishPresentation(buildFixture({ operatingHistory: true })); }
+
 
 /** Fresh demo creation only: never apply this transformation to persisted records. */
-export function buildNorthlinePresentationFixture(anchorDate?: string): OpsFixture {
-  const fixture = clone(presentationFixture);
-  if (!anchorDate) return addDispatchDemo(fixture);
+export function buildNorthlinePresentationFixture(anchorDate?: string, options: { operatingHistory?: boolean } = {}): OpsFixture {
+  const fixture = clone(options.operatingHistory ? operatingHistoryFixture() : presentationFixture);
+  const dispatch = (f: OpsFixture) => addDispatchDemo(f, { centralTeam: options.operatingHistory });
+  if (!anchorDate) return dispatch(fixture);
   const anchor = Date.parse(`${anchorDate.slice(0, 10)}T18:00:00.000Z`);
   if (!Number.isFinite(anchor)) throw new Error("Invalid demo anchor date");
   const offset = anchor - Date.parse(NORTHLINE_AS_OF);
@@ -2137,7 +2165,7 @@ export function buildNorthlinePresentationFixture(anchorDate?: string): OpsFixtu
     if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, shift(entry)]));
     return value;
   }
-  return addDispatchDemo(shift(fixture) as OpsFixture);
+  return dispatch(shift(fixture) as OpsFixture);
 }
 
 export const NORTHLINE_PRESENTATION_FIXTURE: Readonly<OpsFixture> = addDispatchDemo(clone(presentationFixture));

@@ -156,6 +156,9 @@ export async function seedOpsRepository(
   const statements = [...buildOpsSeedStatements(fixture,options), ...finalStatements];
   const chunkSize = repository.kind === "d1" ? 75 : statements.length;
   for (let index = 0; index < statements.length; index += chunkSize) await repository.atomicWrite(statements.slice(index, index + chunkSize));
+  // A bulk load leaves PostgreSQL without table statistics until autovacuum catches up, and reports then
+  // pick very slow plans. Gather them now so a freshly seeded demo is fast for its first viewer.
+  if (repository.kind === "postgres") await repository.atomicWrite([{ sql: "ANALYZE", params: [] }]);
   return { statements: statements.length, organizations: fixture.organizations.length, stores: fixture.stores.length, vendors: fixture.vendors.length };
 }
 
@@ -177,7 +180,7 @@ export function buildPreviewPeopleStatements(): OpsStatement[] {
 /** Stable demo identities added after a hosted preview was first seeded; inserted if missing, never overwritten. */
 const BACKFILL_PREFIXES = ["dispatch-study-", "ai-demo-", "showcase-equipment-document-", "showcase-file-rtu-service-guide", "showcase-file-beer-cave-troubleshooting", "showcase-file-ice-machine-wiring-sheet", "showcase-file-104-beer-cave-install-notes"];
 export function buildDispatchDemoBackfill(anchorDate = new Date().toISOString()): OpsStatement[] {
-  return buildOpsSeedStatements(buildNorthlinePresentationFixture(anchorDate)).filter(statement =>
+  return buildOpsSeedStatements(buildNorthlinePresentationFixture(anchorDate, { operatingHistory: true })).filter(statement =>
     statement.params.some(value=>typeof value === "string" && BACKFILL_PREFIXES.some(prefix => value.startsWith(prefix))) &&
     statement.sql.startsWith("INSERT INTO ") && statement.sql.endsWith("ON CONFLICT DO NOTHING"));
 }

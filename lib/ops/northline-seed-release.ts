@@ -13,12 +13,20 @@ import {
  * real preview mutations, so a new fixture version never merges or reprojects
  * records underneath an older completed bootstrap.
  */
-export const NORTHLINE_SEED_VERSION = "northline-ops-2026-10-03-v16";
+export const NORTHLINE_SEED_VERSION = "northline-ops-2026-10-07-v17";
+
+/**
+ * v17 rebuilt the showcase around two years of operating history. The owner approved
+ * wiping the fictional demo tenant once so every preview shows the same story: a preview
+ * seeded by any earlier version is reset (demo tenant only) and seeded fresh. Later
+ * versions go back to insert-only enrichment unless they set this again.
+ */
+export const NORTHLINE_SEED_RESETS_EARLIER_VERSIONS = true;
 
 /**
  * An older completed fixture is enriched only with missing deterministic rows.
  * Existing IDs and user mutations are never overwritten. This separate
- * receipt remains honest that the database was not freshly seeded as v16.
+ * receipt remains honest that the database was not freshly seeded as this version.
  */
 export const NORTHLINE_SEED_COMPATIBILITY_MARKER = `${NORTHLINE_SEED_VERSION}:enriched-existing`;
 
@@ -33,6 +41,7 @@ export interface NorthlineSeedMarkerRow extends Record<string, unknown> {
 
 export type NorthlineSeedReleasePlan =
   | { kind: "already_current" }
+  | { kind: "reset_current" }
   | { kind: "already_enriched" }
   | { kind: "seed_current" }
   | { kind: "enrich_existing"; sourceVersion: string };
@@ -43,10 +52,12 @@ export type NorthlineSeedReleasePlan =
  */
 export function planNorthlineSeedRelease(
   markers: readonly NorthlineSeedMarkerRow[],
+  options: { resetEarlier?: boolean } = {},
 ): NorthlineSeedReleasePlan {
   if (markers.some((marker) => marker.key === NORTHLINE_SEED_VERSION)) {
     return { kind: "already_current" };
   }
+  if ((options.resetEarlier ?? NORTHLINE_SEED_RESETS_EARLIER_VERSIONS) && markers.length) return { kind: "reset_current" };
   if (markers.some((marker) => marker.key === NORTHLINE_SEED_COMPATIBILITY_MARKER)) {
     return { kind: "already_enriched" };
   }

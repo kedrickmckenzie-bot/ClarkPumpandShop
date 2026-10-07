@@ -168,7 +168,7 @@ describe("vendor scorecard page", () => {
 
   it("counts older unattributed costs only for the job's sole provider", () => {
     const g = fixture(), org = g.organizations[0]!.id;
-    const fact = vendorJobFactsFromFixture(g, { organizationId: org }, scorecardWindows(g.asOf, 365).current).find(x => x.costLineCount > 0)!;
+    const fact = vendorJobFactsFromFixture(g, { organizationId: org }, scorecardWindows(g.asOf, 365).current).find(x => x.costLineCount > 0 && g.costLines.some(c => c.workOrderId === x.workOrderId && !c.vendorId))!;
     const vendor = g.vendors.find(v => v.organizationId === org && v.id !== fact.vendorId)!;
     g.assignments.push({ ...g.assignments.find(a => a.workOrderId === fact.workOrderId && a.vendorId === fact.vendorId)!, id: "second-vendor", vendorId: vendor.id, status: "superseded" });
     const again = vendorJobFactsFromFixture(g, { organizationId: org }, scorecardWindows(g.asOf, 365).current).find(x => x.workOrderId === fact.workOrderId && x.vendorId === fact.vendorId)!;

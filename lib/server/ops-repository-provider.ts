@@ -1,4 +1,5 @@
 import { buildShowcaseFixture } from "@/lib/ops/showcase-fixture";
+import { wipeD1DemoTenant, type D1ResetBinding } from "@/lib/ops/reset-demo-tenant-d1";
 import { TREND_SOURCE_TABLES } from "@/lib/ops/trends-source-tables";
 import "server-only";
 import { isFictionalPreview } from "./operator-access";
@@ -95,6 +96,10 @@ async function ensureNorthlineSeed(binding: D1Database, repository: OpsRepositor
     );
   }
   const plan = planNorthlineSeedRelease(markers);
+  if (plan.kind === "reset_current") {
+    // One-time, owner-approved rebuild: remove only the fictional demo tenant, then seed it fresh below.
+    await wipeD1DemoTenant(binding as unknown as D1ResetBinding);
+  }
   if (plan.kind === "already_current" || plan.kind === "already_enriched") {
     // Insert-only: give an existing preview the people added since it was seeded.
     await repository.atomicWrite(buildPreviewPeopleStatements());

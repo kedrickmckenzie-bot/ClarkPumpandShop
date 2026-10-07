@@ -4,8 +4,9 @@ import type { OpsFixture, StoredFile } from "./types";
 import type { StoreTask } from "./store-task-types";
 
 /** Fresh showcase only. Never merge this over a customer's existing records. */
-export function buildShowcaseFixture(anchorDate = new Date().toISOString()): OpsFixture {
-  const f = buildNorthlinePresentationFixture(anchorDate);
+export function buildShowcaseFixture(anchorDate = new Date().toISOString(), options: { operatingHistory?: boolean } = {}): OpsFixture {
+  // The two-year operating history is on by default; turning it off rebuilds the earlier showcase for comparison.
+  const f = buildNorthlinePresentationFixture(anchorDate, { operatingHistory: options.operatingHistory ?? true });
   const org = f.organizations[0].id;
   const facility = "membership-northline-facilities";
   const day = (offset: number) => new Date(Date.parse(f.asOf) + offset * 86400000).toISOString();

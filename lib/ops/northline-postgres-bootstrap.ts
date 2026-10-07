@@ -1,4 +1,5 @@
 import { buildShowcaseFixture } from "./showcase-fixture";
+import { resetDemoTenant } from "./reset-demo-tenant";
 import {
   buildNorthlinePresentationFixture,
   NORTHLINE_ORGANIZATION_ID,
@@ -35,7 +36,7 @@ export const NORTHLINE_POSTGRES_SEED_LOCK_KEYS = [
   NORTHLINE_POSTGRES_LEGACY_SEED_LOCK_KEY,
 ] as const;
 
-export async function ensureNorthlinePostgresSeed(pool: PostgresPoolLike) {
+export async function ensureNorthlinePostgresSeed(pool: PostgresPoolLike, options: { resetEarlier?: boolean } = {}) {
   const client = await pool.connect();
   const lockedKeys: string[] = [];
   let inTransaction = false;
@@ -67,7 +68,12 @@ export async function ensureNorthlinePostgresSeed(pool: PostgresPoolLike) {
         { cause: error },
       );
     }
-    const plan = planNorthlineSeedRelease(markers);
+    const plan = planNorthlineSeedRelease(markers, options);
+    if (plan.kind === "reset_current") {
+      // One-time, owner-approved rebuild: replace only the fictional demo tenant, in one transaction.
+      const result = await resetDemoTenant(client, buildShowcaseFixture(new Date().toISOString()));
+      return { seeded: true as const, reset: true as const, ...result };
+    }
     if (plan.kind === "already_current" || plan.kind === "already_enriched") {
       // Insert-only: give an existing preview the people added since it was seeded.
       await client.query("BEGIN");
