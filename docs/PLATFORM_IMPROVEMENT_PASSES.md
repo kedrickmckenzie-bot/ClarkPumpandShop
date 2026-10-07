@@ -4,6 +4,20 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Reset demo data button (demo only) — October 7, 2026
+
+The owner asked for a way to clear edge-testing leftovers, since the demo is dated from the day it was seeded and past-due work piles up over time. Approved as demo-only: it must not exist in a production deployment.
+
+- **Setup → Reset demo data:** the section is shown only when `isFictionalPreview()` and the viewer is the top admin (facilities role, no field-manager persona). The person types RESET to confirm. Afterward Setup shows "Demo reset · fresh as of <date>".
+- **Server guard:** `POST /api/ops/demo/reset` refuses outside the fictional preview before it reads the session. It also requires an active `facilities_admin` membership and the typed confirmation, and it keeps the existing same-origin POST check.
+- **One reset path per store:** `resetDemoData()` in `lib/server/demo-reset.ts` handles each repository:
+  - **Fixture:** replaces the in-memory showcase.
+  - **PostgreSQL:** uses the existing transactional, advisory-locked `resetDemoTenant`.
+  - **D1:** uses the existing `wipeD1DemoTenant` plus a conflict-safe reseed. The marker is written last, so an interrupted run finishes at the next start.
+
+  Only the fictional Clark Pump and Shop tenant is touched; schema, other tenants and stored uploads stay.
+- **Tests:** `tests/ops-demo-reset.test.ts` covers top admin success, refusal outside the demo, a missing confirmation, and non-admin or persona refusal.
+
 ### Overview declutter, phone tables, believable demo volume, fair scorecard labels — October 7, 2026
 
 After reviewing the other session's work, the owner agreed the new pieces fit but the Overview had become crowded and the demo story overstated problems ("enough data to showcase all the features, but don't overwhelm").
