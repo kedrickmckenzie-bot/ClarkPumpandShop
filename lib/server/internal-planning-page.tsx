@@ -13,6 +13,8 @@ import { orderedStops } from "@/lib/ops/dispatch-board";
 type Query = Record<string, string | string[] | undefined>;
 
 const openStatuses: NonNullable<WorkOrderListQuery["statuses"]> = ["approved", "issued", "accepted", "scheduled", "in_progress", "waiting_on_vendor", "waiting_on_parts"];
+// A job waiting on parts or a vendor leaves the technician's list; the manager marks it ready and it comes back.
+const technicianStatuses = openStatuses.filter(status => status !== "waiting_on_parts" && status !== "waiting_on_vendor");
 
 /** Manager Dispatch board (technician = false) and the technician's My work page. */
 export async function renderInternalDispatch(query: Query, technician: boolean) {
@@ -46,7 +48,7 @@ export async function renderInternalDispatch(query: Query, technician: boolean) 
   const person = first("person");
   const region = first("region");
 
-  const filter: WorkOrderListQuery = { limit: 25, internalOnly: true, search, storeId: first("store"), regionId: region, statuses: openStatuses };
+  const filter: WorkOrderListQuery = { limit: 25, internalOnly: true, search, storeId: first("store"), regionId: region, statuses: technician ? technicianStatuses : openStatuses };
   if (technician && view !== "pool") filter.internalMembershipId = context.session.membershipId ?? "__none__";
   else if (view !== "all") filter.internalTarget = view as WorkOrderListQuery["internalTarget"];
   if (!technician && person) filter.internalMembershipId = person;

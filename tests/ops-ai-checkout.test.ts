@@ -21,7 +21,7 @@ it("sends the job, equipment, allowed results and the whole chat, and keeps a re
   for (const text of ["Restroom faucet drips", "Faucet · Delta", "completed = Fixed", "Technician: swapped the cartridge", "You: What did you do?"]) expect(calls[0].prompt).toContain(text);
   expect(calls[0].effort).toBe("low");
   expect(calls[0].system).toContain("Never invent parts");
-  expect(calls[0].system).toContain("ONE short question");
+  expect(calls[0].system).toContain("Never repeat back");
 });
 
 it("never claims ready while the form still needs an answer", async () => {

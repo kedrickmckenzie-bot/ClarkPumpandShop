@@ -4,6 +4,23 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Waiting jobs leave the tech's list; checkout chat texts like a manager — October 7, 2026
+
+Owner direction:
+- A job waiting on parts shouldn't sit on a technician's list. The tech doesn't order or receive parts.
+- The AI chats shouldn't read back every message. Checkout should feel like texting a manager, with one final read-back before saving and no follow-up questions once the form has what it needs.
+
+Changes:
+- **Waiting jobs off the tech's list:** a technician's My work views (Today, Coming up, All my jobs, Missed, held work) leave out jobs waiting on parts or on a vendor. The manager's "Mark ready" task and the Dispatch board are unchanged. Once the manager marks the job ready and it is scheduled again, it returns to the tech's list.
+- **Checkout chat:**
+  - It never repeats or rephrases the tech's message and never asks them to confirm a single detail.
+  - When the first message covers the form, it goes straight to the one final summary ("… Is that right?").
+  - Otherwise it asks only for what's missing, the way a manager texts back (two related questions in one message are fine). It asks about temperature or similar only when the tech hasn't said whether it was working, and asks at most three follow-ups.
+- **Troubleshooting chat:** answers directly, without opening by restating what the tech said.
+- **Tests:**
+  - a route test proves a waiting-on-parts job stays off the assigned tech's Today, Coming up and All my jobs;
+  - two new real-AI eval cases (`checkout-complete-first-message`, `checkout-texts-like-a-manager`), which were not run.
+
 ### Troubleshooting AI: who said what, unlinked equipment; What's next matches My work — October 7, 2026
 
 Owner testing found three problems:

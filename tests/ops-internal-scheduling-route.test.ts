@@ -65,6 +65,12 @@ describe("P3 authenticated scheduling and rendered journeys",()=>{
    const upcoming=renderToStaticMarkup(await renderInternalDispatch({view:"upcoming",q:"Dispatch regression"},true));expect(upcoming).toContain("Coming up (0)");expect(upcoming).not.toContain(current.number);
   }finally{vi.useRealTimers();}
  });
+ it("keeps a job waiting on parts off the technician's lists until the manager marks it ready",async()=>{
+  const waiting=(await r.listWorkOrders({organizationId:dispatchOrg},{internalOnly:true,statuses:["waiting_on_parts"],limit:25})).items.find(row=>row.internalMembershipId);
+  expect(waiting).toBeDefined();
+  session={...session,role:"technician",userId:"tech-waiting",membershipId:waiting!.internalMembershipId!};
+  for(const view of ["today","upcoming","mine"])expect(renderToStaticMarkup(await renderInternalDispatch({view},true))).not.toContain(waiting!.number);
+ });
  it("shows a technician's jobs without a date on Today so the page is never empty by mistake",async()=>{
   const job=await dispatchJob(r,"person");technician();
   const today=renderToStaticMarkup(await renderInternalDispatch({},true));
