@@ -10,7 +10,7 @@ import { createOpsD1Repository } from "@/lib/ops/d1-repository";
 import { createOpsPostgresRepository } from "@/lib/ops/postgres-repository";
 import { buildShowcaseFixture } from "@/lib/ops/showcase-fixture";
 import { seedOpsRepository } from "@/lib/ops/seed";
-import { recordInternalWorkResult, markInternalWorkReady, handoffInternalWorkToVendor } from "@/lib/ops/internal-execution";
+import { recordInternalWorkResult, markInternalWorkReady, handoffInternalWorkToVendor, setPartsExpectedDate } from "@/lib/ops/internal-execution";
 import { checkInVisit, checkOutVisit, addHeldWorkToActiveVisit, assignWorkOrder, createFollowUp } from "@/lib/ops/commands";
 import { recordWorkOrderVerification, correctWorkOrderOutcome } from "@/lib/ops/work-order-verification-commands";
 import { configureMaintenanceResponsibilities } from "@/lib/ops/maintenance-policy-commands";
@@ -139,6 +139,22 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
     expect(notices).toContainEqual(expect.objectContaining({ headline: "Return work reviewed; required actions remain" }));
     expect(notices.some(notice => notice.headline === "Job ready for return work")).toBe(false);
     await expect(recordInternalWorkResult(svc(), { ...await current(job.id), outcome: "completed" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("moves the parts follow-up to the expected arrival day and still restores the repair deadline when ready", async () => {
+    const job = await dispatchJob(r, "person");
+    const original = (await r.getWorkOrder(dispatchOrg, job.id))!.dueAt!;
+    await recordInternalWorkResult(svc(), { ...await current(job.id), outcome: "parts_required", blocker: "parts", notes: "Compressor contactor ordered" });
+    const followUpId = (await r.listWorkResults(dispatchOrg, job.id))[0].followUpId!;
+    await expect(setPartsExpectedDate(svc(), { organizationId: dispatchOrg, workOrderId: job.id, actor: dispatchActor(dispatchTech[0]), date: "2026-10-14" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(setPartsExpectedDate(svc(), { organizationId: dispatchOrg, workOrderId: job.id, actor: dispatchActor(dispatchManager), date: "2020-01-01" })).rejects.toMatchObject({ code: "VALIDATION" });
+    await setPartsExpectedDate(svc(), { organizationId: dispatchOrg, workOrderId: job.id, actor: dispatchActor(dispatchManager), date: "2026-10-14" });
+    const followUp = (await r.getFollowUp(dispatchOrg, followUpId))!;
+    expect(followUp.dueAt.slice(0, 10)).toBe("2026-10-14");
+    expect((await r.getWorkOrder(dispatchOrg, job.id))).toMatchObject({ status: "waiting_on_parts", dueAt: followUp.dueAt });
+    expect((await r.listWorkflowTasksForWorkOrder(dispatchOrg, job.id)).find(task => task.sourceFollowUpId === followUpId && task.status === "open")?.dueAt).toBe(followUp.dueAt);
+    await markInternalWorkReady(svc(), { ...await current(job.id), actor: dispatchActor(dispatchManager), notes: "Contactor arrived" });
+    expect(await r.getWorkOrder(dispatchOrg, job.id)).toMatchObject({ status: "approved", dueAt: original });
   });
 
   it("resumes parts work with the original repair deadline, which stays overdue when it has passed", async () => {

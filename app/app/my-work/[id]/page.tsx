@@ -175,6 +175,13 @@ export default async function InternalJob({ params, searchParams }: { params: Pr
       {!mine && !manager && !terminal && !canTake ? <p>This job belongs to someone else.</p> : null}
 
 
+      {manager && !terminal && returnBlocked && work.status === "waiting_on_parts" ? (() => {
+        const partsFollowUp = work.followUps.find(f => f.id === results[0]?.followUpId);
+        return <RecordForm action={action} offerSavedWork={false} className={styles.inlineForm}>
+          <label>Parts expected on<input type="date" name="partsExpectedOn" required min={civilDate(new Date().toISOString(), zone)} defaultValue={partsFollowUp ? civilDate(partsFollowUp.dueAt, zone) : undefined}/></label>
+          <button type="submit" name="action" value="parts_date" className={`${styles.btn} ${styles.btnSecondary}`}>Save date</button>
+        </RecordForm>;
+      })() : null}
       {manager && !terminal && returnBlocked && !vendorNeeded ? <RecordForm action={action} offerSavedWork={false} attachmentLimit={fileLimit} className={styles.form}>
         {version()}
         <p><strong>{plainNextAction(work.nextAction)}.</strong> When it&apos;s sorted, send the job back to {work.internalAssigneeName ?? "the technician"}.</p>

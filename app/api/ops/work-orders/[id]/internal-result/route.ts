@@ -1,6 +1,6 @@
 import { internalCheckoutNotes } from "@/lib/server/internal-checkout-notes";
 import { dispatchIdentity, internalManagerRoles } from "@/lib/ops/internal-dispatch";
-import { recordInternalWorkResult, markInternalWorkReady, internalResultRequestHash, handoffInternalWorkToVendor } from "@/lib/ops/internal-execution";
+import { recordInternalWorkResult, markInternalWorkReady, setPartsExpectedDate, internalResultRequestHash, handoffInternalWorkToVendor } from "@/lib/ops/internal-execution";
 import { assertStoreInSessionScope, getOpsRequestContext, formText, opsApiError } from "@/lib/server/ops-request-context";
 import { storeCompletionFiles, completionFileIntent } from "@/lib/server/work-completion-files";
 import { relativeRedirect303 } from "@/lib/server/relative-redirect";
@@ -10,10 +10,14 @@ import { OpsDomainError } from "@/lib/ops/errors";
 export async function POST(request:Request,{params}:{params:Promise<{id:string}>}) {
   try {
     const {id}=await params, form=await request.formData(), action=formText(form,"action",{required:true,max:20});
-    if(!["result","problem","ready","vendor"].includes(action))throw new OpsDomainError("VALIDATION","Choose a job action.");
-    const c=await getOpsRequestContext(["ready","vendor"].includes(action)?["facilities","regional"]:["technician","facilities","regional"],action==="vendor"?"assign_internal_work":undefined,request);
+    if(!["result","problem","ready","vendor","parts_date"].includes(action))throw new OpsDomainError("VALIDATION","Choose a job action.");
+    const c=await getOpsRequestContext(["ready","vendor","parts_date"].includes(action)?["facilities","regional"]:["technician","facilities","regional"],action==="vendor"?"assign_internal_work":undefined,request);
     const work=await c.repository.getWorkOrder(c.session.organizationId,id);if(!work)throw new OpsDomainError("NOT_FOUND","Job not found.");
     await assertStoreInSessionScope(c.session,work.storeId);
+    if(action==="parts_date"){
+      await setPartsExpectedDate({repository:c.repository},{organizationId:c.session.organizationId,workOrderId:id,actor:c.actor,date:formText(form,"partsExpectedOn",{required:true,max:10})});
+      return relativeRedirect303(`/app/my-work/${encodeURIComponent(id)}?saved=1#next-step`);
+    }
     const input={organizationId:c.session.organizationId,workOrderId:id,actor:c.actor,expectedVersion:Number(formText(form,"expectedVersion",{required:true,max:16})),expectedAssignmentId:formText(form,"expectedAssignmentId",{required:true,max:120}),key:formText(form,"submissionKey",{required:true,max:120}),notes:internalCheckoutNotes(form)};
     if(action==="vendor"){
       await handoffInternalWorkToVendor({repository:c.repository},{organizationId:input.organizationId,workOrderId:id,actor:input.actor,expectedVersion:input.expectedVersion,expectedAssignmentId:input.expectedAssignmentId,key:input.key,vendorId:formText(form,"vendorId",{required:true,max:120})});

@@ -1,6 +1,6 @@
 import { confirmationWindow } from "./delayed-confirmation";
 import type { OpsCommandServices, OpsIdSource } from "./commands";
-import { assignWorkOrder } from "./commands";
+import { assignWorkOrder, rescheduleFollowUp } from "./commands";
 import type { OpsRepository, OpsStatement } from "./repository";
 import type { ActorContext, WorkOrder, WorkResult, SiteVisitWorkOrder, StoredFile, WorkflowTask } from "./types";
 import { OpsDomainError } from "./errors";
@@ -544,6 +544,35 @@ export async function recordInternalWorkResult(svc: OpsCommandServices, input: I
     throw error;
   }
   return result;
+}
+
+/**
+ * "Parts expected on": a manager moves the open parts follow-up to the day the parts should arrive (5 PM at the store),
+ * so its overdue flag means something. Uses the audited follow-up update; the job stays waiting on parts.
+ */
+export async function setPartsExpectedDate(
+  svc: OpsCommandServices,
+  input: { organizationId: string; workOrderId: string; actor: ActorContext; date: string },
+) {
+  const r = svc.repository, now = svc.clock?.now() ?? new Date().toISOString();
+  const work = await r.getWorkOrder(input.organizationId, input.workOrderId);
+  if (!work) throw new OpsDomainError("NOT_FOUND", "Job not found.");
+  if (input.actor.organizationId !== input.organizationId || input.actor.actorType !== "user" || !input.actor.actorId)
+    throw new OpsDomainError("FORBIDDEN", "A manager must set the parts date.");
+  await dispatchIdentity(r, input.organizationId, input.actor.actorId, work.storeId, internalManagerRoles);
+  if (work.status !== "waiting_on_parts") throw new OpsDomainError("CONFLICT", "This job is not waiting on parts.");
+  const latest = (await r.listWorkResults(input.organizationId, work.id))[0];
+  const followUp = latest?.followUpId ? await r.getFollowUp(input.organizationId, latest.followUpId) : null;
+  if (!followUp || followUp.status !== "open") throw new OpsDomainError("CONFLICT", "This job has no open parts follow-up.");
+  const zone = (await r.getStore(input.organizationId, work.storeId))?.timeZone ?? (await r.getOrganization(input.organizationId))!.timeZone;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) throw new OpsDomainError("VALIDATION", "Choose the date the parts should arrive.");
+  const today = civilDate(now, zone);
+  if (input.date < today || input.date > addCalendarDays(today, 365)) throw new OpsDomainError("VALIDATION", "Choose a date from today to a year out.");
+  const dueAt = exactStoreInstant(`${input.date}T17:00`, zone, "earlier");
+  return rescheduleFollowUp(svc, {
+    organizationId: input.organizationId, followUpId: followUp.id, accountableParty: followUp.accountableParty,
+    nextAction: followUp.nextAction, escalationTo: followUp.escalationTo, dueAt, note: `Parts expected ${input.date}`, actor: input.actor,
+  });
 }
 
 export async function markInternalWorkReady(

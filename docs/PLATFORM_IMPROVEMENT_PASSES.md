@@ -4,6 +4,18 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### "Parts expected on" for waiting-on-parts jobs — October 7, 2026
+
+A job waiting on parts already gives the manager an "Arrange parts and mark the job ready" task. Its due date was automatic, though, so a part arriving next week made the task overdue all week. Managers now see **Parts expected on [date] · Save date** above **Mark ready**.
+
+- **How it saves:** `setPartsExpectedDate` (in `lib/ops/internal-execution.ts`) moves the open parts follow-up, its task and the job's next-action deadline to 5 PM store time on that day. It goes through the existing audited `rescheduleFollowUp` command ("Parts expected YYYY-MM-DD").
+- **Guards:**
+  - managers only (`internalManagerRoles`);
+  - waiting-on-parts jobs with an open parts follow-up only;
+  - dates from today to a year out.
+- **Mark ready unchanged:** it still restores the original repair deadline.
+- **Test:** `ops-internal-execution` covers the date move, a technician being refused, a past date being refused, and Mark ready afterwards, on the fixture, D1 and PostgreSQL.
+
 ### Waiting jobs leave the tech's list; checkout chat texts like a manager — October 7, 2026
 
 Owner direction:
