@@ -126,6 +126,11 @@ export function DispatchPlan(initial: Board) {
     if (el.firstElementChild) observer?.observe(el.firstElementChild);
     return () => { el.removeEventListener("scroll", update); observer?.disconnect(); };
   }, [data, railOpen]);
+  // On a Saturday or Sunday, open the board already showing the weekend.
+  const todayIsWeekend = [0, 6].includes(new Date(`${data.today}T12:00:00Z`).getUTCDay());
+  useEffect(() => {
+    if (todayIsWeekend && planRef.current) planRef.current.scrollLeft = planRef.current.scrollWidth;
+  }, [todayIsWeekend, week]);
   const scrollDays = (direction: 1 | -1) => planRef.current?.scrollBy({ left: direction * 260, behavior: "smooth" });
   const busy = useRef(false),
     drag = useRef<DispatchJob | undefined>(undefined),
@@ -410,12 +415,9 @@ export function DispatchPlan(initial: Board) {
       setDropTarget(undefined);
     },
   });
-  // Weekdays always; Saturday and Sunday only when someone has work planned then.
-  const allDays = Array.from({ length: 7 }, (_, i) => addCalendarDays(week, i));
-  const days = allDays.filter(
-    (day, i) =>
-      i < 5 || data.commitments.some((tech) => jobsFor(tech.id, day).length),
-  );
+  // The whole week, so weekend work can be planned; Saturday and Sunday are shaded.
+  const days = Array.from({ length: 7 }, (_, i) => addCalendarDays(week, i));
+  const weekend = (day: string) => day >= addCalendarDays(week, 5);
   const choose = (jobs: DispatchJob[], day = focusDay) => {
     setChosenJobs(jobs);
     setSelected(jobs.map((j) => j.id));
@@ -947,9 +949,7 @@ export function DispatchPlan(initial: Board) {
                     {days.map((day) => (
                       <button
                         key={day}
-                        className={
-                          day === data.today ? styles.todayHead : undefined
-                        }
+                        className={[day === data.today ? styles.todayHead : "", weekend(day) ? styles.weekendDay : ""].filter(Boolean).join(" ") || undefined}
                         onClick={() => {
                           setFocusDay(day);
                           setScale("day");
@@ -984,7 +984,7 @@ export function DispatchPlan(initial: Board) {
                           </span>
                         </div>
                         {days.map((day) => (
-                          <section className={styles.day} key={day}>
+                          <section className={`${styles.day} ${weekend(day) ? styles.weekendDay : ""}`} key={day}>
                             <h3>{dayLabel(day)}</h3>
                             {stopList(tech.id, day, true)}
                           </section>

@@ -4,6 +4,16 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Dispatch week always shows the weekend — October 7, 2026
+
+Owner feedback: the week board showed only Monday to Friday, and stores get weekend maintenance. Before this change, Saturday and Sunday appeared only when someone already had work planned on them, so a job could not be dragged onto an empty weekend.
+
+- The Week board now always shows all seven days. Saturday and Sunday columns are lightly shaded.
+- At the owner's request, Monday to Friday stay full width and the weekend sits just off to the right:
+  - Day columns are sized from the board's own width (`100cqw`), five to a screen.
+  - The sideways scrollbar is always visible (styled, so macOS doesn't hide it), alongside the ‹ › arrows.
+  - On a Saturday or Sunday the board opens scrolled to the weekend.
+
 ### Overview drops replacement planning; dispatch week scrolls visibly; map next-visit toggle on top — October 7, 2026
 
 Owner feedback:

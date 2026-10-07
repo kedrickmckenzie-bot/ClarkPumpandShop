@@ -486,7 +486,8 @@
 .boardHeader,
 .techRow {
   display: grid;
-  grid-template-columns: 124px repeat(var(--plan-days, 5), minmax(118px, 1fr));
+  /* Monday to Friday fill the board; Saturday and Sunday sit just off to the right. */
+  grid-template-columns: 124px repeat(var(--plan-days, 7), max(118px, calc((100cqw - 124px) / 5)));
 }
 .boardHeader {
   position: sticky;
@@ -759,3 +760,14 @@
 /* Header cells carry their own band so it continues when the board scrolls sideways. */
 .workspace .boardHeader > button { background: #f5f7fa; }
 .workspace .boardHeader > .todayHead { background: #f5f7fa; }
+/* Saturday and Sunday stay plannable, just quieter. */
+.workspace .boardHeader > .weekendDay { background: #eceff3; }
+.day.weekendDay { background: #fafbfc; }
+/* The board measures its own width for the day columns, and its sideways scrollbar is always visible. */
+.plan {
+  container-type: inline-size;
+  scrollbar-color: #b8c2cf #f1f4f8;
+}
+.plan::-webkit-scrollbar { height: 12px; width: 12px; }
+.plan::-webkit-scrollbar-track { background: #f1f4f8; }
+.plan::-webkit-scrollbar-thumb { background: #b8c2cf; border-radius: 6px; border: 2px solid #f1f4f8; }
