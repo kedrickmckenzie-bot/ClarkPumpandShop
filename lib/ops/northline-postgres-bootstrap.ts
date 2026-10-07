@@ -18,6 +18,7 @@ import {
   NORTHLINE_SEED_COMPATIBILITY_MARKER,
   NORTHLINE_SEED_VERSION,
   planNorthlineSeedRelease,
+  northlineDemoResetAllowed,
   remapNorthlineFixtureVisitWorkIds,
   type NorthlineSeedMarkerRow,
 } from "./northline-seed-release";
@@ -36,7 +37,7 @@ export const NORTHLINE_POSTGRES_SEED_LOCK_KEYS = [
   NORTHLINE_POSTGRES_LEGACY_SEED_LOCK_KEY,
 ] as const;
 
-export async function ensureNorthlinePostgresSeed(pool: PostgresPoolLike, options: { resetEarlier?: boolean } = {}) {
+export async function ensureNorthlinePostgresSeed(pool: PostgresPoolLike, options: { allowReset?: boolean } = {}) {
   const client = await pool.connect();
   const lockedKeys: string[] = [];
   let inTransaction = false;
@@ -68,7 +69,7 @@ export async function ensureNorthlinePostgresSeed(pool: PostgresPoolLike, option
         { cause: error },
       );
     }
-    const plan = planNorthlineSeedRelease(markers, options);
+    const plan = planNorthlineSeedRelease(markers, { allowReset: options.allowReset ?? northlineDemoResetAllowed() });
     if (plan.kind === "reset_current") {
       // One-time, owner-approved rebuild: replace only the fictional demo tenant, in one transaction.
       const result = await resetDemoTenant(client, buildShowcaseFixture(new Date().toISOString()));

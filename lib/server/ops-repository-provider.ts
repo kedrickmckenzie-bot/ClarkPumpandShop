@@ -95,7 +95,8 @@ async function ensureNorthlineSeed(binding: D1Database, repository: OpsRepositor
       { cause: error },
     );
   }
-  const plan = planNorthlineSeedRelease(markers);
+  // This path only runs for the fictional preview (see the caller), so the one-time demo reset may apply.
+  const plan = planNorthlineSeedRelease(markers, { allowReset: true });
   if (plan.kind === "reset_current") {
     // One-time, owner-approved rebuild: remove only the fictional demo tenant, then seed it fresh below.
     await wipeD1DemoTenant(binding as unknown as D1ResetBinding);
@@ -153,7 +154,7 @@ export async function getServerOpsRepository(): Promise<OpsRepository> {
     return initializeDurableRepository(async () => {
       const pool = await getPostgresPool();
       const repository = createOpsPostgresRepository(pool);
-      if (isFictionalPreview()) await ensureNorthlinePostgresSeed(pool);
+      if (isFictionalPreview()) await ensureNorthlinePostgresSeed(pool, { allowReset: true });
       return repository;
     });
   }

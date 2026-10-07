@@ -4,6 +4,18 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Review of 15b2284…a2e03a7 — October 7, 2026
+
+The owner asked for a review of the commits made in a separate session (Since you last looked, repeat problems, vendor scorecards, two-year demo history and the one-time demo reset) and to fix what was found.
+
+- **Fixed: the "one-time" hosted demo reset was not one-time.** a2e03a7 controlled the reset with a constant left on (`NORTHLINE_SEED_RESETS_EARLIER_VERSIONS = true`), so the next seed-version bump would have wiped the hosted demo tenant again with no warning, against AGENTS.md's no-reset rule. The reset is now bounded by version: it runs only when every seed marker in the database predates v17 (`NORTHLINE_SEED_RESET_BEFORE_VERSION`); a database seeded at v17 or later is never reset by later versions, which return to insert-only enrichment.
+- **Fixed: the reset could run outside the fictional preview.** `render:predeploy` runs the PostgreSQL seed on every Render deploy regardless of mode. The reset now requires the fictional preview (`OPS_ACCESS_MODE=preview`, or the D1/PostgreSQL provider paths that only run in preview); otherwise an older database is enriched insert-only as before.
+- Tests: the planner resets only with the preview flag and only before v17 (a v18 marker or a v17 receipt never resets), and the demo-mode check reads `OPS_ACCESS_MODE`.
+- Reviewed without changes: "Since you last looked" counts and its lists share one rule per kind (fixture and SQL) with the window carried in the link; "fixed" waits for the repair check; Mark as seen is insert-only and origin-checked; repeat problems reuse the issue ranking with the replacement rules' 3-job threshold over 60 days; vendor scorecards are limited to executive/facilities/regional and scoped by organization, region and store.
+- Left as notes: D1 has no cross-isolate lock, so two isolates starting together could both reset and reseed (the result converges because seeding is conflict-safe); files uploaded to the old demo tenant stay in object storage without records; scorecard costs are USD-only.
+
+Validation: `db:seed`, `typecheck`, `lint`, `npm test` with PostgreSQL (1547 passed, 16 skipped), `test:e2e` (68 passed), `build` and `build:render` passed.
+
 ### Demo rebuilt around two years of operating history; one-time hosted reseed — October 7, 2026
 
 The owner approved wiping and reseeding the demo, on the condition that nothing showcased before is lost. A survey of the old demo found the in-house team spread evenly across districts, a lot-and-snow vendor with the most jobs and only 39 refrigeration jobs, every vendor answering in 30–40 minutes (one decline in 367 replies), only 3 repair checks and 7 appointments, and almost no work in October–November 2025.

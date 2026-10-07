@@ -17,11 +17,23 @@ export const NORTHLINE_SEED_VERSION = "northline-ops-2026-10-07-v17";
 
 /**
  * v17 rebuilt the showcase around two years of operating history. The owner approved
- * wiping the fictional demo tenant once so every preview shows the same story: a preview
- * seeded by any earlier version is reset (demo tenant only) and seeded fresh. Later
- * versions go back to insert-only enrichment unless they set this again.
+ * wiping the fictional demo tenant once so every preview shows the same story. The reset is
+ * bounded to databases seeded before this version: once a database carries v17 or later it is
+ * never reset again, even after later version bumps, which go back to insert-only enrichment.
+ * It also only runs in the fictional preview (callers pass `allowReset`).
  */
-export const NORTHLINE_SEED_RESETS_EARLIER_VERSIONS = true;
+export const NORTHLINE_SEED_RESET_BEFORE_VERSION = 17;
+
+/** The version number in a seed marker key such as "northline-ops-2026-10-07-v17" (or its ":enriched-existing" receipt). */
+export function northlineSeedVersionNumber(key: unknown) {
+  const match = typeof key === "string" ? /-v(\d+)(?::|$)/.exec(key) : null;
+  return match ? Number(match[1]) : undefined;
+}
+
+/** The demo reset runs only for the fictional preview (OPS_ACCESS_MODE=preview), never for a customer deployment. */
+export function northlineDemoResetAllowed(environment: Record<string, string | undefined> = process.env) {
+  return environment.OPS_ACCESS_MODE === "preview";
+}
 
 /**
  * An older completed fixture is enriched only with missing deterministic rows.
@@ -52,12 +64,14 @@ export type NorthlineSeedReleasePlan =
  */
 export function planNorthlineSeedRelease(
   markers: readonly NorthlineSeedMarkerRow[],
-  options: { resetEarlier?: boolean } = {},
+  options: { allowReset?: boolean } = {},
 ): NorthlineSeedReleasePlan {
   if (markers.some((marker) => marker.key === NORTHLINE_SEED_VERSION)) {
     return { kind: "already_current" };
   }
-  if ((options.resetEarlier ?? NORTHLINE_SEED_RESETS_EARLIER_VERSIONS) && markers.length) return { kind: "reset_current" };
+  // Reset only a preview whose every marker predates the reset version; anything seeded at or after it is kept.
+  const predatesReset = markers.length > 0 && markers.every(marker => (northlineSeedVersionNumber(marker.key) ?? 0) < NORTHLINE_SEED_RESET_BEFORE_VERSION);
+  if (options.allowReset && predatesReset) return { kind: "reset_current" };
   if (markers.some((marker) => marker.key === NORTHLINE_SEED_COMPATIBILITY_MARKER)) {
     return { kind: "already_enriched" };
   }

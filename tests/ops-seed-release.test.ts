@@ -79,11 +79,11 @@ describe("Northline deterministic seed release", () => {
     expect(planNorthlineSeedRelease([{
       key: NORTHLINE_SEED_COMPATIBILITY_MARKER,
       command: NORTHLINE_COMPATIBILITY_COMMAND,
-    }], { resetEarlier: false })).toEqual({ kind: "already_enriched" });
+    }], { allowReset: false })).toEqual({ kind: "already_enriched" });
     expect(planNorthlineSeedRelease([{
       key: "northline-ops-2026-08-15-v9",
       command: NORTHLINE_BOOTSTRAP_COMMAND,
-    }], { resetEarlier: false })).toEqual({
+    }], { allowReset: false })).toEqual({
       kind: "enrich_existing",
       sourceVersion: "northline-ops-2026-08-15-v9",
     });
@@ -157,7 +157,7 @@ describe("Northline deterministic seed release", () => {
       result_id: "org-northline-demo",
     }]);
 
-    const result = await ensureNorthlinePostgresSeed(new RecordingPostgresPool(client), { resetEarlier: false });
+    const result = await ensureNorthlinePostgresSeed(new RecordingPostgresPool(client), { allowReset: false });
 
     expect(result).toMatchObject({ seeded: true, enrichedExisting: true, sourceVersion: legacyVersion, stores: 15, vendors: 5 });
     const inserts = client.queries.filter((query) => /^\s*INSERT/i.test(query.text));

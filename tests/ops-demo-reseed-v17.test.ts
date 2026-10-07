@@ -6,7 +6,7 @@ import { Miniflare } from "miniflare";
 import { buildShowcaseFixture } from "@/lib/ops/showcase-fixture";
 import { NORTHLINE_ORGANIZATION_ID } from "@/lib/ops/fixtures";
 import { ensureNorthlinePostgresSeed } from "@/lib/ops/northline-postgres-bootstrap";
-import { NORTHLINE_BOOTSTRAP_COMMAND, NORTHLINE_SEED_VERSION, planNorthlineSeedRelease } from "@/lib/ops/northline-seed-release";
+import { NORTHLINE_BOOTSTRAP_COMMAND, NORTHLINE_SEED_VERSION, northlineDemoResetAllowed, planNorthlineSeedRelease } from "@/lib/ops/northline-seed-release";
 import { createOpsPostgresTransactionRepository, type PostgresClientLike, type PostgresQueryResult } from "@/lib/ops/postgres-repository";
 import { seedOpsRepository } from "@/lib/ops/seed";
 import { wipeD1DemoTenant, type D1ResetBinding } from "@/lib/ops/reset-demo-tenant-d1";
@@ -18,10 +18,17 @@ const anchor = "2026-10-07T15:00:00.000Z";
 describe("one-time reseed of the hosted demo for the v17 story", () => {
   it("plans a reset only for a database seeded by an earlier version", () => {
     expect(planNorthlineSeedRelease([])).toEqual({ kind: "seed_current" });
-    expect(planNorthlineSeedRelease([{ key: OLD_VERSION, command: NORTHLINE_BOOTSTRAP_COMMAND }])).toEqual({ kind: "reset_current" });
+    expect(planNorthlineSeedRelease([{ key: OLD_VERSION, command: NORTHLINE_BOOTSTRAP_COMMAND }], { allowReset: true })).toEqual({ kind: "reset_current" });
+    // Outside the fictional preview the reset never runs.
+    expect(planNorthlineSeedRelease([{ key: OLD_VERSION, command: NORTHLINE_BOOTSTRAP_COMMAND }])).not.toEqual({ kind: "reset_current" });
+    // A database already seeded at v17 or later is never reset again, even after a later version bump.
+    expect(planNorthlineSeedRelease([{ key: "northline-ops-2026-11-01-v18", command: NORTHLINE_BOOTSTRAP_COMMAND }], { allowReset: true })).not.toEqual({ kind: "reset_current" });
+    expect(planNorthlineSeedRelease([{ key: OLD_VERSION, command: NORTHLINE_BOOTSTRAP_COMMAND }, { key: `${NORTHLINE_SEED_VERSION}:enriched-existing`, command: NORTHLINE_BOOTSTRAP_COMMAND }], { allowReset: true })).not.toEqual({ kind: "reset_current" });
+    expect(northlineDemoResetAllowed({ OPS_ACCESS_MODE: "preview" })).toBe(true);
+    expect(northlineDemoResetAllowed({})).toBe(false);
     expect(planNorthlineSeedRelease([{ key: NORTHLINE_SEED_VERSION, command: NORTHLINE_BOOTSTRAP_COMMAND }])).toEqual({ kind: "already_current" });
     // Without the one-time reset the older insert-only enrichment still applies.
-    expect(planNorthlineSeedRelease([{ key: OLD_VERSION, command: NORTHLINE_BOOTSTRAP_COMMAND }], { resetEarlier: false })).toEqual({ kind: "enrich_existing", sourceVersion: OLD_VERSION });
+    expect(planNorthlineSeedRelease([{ key: OLD_VERSION, command: NORTHLINE_BOOTSTRAP_COMMAND }], { allowReset: false })).toEqual({ kind: "enrich_existing", sourceVersion: OLD_VERSION });
   });
 
   let pg: PGlite | undefined;
@@ -47,7 +54,7 @@ describe("one-time reseed of the hosted demo for the v17 story", () => {
     await db.query("UPDATE ops_store_tasks SET title = 'edit made in the old demo' WHERE id = $1", [earlier.storeTasks![0]!.id]);
     await db.exec("INSERT INTO ops_organizations SELECT 'other-tenant', 'Other tenant', 'other-tenant', time_zone, work_order_prefix, created_at FROM ops_organizations LIMIT 1");
 
-    const first = await ensureNorthlinePostgresSeed(pool);
+    const first = await ensureNorthlinePostgresSeed(pool, { allowReset: true });
     expect(first).toMatchObject({ seeded: true, reset: true, stores: 15, vendors: 5 });
     const fresh = buildShowcaseFixture(new Date().toISOString());
     const count = async (sql: string, values: unknown[] = []) => Number((await db.query<{ n: number }>(sql, values)).rows[0]!.n);
@@ -58,7 +65,7 @@ describe("one-time reseed of the hosted demo for the v17 story", () => {
 
     // The next start finds the new receipt and does not reset again.
     await db.query("UPDATE ops_store_tasks SET title = 'edit made in the new demo' WHERE id = $1", [fresh.storeTasks![0]!.id]);
-    expect(await ensureNorthlinePostgresSeed(pool)).toMatchObject({ seeded: false });
+    expect(await ensureNorthlinePostgresSeed(pool, { allowReset: true })).toMatchObject({ seeded: false });
     expect(await count("SELECT count(*)::int AS n FROM ops_store_tasks WHERE title = 'edit made in the new demo'")).toBe(1);
   }, 300_000);
 
