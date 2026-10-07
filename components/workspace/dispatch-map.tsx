@@ -227,6 +227,16 @@ export function DispatchMap({ techs, queue, held = [], onOpen, onPickHeld, onMov
           : routes && routes.pending > 0 ? <p className={styles.notice}>Loading driving routes…</p> : null}
       </div>
       <aside className={styles.legend} aria-label="Technicians on the map">
+        {/* Next-visit jobs sit at the top so they're easy to find. */}
+        {held.length ? (
+          <label className={styles.heldToggle}>
+            <input type="checkbox" checked={showHeld} onChange={toggleHeld} />
+            <span>
+              <span className={styles.held} aria-hidden="true" /> Show next-visit small jobs ({held.length})
+              <small>Look along a route and add one to a tech&apos;s day.</small>
+            </span>
+          </label>
+        ) : null}
         <h2>Technicians</h2>
         <ul>
           {techs.map(tech => {
@@ -275,15 +285,6 @@ export function DispatchMap({ techs, queue, held = [], onOpen, onPickHeld, onMov
           })}
         </ul>
         {only ? <button className={styles.showAll} onClick={() => setOnly(undefined)}>Show everyone</button> : null}
-        {held.length ? (
-          <label className={styles.heldToggle}>
-            <input type="checkbox" checked={showHeld} onChange={toggleHeld} />
-            <span>
-              <span className={styles.held} aria-hidden="true" /> Show next-visit small jobs ({held.length})
-              <small>Look along a route and add one to a tech&apos;s day.</small>
-            </span>
-          </label>
-        ) : null}
         {queue.length ? <p className={styles.waitingKey}><span className={styles.waiting} aria-hidden="true" /> {queue.length} {queue.length === 1 ? "job needs" : "jobs need"} a tech</p> : null}
         <p className={styles.fine}>Drive times are for a typical day, not live traffic.</p>
       </aside>

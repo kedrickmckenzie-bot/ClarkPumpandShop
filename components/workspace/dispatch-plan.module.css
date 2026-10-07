@@ -486,7 +486,7 @@
 .boardHeader,
 .techRow {
   display: grid;
-  grid-template-columns: 130px repeat(var(--plan-days, 5), minmax(130px, 1fr));
+  grid-template-columns: 124px repeat(var(--plan-days, 5), minmax(118px, 1fr));
 }
 .boardHeader {
   position: sticky;
@@ -721,3 +721,41 @@
     align-items: flex-start;
   }
 }
+
+/* Week board: when the days don't fit, tech names stay put and arrows show there is more to the side. */
+.planWrap {
+  position: relative;
+  min-width: 0;
+}
+.workspace .dayArrow {
+  position: absolute;
+  top: 2px;
+  z-index: 3;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: white;
+  color: var(--blue);
+  font-size: 22px;
+  line-height: 1;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.15);
+}
+.dayArrowLeft { left: 136px; }
+.dayArrowRight { right: 6px; }
+.techRow > .person,
+.boardHeader > b {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+.boardHeader > b { background: #f5f7fa; }
+.workspace .railHide { white-space: nowrap; }
+@media (max-width: 700px) {
+  .workspace .dayArrow { display: none; }
+}
+/* Header cells carry their own band so it continues when the board scrolls sideways. */
+.workspace .boardHeader > button { background: #f5f7fa; }
+.workspace .boardHeader > .todayHead { background: #f5f7fa; }

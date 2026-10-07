@@ -4,6 +4,24 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Overview drops replacement planning; dispatch week scrolls visibly; map next-visit toggle on top — October 7, 2026
+
+Owner feedback:
+- Replacement planning doesn't belong on a daily Overview.
+- The Dispatch week showed only 3–4 days with no visible way to see the rest.
+- The map's "Show next-visit small jobs" toggle was hard to find at the bottom of the panel.
+
+Changes:
+- **Overview:** the "Replacement planning · next 12 months" panel is removed for every role; it remains under Spend & planning. Only the owner (executive) sees one line, "N units to decide: repair or replace → Review", and only when the lifecycle review queue has units (`queryLifecycleQueue` view `review`).
+- **Dispatch week:**
+  - When the days don't fit, round **‹ / ›** arrows appear at the board's top edges and scroll about two days at a time. They show only when there is more to that side.
+  - Technician names and the "Technician" header stay pinned while scrolling.
+  - Columns are slightly narrower (tech 124px, days at least 118px), so more days fit before scrolling.
+  - Header cells keep their band while scrolled, and "Hide" no longer wraps.
+  - The arrows are hidden on phones, where the board shows one technician at a time.
+- **Dispatch map:** the next-visit toggle now sits at the top of the Technicians panel as a shaded box.
+- **Browser check:** the owner Overview shows the line (3 units in the demo) and the coordinator Overview shows neither. The week board at 1100px scrolls with the arrows, and at 1600px all days align. There were no console errors besides map tiles that are blocked in the sandbox.
+
 ### "Parts expected on" for waiting-on-parts jobs — October 7, 2026
 
 A job waiting on parts already gives the manager an "Arrange parts and mark the job ready" task. Its due date was automatic, though, so a part arriving next week made the task overdue all week. Managers now see **Parts expected on [date] · Save date** above **Mark ready**.

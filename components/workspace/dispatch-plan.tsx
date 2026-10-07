@@ -109,6 +109,24 @@ export function DispatchPlan(initial: Board) {
     [railOpen, setRailOpen] = useState(true),
     [dropTarget, setDropTarget] = useState<string>(),
     [heldPick, setHeldPick] = useState<{ jobs: DispatchJob[]; jobId: string; techId: string; position: number }>();
+  // The board scrolls sideways when the days don't fit; show clear arrows so the rest of the week is findable.
+  const planRef = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+  useEffect(() => {
+    const el = planRef.current;
+    if (!el) return;
+    const update = () => {
+      const left = el.scrollLeft > 4, right = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+      setEdges(current => current.left === left && current.right === right ? current : { left, right });
+    };
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    const observer = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(update);
+    observer?.observe(el);
+    if (el.firstElementChild) observer?.observe(el.firstElementChild);
+    return () => { el.removeEventListener("scroll", update); observer?.disconnect(); };
+  }, [data, railOpen]);
+  const scrollDays = (direction: 1 | -1) => planRef.current?.scrollBy({ left: direction * 260, behavior: "smooth" });
   const busy = useRef(false),
     drag = useRef<DispatchJob | undefined>(undefined),
     generation = useRef(0);
@@ -865,7 +883,10 @@ export function DispatchPlan(initial: Board) {
             >
               {queue}
             </div>
-            <div className={styles.plan}>
+            <div className={styles.planWrap}>
+            {edges.left ? <button type="button" className={`${styles.dayArrow} ${styles.dayArrowLeft}`} onClick={() => scrollDays(-1)} aria-label="Earlier days">‹</button> : null}
+            {edges.right ? <button type="button" className={`${styles.dayArrow} ${styles.dayArrowRight}`} onClick={() => scrollDays(1)} aria-label="More days">›</button> : null}
+            <div className={styles.plan} ref={planRef}>
               <label className={styles.mobileSelect}>
                 Technician
                 <select
@@ -978,6 +999,7 @@ export function DispatchPlan(initial: Board) {
                   })}
                 </div>
               )}
+            </div>
             </div>
           </div>
         </>
