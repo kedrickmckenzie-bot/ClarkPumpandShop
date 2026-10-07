@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getOpsRequestContext } from "@/lib/server/ops-request-context";
 import { internalDispatchScope } from "@/lib/server/internal-dispatch-context";
 import { RecordForm } from "@/components/ops/record-form";
-import { orderedStops, dispatchJob } from "@/lib/ops/dispatch-board";
+import { orderedStops, dispatchJob, dueLabel, type DispatchJob } from "@/lib/ops/dispatch-board";
 import { civilDate } from "@/lib/ops/dispatch-calendar";
 import { jobShortName } from "@/lib/ops/short-name";
 import styles from "@/components/workspace/internal-dispatch.module.css";
@@ -35,6 +35,11 @@ export default async function NextStatus({ searchParams }: { searchParams: Promi
     next = jobs[0],
     others = jobs.filter((j) => j.id !== next?.id),
     storeId = next?.storeId ?? scope.storeIds?.[0];
+  const minutes = (m?: number) => !m ? undefined : m < 60 ? `about ${m} min` : `about ${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ""}`;
+  // What a technician weighs before going: when it's due, how long it takes, which unit, and the full job one tap away.
+  const facts = (job: DispatchJob) => [dueLabel(job, today, org!.timeZone), minutes(job.schedule?.durationMinutes ?? job.estimatedMinutes),
+    job.assetName && !jobShortName(job).includes(job.assetName) ? job.assetName : undefined].filter(Boolean).join(" · ");
+  const openJob = (job: DispatchJob) => <Link href={`/app/my-work/${encodeURIComponent(job.id)}`}>Open job</Link>;
   const revision = (
     <input name="expectedRevision" type="hidden" value={current?.revision ?? 0} />
   );
@@ -50,9 +55,12 @@ export default async function NextStatus({ searchParams }: { searchParams: Promi
           {next ? (
             <>
               <input type="hidden" name="workOrderId" value={next.id} />
+              <div className={styles.nextUp}>
+                <strong>Next up: Store {next.storeNumber} · {jobShortName(next)}</strong>
+                <span>{facts(next)}{facts(next) ? " · " : ""}{openJob(next)}</span>
+              </div>
               <button className={`${styles.btn} ${styles.btnPrimary} ${styles.nextMain}`} name="status" value="heading" type="submit">
-                Heading to next job
-                <span>{next.storeNumber} · {jobShortName(next)}</span>
+                Heading there now
               </button>
             </>
           ) : null}
@@ -74,12 +82,16 @@ export default async function NextStatus({ searchParams }: { searchParams: Promi
       <details className={styles.nextDifferent}>
         <summary className={`${styles.btn} ${styles.btnSecondary}`}>Going to a different job</summary>
         {others.map((job) => (
-          <RecordForm key={job.id} action="/api/ops/technician-status" className={styles.nextForm}>
+          <RecordForm key={job.id} action="/api/ops/technician-status" className={styles.nextOther}>
             {revision}
             <input name="storeId" type="hidden" value={job.storeId} />
             <input name="workOrderId" type="hidden" value={job.id} />
-            <button className={`${styles.btn} ${styles.btnSecondary} ${styles.nextJob}`} name="status" value="heading" type="submit">
-              {job.storeNumber} · {jobShortName(job)}
+            <div className={styles.nextInfo}>
+              <strong>Store {job.storeNumber} · {jobShortName(job)}</strong>
+              <span>{facts(job)}{facts(job) ? " · " : ""}{openJob(job)}</span>
+            </div>
+            <button className={`${styles.btn} ${styles.btnSecondary}`} name="status" value="heading" type="submit">
+              Heading here
             </button>
           </RecordForm>
         ))}

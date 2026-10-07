@@ -46,9 +46,13 @@ export function dispatchStatus(row: Pick<WorkOrderListRow, "status" | "hasOpenFo
 export function canPlanJob(row: DispatchJob) {
   return Boolean(row.assignmentId && !row.inspectionId && !row.hasOpenFollowUp && !row.visitHoldPosture && !["draft", "awaiting_approval", "in_progress", "completed_pending_review", "resolved", "closed", "cancelled"].includes(row.status));
 }
-export function orderedStops(rows: DispatchJob[]) {
-  return [...rows].sort((a, b) => ((a.schedule?.stopOrder ?? 1000000) - (b.schedule?.stopOrder ?? 1000000)) || (a.schedule?.startsAt ?? "9999").localeCompare(b.schedule?.startsAt ?? "9999")
+const priorityRank: Record<string, number> = { emergency: 3, urgent: 2, routine: 1, planned: 0 };
 
+/** One order for a day's jobs, shared by My work and "What's next": stop order, start time, most urgent, soonest due. */
+export function orderedStops<T extends Pick<DispatchJob, "id" | "schedule" | "priority" | "dueAt">>(rows: T[]) {
+  return [...rows].sort((a, b) => ((a.schedule?.stopOrder ?? 1000000) - (b.schedule?.stopOrder ?? 1000000)) || (a.schedule?.startsAt ?? "9999").localeCompare(b.schedule?.startsAt ?? "9999")
+    || (priorityRank[b.priority] ?? 0) - (priorityRank[a.priority] ?? 0)
+    || (a.dueAt ?? "9999").localeCompare(b.dueAt ?? "9999")
     || a.id.localeCompare(b.id));
 }
 

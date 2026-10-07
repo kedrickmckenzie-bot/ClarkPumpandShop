@@ -4,6 +4,24 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Troubleshooting AI: who said what, unlinked equipment; What's next matches My work — October 7, 2026
+
+Owner testing found three problems:
+- **Job report mistaken for the tech.** The troubleshooting AI said "you told me the evap fan stops", but the fan detail came from the job's original report, not from the technician.
+- **"No history" on an unlinked job.** It said there was "no history" on a Store 104 beer cave job. The real issue was that the job wasn't linked to equipment, and that unit has plenty of history.
+- **What's next out of step.** "What's next" suggested the Store 102 rooftop job even though My work listed it near the bottom, and there was no way to open the suggested job before choosing.
+
+Changes:
+- **Who said what:** the prompt now labels the problem as the "Job report", written when the job was opened and possibly out of date. The AI must never attribute report details to the technician. It builds on the technician's own words and treats report-only symptoms as questions.
+- **Unlinked jobs:** `matchJobEquipment` (in `lib/ops/job-equipment-match.ts`) picks the one non-retired unit at the store whose name or tag the report names. The AI then uses that unit's records and says the job isn't linked. When no single unit matches, the AI says it can't see the history because the job isn't linked, never "no history", and lists same-category units to ask about.
+- **Shorter first answers:** short or vague first messages get about 4 lines: one question plus at most one check.
+- **One order for the day:** `orderedStops` now breaks ties by priority, then soonest due. My work Today uses it too, so "What's next" suggests the top ready job in the same order the list shows.
+- **What's next shows the job:** the suggested job and every other job show due time, planned duration, equipment and an **Open job** link before the tech chooses. The buttons read "Heading there now" and "Heading here".
+- **Tests:**
+  - matcher unit tests;
+  - a context test showing the Store 104 fan job uses the beer cave's history;
+  - two new real-AI eval cases (`job-report-is-not-the-tech`, `unlinked-job-not-no-history`), which were not run, to save API usage.
+
 ### Reset demo data button (demo only) — October 7, 2026
 
 The owner asked for a way to clear edge-testing leftovers, since the demo is dated from the day it was seeded and past-due work piles up over time. Approved as demo-only: it must not exist in a production deployment.

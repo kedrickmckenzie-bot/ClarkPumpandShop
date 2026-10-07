@@ -8,6 +8,7 @@ import type { WorkOrderListQuery } from "@/lib/ops/repository";
 import { calendarDate, civilDate, mondayOf } from "@/lib/ops/dispatch-calendar";
 import { addCalendarDays } from "@/lib/ops/internal-schedule-types";
 import { renderDispatchBoard } from "./dispatch-board-page";
+import { orderedStops } from "@/lib/ops/dispatch-board";
 
 type Query = Record<string, string | string[] | undefined>;
 
@@ -91,6 +92,8 @@ export async function renderInternalDispatch(query: Query, technician: boolean) 
     technician ? { people: [], regions: [] } : context.repository.getDispatchFilters(scope),
   ]);
 
+  // A technician's day reads in the same order "What's next" suggests.
+  if (technician && planned && view === "today") planned.items = orderedStops(planned.items);
   const visibleStores=[...new Set([page,heldPage,planned,replan,review,unscheduled].flatMap(list=>list?.items.map(row=>row.storeId)??[]))];
   const storeZones=Object.fromEntries(await Promise.all(visibleStores.map(async id=>[id,(await context.repository.getStore(scope.organizationId,id))?.timeZone??zone])));
   const saved = first("saved") ? { number: first("saved")!.slice(0, 40), when: (first("savedWhen") ?? "").slice(0, 80) } : undefined;

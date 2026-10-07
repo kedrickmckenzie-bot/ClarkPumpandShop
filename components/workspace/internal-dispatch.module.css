@@ -129,12 +129,14 @@
 /* What's next: one clear main choice, the rest quieter underneath. */
 .savedNote { margin: 0 0 4px; padding: 10px 14px; max-width: 480px; border-radius: 6px; background: #e8f5ec; color: #17643a; font-weight: 600; }
 .nextForm { display: grid; gap: 12px; margin: 16px 0; max-width: 480px; }
-.nextMain { flex-direction: column; align-items: flex-start; gap: 2px; min-height: 64px; padding: 12px 18px; font-size: 17px; white-space: normal; text-align: left; }
-.nextMain span { font-weight: 500; font-size: 15px; opacity: 0.9; }
+.nextMain { min-height: 48px; padding: 10px 18px; font-size: 17px; }
 .nextOthers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.nextOthers .btn, .nextJob { white-space: normal; text-align: center; }
-.nextJob { justify-content: flex-start; text-align: left; width: 100%; }
+.nextOthers .btn { white-space: normal; text-align: center; }
 .nextDifferent { max-width: 480px; margin: 8px 0 16px; }
+.nextUp, .nextInfo { display: grid; gap: 2px; }
+.nextUp strong, .nextOther strong { font-size: 16px; }
+.nextUp span, .nextOther span { color: #5b6b80; font-size: 15px; }
+.nextOther { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid #e3e8ef; }
 .nextDifferent[open] > .nextForm { margin: 8px 0; }
 @media (max-width: 700px) {
   .nextOthers { grid-template-columns: 1fr; }
