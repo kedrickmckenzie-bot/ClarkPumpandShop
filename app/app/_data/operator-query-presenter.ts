@@ -124,7 +124,7 @@ function queryFilters(route: OperatorListRoute, query: OperatorSearchParameters)
 
 function queryAppliedFilters(route: OperatorListRoute, query: OperatorSearchParameters) {
   const labels: Record<string, string> = {
-    pending: "Needs review", "not-sent": "Approved · not sent", "vendor-response": "Waiting on vendor",
+    pending: "Needs review", "not-sent": "Approved · not started", "vendor-response": "Waiting on vendor",
     active: "No checkout recorded", checked_out: "Completed visits", open: "Open work", waiting_on_vendor: "Vendor follow-up",
     waiting_on_parts: "Waiting on parts", completed_pending_review: "Needs confirmation", confirmation: "Needs confirmation", submitted: "New reports",
     open_unlinked: "Open reports", under_review: "Reports under review", acknowledged_unlinked: "Acknowledged without linked work", converted: "Reports converted to work", unlinked: "Not linked",
@@ -417,7 +417,7 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
       ] }];
     }
     if (stageStatuses) {
-      title = first(query.stage) === "not-sent" ? "Approved · not sent" : "Waiting on vendor";
+      title = first(query.stage) === "not-sent" ? "Approved · not started" : "Waiting on vendor";
       description = first(query.stage) === "not-sent" ? "Approved work, including jobs held for a later visit." : "Sent work needing a vendor response.";
     }
     if (heldPlan && roleCan(session, "issue_work_order")) {

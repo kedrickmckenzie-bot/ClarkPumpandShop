@@ -18,7 +18,7 @@ export async function WorkflowSummary({
     dispatchScope = await internalDispatchScope(repository, session),
     asOf = new Date().toISOString(),
     access = attentionAccess(session);
-  const [review, needs, stuck, overdue] = await Promise.all([
+  const [review, needs, stuck, overdue, waiting] = await Promise.all([
     repository.listAttention(scope, access, { asOf, stage: "decide", limit: 1 }),
     repository.listWorkOrders(dispatchScope, {
       internalOnly: true,
@@ -35,6 +35,7 @@ export async function WorkflowSummary({
       stage: "confirmation_overdue",
       limit: 1,
     }),
+    repository.countWorkOrders(scope, { stage: "vendor-or-parts" }),
   ]);
   return (
     <nav aria-label="Work to arrange" className={styles.lines}>
@@ -51,6 +52,10 @@ export async function WorkflowSummary({
       <Link href="/app/action-center?lane=all&stage=confirmation_overdue">
         <strong>{overdue.totalCount}</strong> confirmations overdue{" "}
         <span>Review →</span>
+      </Link>
+      <Link href="/app/work-orders?stage=vendor-or-parts">
+        <strong>{waiting}</strong> waiting on a vendor or parts{" "}
+        <span>Work orders →</span>
       </Link>
     </nav>
   );

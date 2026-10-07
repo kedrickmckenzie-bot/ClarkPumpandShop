@@ -4,6 +4,20 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Overview declutter, phone tables, believable demo volume, fair scorecard labels — October 7, 2026
+
+After reviewing the other session's work, the owner agreed the new pieces fit but the Overview had become crowded and the demo story overstated problems ("enough data to showcase all the features, but don't overwhelm").
+
+- **One equipment table on the Overview.** "Repeat problems" and "Most frequent equipment issues" showed mostly the same units side by side. The Overview now shows Repeat problems, with "All equipment issues" linking to the full ranking under Equipment; roles without repeat problems still see the ranking.
+- **No duplicate stage tiles for managers and owners.** The six "Where work stands" tiles repeated the summary lines and the top tiles. They are removed from the operations, regional and executive Overviews; a new summary line "N waiting on a vendor or parts" (exact count, opens those work orders) covers the one fact they added. Store and finance layouts keep the tiles, where "Approved · not sent" is renamed "Approved · not started" ("Waiting for a tech or vendor, or held for a later visit"), because most of those jobs are planned in-house work that is never "sent".
+- **Phone tables.** Equipment tables stack each unit into a short block under 640 px (calls/issues and latest date labeled), so nothing scrolls sideways.
+- **Believable demo volume.** "New urgent" over the last week went from 20 to 11: the two-year history's everyday jobs in the final week stay routine (the random sequence is unchanged, so the rest of the history is identical), three of its recent stories are routine, and three in-house planning jobs are no longer urgent. The Store 112 ice-machine repeat calls are spaced 31 and 15 days apart, still three calls in 60 days but only one counts as "broke again within 30 days" against ColdLine. DEMO.md now says ColdLine carries the Store 104 compressor callbacks under warranty review. Seed version stays v17, so a preview reset to v17 picks this up; one already seeded at v17 keeps its data (insert-only).
+- **Fair Best/Weakest.** A rate still shows from 5 jobs, but Best and Weakest now need at least 10 counted jobs (`RANK_SAMPLE`), and the page explains this. HVAC no longer crowns ColdLine from 6 jobs.
+
+Browser check (facilities, 1440 px and 390 px): Overview shows "4 fixed · 11 new urgent · 1 vendor declined · 5 now overdue", five summary lines including "7 waiting on a vendor or parts", one Repeat problems table that stacks on a phone, and no stage tiles; no page errors.
+
+Validation: `db:seed`, `typecheck`, `lint`, `npm test` with PostgreSQL (1547 passed, 16 skipped), `test:e2e` (68 passed), `build` and `build:render` passed.
+
 ### Review of 15b2284…a2e03a7 — October 7, 2026
 
 The owner asked for a review of the commits made in a separate session (Since you last looked, repeat problems, vendor scorecards, two-year demo history and the one-time demo reset) and to fix what was found.

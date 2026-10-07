@@ -411,7 +411,7 @@ export async function loadDashboardModel() {
     loadRepeatProblems(repository, scope, session, asOf),
     loadSinceLastLooked(repository, scope, session, asOf),
   ]);
-  model.repeatProblems = repeat;
+  model.repeatProblems = repeat ? { ...repeat, allIssuesHref: model.equipmentIssues?.href } : undefined;
   model.sinceLastLooked = since;
   // "Needs your action" says what its number is made of, so it never silently disagrees with Review.
   const yours = model.metrics?.find(metric => metric.id === "open-exceptions");

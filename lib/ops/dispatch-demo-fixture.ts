@@ -67,7 +67,7 @@ const examples = [
     "store": 103,
     "problem": "Two canopy lights over the east fuel island flicker and then go dark after sunset.",
     "status": "Ready",
-    "urgent": true
+    "urgent": false
   },
   {
     "store": 107,
@@ -91,7 +91,7 @@ const examples = [
     "store": 108,
     "problem": "The main entrance door drags on the threshold and does not close without being pulled shut.",
     "status": "Work started",
-    "urgent": true
+    "urgent": false
   },
   {
     "store": 113,
@@ -157,7 +157,7 @@ const examples = [
     "store": 101,
     "problem": "The automatic entrance door stalls halfway open, restricting customer access during busy periods.",
     "status": "Ready",
-    "urgent": true
+    "urgent": false
   },
   {
     "store": 113,

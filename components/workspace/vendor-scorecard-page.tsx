@@ -103,7 +103,7 @@ function Definitions({ model }: { model: ScorecardPageModel }) {
   return <details className={styles.definitions}>
     <summary>How each number is measured</summary>
     <dl>{model.definitions.map(item => <div key={item.label}><dt>{item.label}</dt><dd>{item.definition}</dd></div>)}</dl>
-    <p>Rates and typical times need at least {model.smallSample} jobs; below that you see &ldquo;too few to judge&rdquo;. Best and Weakest only compare vendors doing the same type of work. Arrows show a clear change from the previous period. Tap any number to see the jobs behind it.</p>
+    <p>Rates and typical times need at least {model.smallSample} jobs; below that you see &ldquo;too few to judge&rdquo;. Best and Weakest need at least {model.rankSample} jobs each and only compare vendors doing the same type of work. Arrows show a clear change from the previous period. Tap any number to see the jobs behind it.</p>
   </details>;
 }
 

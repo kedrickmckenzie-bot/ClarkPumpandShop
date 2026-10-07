@@ -164,8 +164,8 @@ export function EquipmentIssues({ model }: { model: NonNullable<DashboardPageVie
     <div className={styles.issueHeading}><div><h2 id="equipment-issues-title">Most frequent equipment issues</h2><p>{model.period} · {model.totalCount ? `Top ${Math.min(5, model.totalCount)} in your scope` : "Your equipment scope"}</p></div><Link href={model.href} className={styles.textLink}>View all <ArrowRight size={16} aria-hidden="true" /></Link></div>
     {model.rows.length ? <div className={styles.issueTable}><table><caption>Equipment ranked by unplanned work orders</caption><thead><tr><th>Equipment</th><th>Store</th><th>Issues</th><th>Recorded work cost · {model.currency}</th><th>Latest issue</th></tr></thead><tbody>{model.rows.map(row => <tr key={row.id}>
       <td><Link href={row.href}>{row.name}</Link><small>{row.assetTag}</small></td><td>{row.storeLabel}</td>
-      <td><Link href={row.href} aria-label={`${row.issueCount} ${row.issueCount === 1 ? "issue" : "issues"} for ${row.name} at ${row.storeLabel}`}>{row.issueCount}</Link></td>
-      <td>{row.cost}<small>{row.coverage}</small></td><td>{row.latestIssue}</td>
+      <td data-suffix={row.issueCount === 1 ? " issue" : " issues"}><Link href={row.href} aria-label={`${row.issueCount} ${row.issueCount === 1 ? "issue" : "issues"} for ${row.name} at ${row.storeLabel}`}>{row.issueCount}</Link></td>
+      <td>{row.cost}<small>{row.coverage}</small></td><td data-prefix="Latest issue: ">{row.latestIssue}</td>
     </tr>)}</tbody></table></div> : <p className={styles.issueNote}>No unplanned work orders are linked to equipment in this period.</p>}
     <p className={styles.issueNote}>Unplanned work linked to equipment. Counts describe issues, not confirmed outages. <Link href="/app/work-orders?asset=unlinked&status=all">Review work without equipment</Link>.</p>
   </section>;
@@ -188,11 +188,11 @@ export function SinceLastLooked({ model }: { model: NonNullable<DashboardPageVie
 /** Repeat problems: equipment with several repair calls in a short window, using the issue-ranking rule. */
 export function RepeatProblems({ model }: { model: NonNullable<DashboardPageViewModel["repeatProblems"]> }) {
   return <section id="repeat-problems" className={styles.section} aria-labelledby="repeat-problems-title">
-    <div className={styles.issueHeading}><div><h2 id="repeat-problems-title">Repeat problems</h2><p>{model.minIssues}+ repair calls in the last {model.days} days · {model.period}</p></div>{model.totalCount > model.rows.length ? <Link href={model.href} className={styles.textLink}>View all {model.totalCount} <ArrowRight size={16} aria-hidden="true" /></Link> : null}</div>
+    <div className={styles.issueHeading}><div><h2 id="repeat-problems-title">Repeat problems</h2><p>{model.minIssues}+ repair calls in the last {model.days} days · {model.period}</p></div><Link href={model.totalCount > model.rows.length ? model.href : model.allIssuesHref ?? model.href} className={styles.textLink}>{model.totalCount > model.rows.length ? `View all ${model.totalCount}` : "All equipment issues"} <ArrowRight size={16} aria-hidden="true" /></Link></div>
     {model.rows.length ? <div className={styles.issueTable}><table><caption>Equipment with repeat repair calls</caption><thead><tr><th>Equipment</th><th>Store</th><th>Calls</th><th>Recorded work cost</th><th>Latest call</th></tr></thead><tbody>{model.rows.map(row => <tr key={row.id}>
       <td><Link href={row.href}>{row.name}</Link><small>{row.assetTag}</small></td><td>{row.storeLabel}</td>
-      <td><Link href={row.href} aria-label={`${row.issueCount} repair calls for ${row.name} at ${row.storeLabel}`}>{row.issueCount}</Link></td>
-      <td>{row.cost}<small>{row.coverage}</small></td><td>{row.latestIssue}</td>
+      <td data-suffix=" calls"><Link href={row.href} aria-label={`${row.issueCount} repair calls for ${row.name} at ${row.storeLabel}`}>{row.issueCount}</Link></td>
+      <td>{row.cost}<small>{row.coverage}</small></td><td data-prefix="Latest call: ">{row.latestIssue}</td>
     </tr>)}</tbody></table></div> : <p className={styles.issueNote}>No equipment has {model.minIssues} or more repair calls in the last {model.days} days.</p>}
   </section>;
 }
@@ -226,27 +226,28 @@ export function ControlTower({ model, capitalSummary, operatingSummary }: { mode
   const pipeline = <Pipeline model={model} />;
   const spotlight = model.spotlight ? <Spotlight model={model.spotlight} /> : null;
   const repeat = model.repeatProblems ? <RepeatProblems model={model.repeatProblems} /> : null;
-  const equipment = <>{repeat}{model.equipmentIssues ? <EquipmentIssues model={model.equipmentIssues} /> : null}</>;
+  // One equipment table: repeat problems when shown, with the full issue ranking one tap away; otherwise the ranking.
+  const equipment = repeat ?? (model.equipmentIssues ? <EquipmentIssues model={model.equipmentIssues} /> : null);
   let content: ReactNode;
 
   switch (model.layout) {
     case "executive":
       // Owner order: money first, where it goes, what is broken, upcoming decisions.
-      content = <>{metrics}{queueLink}{pipeline}{insights}{equipment}{capitalSummary}{spotlight}</>;
+      content = <>{metrics}{queueLink}{insights}{equipment}{capitalSummary}{spotlight}</>;
       break;
     case "finance":
       content = <>{metrics}{queueLink}{capitalSummary}{pipeline}{equipment}<details className={styles.section}><summary>Spending and equipment insights</summary>{insights}{spotlight}</details></>;
       break;
     case "regional":
-      content = <>{metrics}{capitalSummary}{pipeline}{equipment}{spendSummary}<details className={styles.section}><summary>More insights</summary>{insights}{spotlight}</details></>;
+      content = <>{metrics}{capitalSummary}{equipment}{spendSummary}<details className={styles.section}><summary>More insights</summary>{insights}{spotlight}</details></>;
       break;
     case "store":
       content = <>{metrics}{capitalSummary}{equipment}{pipeline}{insights}{spotlight}</>;
       break;
     case "operations":
     default:
-      // The "Needs your action" tile opens the review queue; the Overview itself shows no item list.
-      content = <>{metrics}{capitalSummary}{pipeline}{equipment}{spendSummary}<details className={styles.section}><summary>More insights</summary>{insights}{spotlight}</details></>;
+      // The "Needs your action" tile opens the review queue; the work summary lines replace the stage tiles here.
+      content = <>{metrics}{capitalSummary}{equipment}{spendSummary}<details className={styles.section}><summary>More insights</summary>{insights}{spotlight}</details></>;
   }
 
   return <div className={styles.workspace}><PageHeader model={model} />{content}</div>;

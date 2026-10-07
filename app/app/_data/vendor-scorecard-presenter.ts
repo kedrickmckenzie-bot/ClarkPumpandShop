@@ -3,7 +3,7 @@ import type { OpsRepository } from "@/lib/ops/repository";
 import { formatOperationsDate } from "@/lib/ops/local-time";
 import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import {
-  MEASURES, MEASURE_INFO, SMALL_SAMPLE, buildScorecard, historyLength, inWindow, isMeasure, isPeriod, jobResult, rankRows,
+  MEASURES, MEASURE_INFO, RANK_SAMPLE, SMALL_SAMPLE, buildScorecard, historyLength, inWindow, isMeasure, isPeriod, jobResult, rankRows,
   scoreRows, scorecardWindowAt, summarizeAll, tradeLabel,
   type MeasureSummary, type ScoreRow, type ScorecardMeasureKey, type ScorecardPeriod, type ScorecardWindow, type VendorJobFact,
 } from "@/lib/ops/vendor-scorecard";
@@ -48,6 +48,7 @@ export interface ScorecardPageModel {
   drill?: ScorecardDrill;
   definitions: Array<{ label: string; definition: string }>;
   smallSample: number;
+  rankSample: number;
 }
 
 const money = (minor: number) => cachedNumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(minor / 100);
@@ -216,7 +217,7 @@ export async function buildVendorScorecardPage(repository: OpsRepository, sessio
       .sort((a, b) => (a.value === "unclassified" ? 1 : 0) - (b.value === "unclassified" ? 1 : 0) || b.jobs - a.jobs || a.label.localeCompare(b.label)),
     allTradesHref: href({ trade: undefined }), trade,
     totals: { vendors: new Set(currentFacts.map(f => f.vendorId)).size, jobs: currentFacts.length },
-    vendors, comparisons, vendor, drill, smallSample: SMALL_SAMPLE,
+    vendors, comparisons, vendor, drill, smallSample: SMALL_SAMPLE, rankSample: RANK_SAMPLE,
     definitions: MEASURES.map(key => ({ label: MEASURE_INFO[key].label, definition: MEASURE_INFO[key].definition })),
   };
 }

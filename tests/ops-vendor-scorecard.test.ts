@@ -73,15 +73,17 @@ describe("vendor scorecard summary", () => {
   });
 
   it("marks best and weakest only among comparable vendors, and trends only on clear changes", () => {
-    const alpha = [1, 2, 3, 4, 5].map(i => job(i, { firstOutcome: "completed" }));
-    const beta = [6, 7, 8, 9, 10].map(i => job(i, { vendorId: "v2", vendorName: "Beta", firstOutcome: i < 8 ? "completed" : "return_visit_required" }));
-    const gamma = [11, 12].map(i => job(i, { vendorId: "v3", vendorName: "Gamma", firstOutcome: "return_visit_required" }));
-    const priorBeta = [20, 21, 22, 23, 24].map(i => job(i, { vendorId: "v2", vendorName: "Beta", firstOutcome: "completed" }));
+    const alpha = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(i => job(i, { firstOutcome: "completed" }));
+    const beta = [11, 12, 13, 14, 15, 16, 17, 18, 19, 20].map(i => job(i, { vendorId: "v2", vendorName: "Beta", firstOutcome: i < 16 ? "completed" : "return_visit_required" }));
+    // Six jobs: enough to show a number, not enough to be called Best or Weakest.
+    const gamma = [31, 32, 33, 34, 35, 36].map(i => job(i, { vendorId: "v3", vendorName: "Gamma", firstOutcome: "return_visit_required" }));
+    const priorBeta = [40, 41, 42, 43, 44].map(i => job(i, { vendorId: "v2", vendorName: "Beta", firstOutcome: "completed" }));
     const [group] = buildScorecard([...alpha, ...beta, ...gamma], priorBeta, NOW);
     const by = (id: string) => group!.vendors.find(v => v.vendorId === id)!.measures.firstFix;
     expect(by("v1").rank).toBe("best");
     expect(by("v2").rank).toBe("worst");
-    // Gamma has too few jobs to be ranked at all.
+    // Gamma's rate is shown but it has too few jobs to be ranked.
+    expect(by("v3")).toMatchObject({ tooFew: false, value: 0 });
     expect(by("v3").rank).toBeUndefined();
     expect(by("v2")).toMatchObject({ trend: "worse", priorValue: 1 });
     expect(by("v1").trend).toBeUndefined();

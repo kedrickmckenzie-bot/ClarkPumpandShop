@@ -344,7 +344,9 @@ export function buildOperatingHistory(input: OperatingHistoryInput): OperatingHi
   for (const store of input.stores) {
     for (let day = start + rnd() * 20 * DAY; day < stop; day += between(22, 44) * DAY) {
       const month = new Date(day).getUTCMonth(), trade = chooseTrade(month, store);
-      const priority: WorkOrder["priority"] = trade === "refrigeration" && rnd() < 0.12 ? "emergency" : rnd() < 0.22 ? "urgent" : "routine";
+      const drawn: WorkOrder["priority"] = trade === "refrigeration" && rnd() < 0.12 ? "emergency" : rnd() < 0.22 ? "urgent" : "routine";
+      // The final week's everyday jobs stay routine, so "new urgent" on the Overview shows a believable handful.
+      const priority: WorkOrder["priority"] = day > asOfMs - 8 * DAY ? "routine" : drawn;
       addJob({ store, trade, createdMs: day + between(7, 15) * HOUR, priority, state: "closed" });
     }
   }
@@ -353,15 +355,16 @@ export function buildOperatingHistory(input: OperatingHistoryInput): OperatingHi
   const storeNumber = (n: string) => input.stores.find(s => s.storeNumber === n)!;
   const daysAgo = (days: number, hour = 10) => asOfMs - days * DAY + (hour - 18) * HOUR;
   // Store 112 ice machine keeps failing: a repeat problem on the Overview.
-  for (const days of [52, 33, 16]) addJob({ store: storeNumber("112"), trade: "refrigeration", createdMs: daysAgo(days), priority: "urgent", state: "closed", forceVendor: COLDLINE, forceAsset: "ice-machine" });
+  // Calls 31 days apart, then 15: still 3 calls in 60 days, but only one counts against the vendor as "broke again within 30 days".
+  for (const days of [58, 27, 12]) addJob({ store: storeNumber("112"), trade: "refrigeration", createdMs: daysAgo(days), priority: "urgent", state: "closed", forceVendor: COLDLINE, forceAsset: "ice-machine" });
   // ClearFlow HVAC in the South: a fix that did not hold, then a return visit.
   addJob({ store: storeNumber("113"), trade: "hvac", createdMs: daysAgo(28), priority: "urgent", state: "closed", forceVendor: CLEARFLOW, forceAsset: "rtu-1", forceRejected: true });
   addJob({ store: storeNumber("114"), trade: "hvac", createdMs: daysAgo(19), priority: "routine", state: "closed", forceVendor: CLEARFLOW, forceAsset: "rtu-1", forceFirstVisitFail: true });
 
   // The last days: work in every open state, so "Since you last looked", Review and the scorecards have something current.
-  addJob({ store: storeNumber("102"), trade: "refrigeration", createdMs: daysAgo(6), priority: "urgent", state: "fixed_recent", forceVendor: COLDLINE, forceAsset: "walk-in-freezer" });
+  addJob({ store: storeNumber("102"), trade: "refrigeration", createdMs: daysAgo(6), priority: "routine", state: "fixed_recent", forceVendor: COLDLINE, forceAsset: "walk-in-freezer" });
   addJob({ store: storeNumber("107"), trade: "plumbing", createdMs: daysAgo(5), priority: "routine", state: "fixed_recent", forceVendor: CLEARFLOW });
-  addJob({ store: storeNumber("111"), trade: "forecourt", createdMs: daysAgo(4), priority: "urgent", state: "fixed_recent", forceVendor: PUMPPRO });
+  addJob({ store: storeNumber("111"), trade: "forecourt", createdMs: daysAgo(4), priority: "routine", state: "fixed_recent", forceVendor: PUMPPRO });
   addJob({ store: storeNumber("105"), trade: "hvac", createdMs: daysAgo(5), priority: "routine", state: "limbo", forceVendor: CLEARFLOW, checkOverdue: true });
   addJob({ store: storeNumber("115"), trade: "refrigeration", createdMs: daysAgo(4), priority: "urgent", state: "limbo", forceVendor: COLDLINE, checkOverdue: true });
   addJob({ store: storeNumber("103"), trade: "forecourt", createdMs: daysAgo(3), priority: "routine", state: "limbo", forceVendor: PUMPPRO });
@@ -369,7 +372,7 @@ export function buildOperatingHistory(input: OperatingHistoryInput): OperatingHi
   addJob({ store: storeNumber("101"), trade: "electrical", createdMs: daysAgo(1, 9), priority: "urgent", state: "awaiting_vendor", forceVendor: BRIGHTLINE });
   addJob({ store: storeNumber("114"), trade: "refrigeration", createdMs: daysAgo(1, 14), priority: "emergency", state: "awaiting_vendor", forceVendor: COLDLINE, forceAsset: "beer-cave" });
   addJob({ store: storeNumber("110"), trade: "hvac", createdMs: daysAgo(2), priority: "routine", state: "scheduled", forceVendor: COLDLINE, forceAsset: "rtu-2" });
-  addJob({ store: storeNumber("112"), trade: "forecourt", createdMs: daysAgo(3), priority: "urgent", state: "scheduled", forceVendor: PUMPPRO });
+  addJob({ store: storeNumber("112"), trade: "forecourt", createdMs: daysAgo(3), priority: "routine", state: "scheduled", forceVendor: PUMPPRO });
 
   // Nothing finished may be dated after today.
   const late = out.workOrders.find(w => [w.closedAt, w.resolvedAt].some(at => at && Date.parse(at) > asOfMs))

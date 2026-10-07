@@ -588,7 +588,7 @@ export interface DashboardPageViewModel {
     rows: Array<{ id: string; name: string; assetTag: string; storeLabel: string; issueCount: number; latestIssue: string; cost: string; coverage: string; href: string }>;
   };
   /** Equipment with several repair calls in a short window; same rows and links as equipmentIssues. */
-  repeatProblems?: NonNullable<DashboardPageViewModel["equipmentIssues"]> & { days: number; minIssues: number };
+  repeatProblems?: NonNullable<DashboardPageViewModel["equipmentIssues"]> & { days: number; minIssues: number; /** The full issue ranking (Equipment), linked from the heading. */ allIssuesHref?: string };
   /** What changed since this person last pressed "Mark as seen". Each part's count equals the list it opens. */
   sinceLastLooked?: {
     sinceLabel: string;

@@ -374,12 +374,18 @@ export function scoreRows(facts: VendorJobFact[], prior: VendorJobFact[], now: s
     .sort((a, b) => b.measures.jobs.counted - a.measures.jobs.counted || a.label.localeCompare(b.label));
 }
 
-/** Best and Weakest, only among rows with enough jobs, and only when they actually differ. Use only for like-for-like work. */
+/**
+ * Jobs a measure needs before it can be called Best or Weakest. Higher than SMALL_SAMPLE on purpose:
+ * a number can be shown from 5 jobs, but naming a winner needs more evidence than that.
+ */
+export const RANK_SAMPLE = 10;
+
+/** Best and Weakest, only among rows with at least RANK_SAMPLE counted jobs, and only when they actually differ. Use only for like-for-like work. */
 export function rankRows(rows: ScoreRow[]) {
   for (const key of MEASURES) {
     const direction = MEASURE_INFO[key].direction;
     if (direction === "neutral" || key === "invoice") continue;
-    const ready = rows.map(v => v.measures[key]).filter(m => m.value !== undefined && !m.tooFew);
+    const ready = rows.map(v => v.measures[key]).filter(m => m.value !== undefined && !m.tooFew && m.counted >= RANK_SAMPLE);
     if (ready.length < 2) continue;
     const sorted = [...ready].sort((a, b) => direction === "higher" ? b.value! - a.value! : a.value! - b.value!);
     if (sorted[0]!.value === sorted.at(-1)!.value) continue;

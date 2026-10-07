@@ -487,3 +487,14 @@
   .sinceBar { flex-direction:column; align-items:stretch; }
   .sinceButton { width:100%; }
 }
+
+/* Phones: each equipment row becomes a short stacked block, so nothing scrolls sideways. */
+@media (max-width: 640px) {
+  .issueTable { overflow-x: visible; }
+  .issueTable thead { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+  .issueTable table, .issueTable tbody, .issueTable tr, .issueTable td { display:block; width:100%; }
+  .issueTable tr { padding:12px 16px; border-bottom:1px solid var(--enterprise-line); }
+  .issueTable td { padding:2px 0; border:0; }
+  .issueTable td[data-suffix]::after { content:attr(data-suffix); font-size:14px; color:var(--enterprise-muted); }
+  .issueTable td[data-prefix]::before { content:attr(data-prefix); color:var(--enterprise-muted); }
+}
