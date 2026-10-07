@@ -16,7 +16,7 @@ The owner asked for a way to clear edge-testing leftovers, since the demo is dat
   - **D1:** uses the existing `wipeD1DemoTenant` plus a conflict-safe reseed. The marker is written last, so an interrupted run finishes at the next start.
 
   Only the fictional Clark Pump and Shop tenant is touched; schema, other tenants and stored uploads stay.
-- **Tests:** `tests/ops-demo-reset.test.ts` covers top admin success, refusal outside the demo, a missing confirmation, and non-admin or persona refusal.
+- **Tests:** `tests/ops-demo-reset-route.test.ts` covers top admin success, refusal outside the demo, a missing confirmation, and non-admin or persona refusal.
 
 ### Overview declutter, phone tables, believable demo volume, fair scorecard labels — October 7, 2026
 
