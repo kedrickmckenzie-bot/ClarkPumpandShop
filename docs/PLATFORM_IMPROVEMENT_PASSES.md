@@ -4,6 +4,27 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Reports rebuilt for owners and leadership; report scheduling — October 8, 2026
+
+**Reports are now purpose-built documents.** Each opens with a period picker (last month, this month so far, last quarter, year to date, last 12 months, or a named month), store and area filters, and **Summary** or **Every record**. Every number derives from source cost lines, assignments, visits, PM occurrences and invoice allocations (`lib/ops/reports/*`).
+- **Who did the work:** each report is marked *Vendors and in-house*, *Outside vendors only* or *In-house team only*. Two-sided reports get a "Who did the work" filter; one-sided reports are locked to their side whatever the link says.
+- **New reports:**
+  - **Owner summary** (leadership): spend vs prior period and last year, repairs completed, typical time to fix, open/past due, PM on time, repeat problems, auto "What to look at", vendor vs in-house split, spending by store and type of work, costliest jobs, repair-or-replace decisions waiting, vendor and in-house tables.
+  - **Store report**: one store against the average store, or every store side by side.
+  - **Vendor work for accounts payable**: our work-order number, vendor ticket, approved limit, recorded cost, invoice number and amount per vendor work order, with "worth a second look" flags (over the approved limit, invoice above or below recorded cost, finished with no invoice) and invoices not tied to a work order. Review facts only; it approves or pays nothing.
+  - **Vendor performance** (vendors only) and **In-house team** (in-house only; a workload view, not a rating).
+- **Older reports** use the same document layout, period header and print styling; constant columns and screen wording are dropped.
+- **Reports page:** grouped by reader (leadership, vendors, team, operations), with Open, Schedule and CSV on each.
+
+**Report scheduling (bones; email not live).**
+- Weekly (day + hour) or monthly (day 1–28 + hour) in the organization's time zone. Recipients are active members whose role can open the report.
+- New tables `ops_report_schedules` and `ops_report_runs` (migration 0084 for D1 and PostgreSQL), with fixture, D1 and PostgreSQL parity. Create, pause, turn on, remove and **Send now** are version-fenced where needed and audited in the same transaction. Only the maker, an owner or a facilities lead can change a schedule.
+- The job cycle (`runReportScheduleCycle`, wired into the PostgreSQL job runner and the D1 worker) saves one run per send time. Run ids are fixed by schedule and send time, so a repeated cycle never makes a second run. It also queues an outbox message.
+- Delivery (`ops.report.scheduled`) emails only a link to `/app/reports/runs/{id}`, never figures, so each person sees only their own stores. Without an email provider the run is marked "email not set up" and remains openable from Reports. Nothing implies email is live.
+- Fixed while here: the report header "Prepared" time now shows the organization's local time.
+
+**Validation:** `tests/ops-report-schedules.test.ts` covers next-send math across daylight-time change, validation, role locking, idempotent cycles, delivery statuses, permissions, version conflicts, send now and remove. It runs on the fixture, D1 SQLite with real migrations, and PostgreSQL. `tests/ops-report-builders.test.ts` checks that owner spend equals the source cost lines, that vendor and in-house spend add up without double counting, store scope, summary vs every record, one-sided locking (no in-house job on the AP report), the AP checks and report access. Browser: Reports page, schedule form (desktop and 390 px phone, no sideways scroll), save, Send now, the saved run page and PDF, and five older reports rendered and printed with no page errors.
+
 ### Printable reports; dispatch scrolls on a sideways phone — October 8, 2026
 
 **Printable reports.** Every report on Reports now has **Print or PDF** next to Export CSV.

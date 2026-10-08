@@ -2311,6 +2311,31 @@ export const opsEquipmentDocumentPages = pgTable("ops_equipment_document_pages",
   foreignKey({columns:[t.organizationId],foreignColumns:[opsOrganizations.id]}),
   foreignKey({columns:[t.documentId],foreignColumns:[opsEquipmentDocuments.id]}),
 ]);
+/** A saved report schedule. Versioned; pause/resume/remove are audited and removed rows stay on record. */
+export const opsReportSchedules = pgTable("ops_report_schedules", {
+  id: text("id").primaryKey(), organizationId: text("organization_id").notNull(), reportId: text("report_id").notNull(), title: text("title").notNull(), optionsJson: text("options_json").notNull(),
+  frequency: text("frequency").notNull(), weekday: integer("weekday"), monthDay: integer("month_day"), sendHour: integer("send_hour").notNull(), timeZone: text("time_zone").notNull(),
+  recipientsJson: text("recipients_json").notNull(), status: text("status").notNull(), version: integer("version").notNull().default(0),
+  createdByMembershipId: text("created_by_membership_id"), createdByName: text("created_by_name").notNull(), createdAt: text("created_at").notNull(), updatedAt: text("updated_at").notNull(),
+  nextRunAt: text("next_run_at"), lastRunAt: text("last_run_at"),
+},t=>[
+  index("idx_ops_report_schedules_org").on(t.organizationId,t.status,t.createdAt),
+  index("idx_ops_report_schedules_due").on(t.status,t.nextRunAt),
+  check("ck_ops_report_schedules_frequency", sql`${t.frequency} IN ('weekly','monthly')`),
+  check("ck_ops_report_schedules_status", sql`${t.status} IN ('active','paused','removed')`),
+  foreignKey({columns:[t.organizationId],foreignColumns:[opsOrganizations.id]}),
+]);
+/** One saved send of a schedule. The id is fixed by schedule and send time so a run is never made twice. */
+export const opsReportRuns = pgTable("ops_report_runs", {
+  id: text("id").primaryKey(), organizationId: text("organization_id").notNull(), scheduleId: text("schedule_id").notNull(), reportId: text("report_id").notNull(), optionsJson: text("options_json").notNull(),
+  periodLabel: text("period_label").notNull(), runAt: text("run_at").notNull(), createdAt: text("created_at").notNull(), deliveryStatus: text("delivery_status").notNull(),
+  recipientCount: integer("recipient_count").notNull().default(0), deliveredAt: text("delivered_at"),
+},t=>[
+  index("idx_ops_report_runs_org").on(t.organizationId,t.runAt),
+  index("idx_ops_report_runs_schedule").on(t.organizationId,t.scheduleId,t.runAt),
+  foreignKey({columns:[t.organizationId],foreignColumns:[opsOrganizations.id]}),
+  foreignKey({columns:[t.scheduleId],foreignColumns:[opsReportSchedules.id]}),
+]);
 /** Each "Mark as seen" press on the Overview. Insert-only; the newest row per person is when they last looked. */
 export const opsOverviewSeenMarks = pgTable("ops_overview_seen_marks", {
   id: text("id").primaryKey(), organizationId: text("organization_id").notNull(), membershipId: text("membership_id").notNull(), seenAt: text("seen_at").notNull(),

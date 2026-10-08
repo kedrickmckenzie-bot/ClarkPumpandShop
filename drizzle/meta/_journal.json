@@ -589,6 +589,13 @@
       "when": 1791320847538,
       "tag": "0083_flashy_scorpion",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "6",
+      "when": 1791491090727,
+      "tag": "0084_huge_klaw",
+      "breakpoints": true
     }
   ]
 }

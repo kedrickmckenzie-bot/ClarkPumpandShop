@@ -1,4 +1,5 @@
 import { cachedDateTimeFormat } from "@/lib/ops/intl-format-cache";
+import { deliverScheduledReport } from "./reports/schedules";
 import { readPrivateUpload } from "@/components/ops-public/server-file-store";
 import { deliverInspectionEmail } from "./compliance-delivery";
 import { deliverRoutineReminder } from "./routine-follow-ups";
@@ -367,6 +368,7 @@ export function createNotificationEmailTransport(input: {
     async deliver(message) {
       if (message.topic.startsWith("ops.compliance.")) { await deliverInspectionEmail({...input,readAttachment:readPrivateUpload},message); return; }
       if (message.topic === "ops.routine.reminder") { await deliverRoutineReminder(input,message); return; }
+      if (message.topic === "ops.report.scheduled") { await deliverScheduledReport(input, message); return; }
       const eventKey = notificationEventForTopic(message.topic);
       if (!eventKey) {
         sink(JSON.stringify({ channel: "ops.outbox.delivery", transport: "operational-log", messageId: message.id, topic: message.topic, notification: "not_routed" }));

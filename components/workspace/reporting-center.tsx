@@ -1,67 +1,51 @@
 import Link from "next/link";
-import {
-  ArrowRight,
-  Database,
-  Download,
-  Printer,
-  FileBarChart2,
-  Layers3,
-  ShieldCheck,
-} from "lucide-react";
-import type { ListPageViewModel } from "@/components/ops/data-contract";
-import { DataStatePanel } from "@/components/ops/views";
-import { reportCatalogEntry } from "@/lib/ops/report-catalog";
+import { CalendarClock, Download, FileBarChart2 } from "lucide-react";
+import { REPORT_GROUPS, type ReportCatalogEntry, type ReportGroup } from "@/lib/ops/report-catalog";
+import { AUDIENCE_LABELS } from "@/lib/ops/reports/options";
 import styles from "./reporting-center.module.css";
 
-function cell(model: ListPageViewModel, rowId: string, key: string) {
-  return model.table.rows.find((row) => row.id === rowId)?.cells.find((item) => item.key === key);
-}
+const ORDER: ReportGroup[] = ["leadership", "vendors", "team", "operations"];
 
-export function ReportingCenter({ model }: { model: ListPageViewModel }) {
+/**
+ * Reports, grouped by who reads them. Each card says whether it covers outside vendors, the in-house team or both,
+ * and opens straight into the report, where the period and stores are chosen.
+ */
+export function ReportingCenter({ entries, schedules }: { entries: ReportCatalogEntry[]; schedules?: React.ReactNode }) {
   return (
     <div className={styles.workspace}>
       <header className={styles.header}>
-        <div><p>{model.page.eyebrow}</p><h1>{model.page.title}</h1><span>{model.page.description}</span></div>
+        <div><h1>Reports</h1><span>Open a report, pick the period and stores, then print, save as PDF, download, or schedule it.</span></div>
       </header>
-      <div className={styles.context} aria-label="Current reporting context">
-        <span><Layers3 size={16} aria-hidden="true" /><small>Viewing</small><strong>{model.page.scopeLabel}</strong></span>
-        <span><Database size={16} aria-hidden="true" /><small>Based on</small><strong>Recorded work and activity</strong></span>
-        <span><ShieldCheck size={16} aria-hidden="true" /><small>Exports</small><strong>Include the report definition</strong></span>
-      </div>
-      {model.state.kind !== "ready" ? <DataStatePanel state={model.state} /> : (
-        <>
-          <section className={styles.grid} aria-label="Available management reports">
-            {model.table.rows.map((row) => {
-              const definition = reportCatalogEntry(row.id);
-              const report = cell(model, row.id, "report");
-              const scope = cell(model, row.id, "scope");
-              const period = cell(model, row.id, "period");
-              const basis = cell(model, row.id, "basis");
-              return (
-                <article key={row.id}>
-                  <header><span><FileBarChart2 size={18} aria-hidden="true" /></span><div><small>Live report</small><h2>{report?.value ?? row.label}</h2></div></header>
-                  <p>{definition?.description ?? basis?.value}</p>
-                  <details><summary>Scope, period and calculation</summary><dl>
-                    <div><dt>Scope</dt><dd>{scope?.value ?? model.page.scopeLabel}</dd></div>
-                    <div><dt>Period</dt><dd>{period?.value ?? "Current source view"}</dd></div>
-                    <div><dt>Definition</dt><dd>{basis?.value ?? definition?.definition}</dd></div>
-                    <div><dt>Source</dt><dd>{report?.secondary ?? "Scoped operational records"}</dd></div>
-                  </dl></details>
+      {ORDER.map(group => {
+        const items = entries.filter(e => e.group === group);
+        if (!items.length) return null;
+        return (
+          <section key={group} className={styles.group} aria-labelledby={`group-${group}`}>
+            <h2 id={`group-${group}`}>{REPORT_GROUPS[group].title}</h2>
+            <p className={styles.groupNote}>{REPORT_GROUPS[group].description}</p>
+            <div className={styles.grid}>
+              {items.map(entry => (
+                <article key={entry.id}>
+                  <header>
+                    <span aria-hidden="true"><FileBarChart2 size={18} /></span>
+                    <div>
+                      <h3><Link href={`/app/reports/${entry.id}`}>{entry.title}</Link></h3>
+                      <small className={styles[`aud_${entry.audience}`]}>{AUDIENCE_LABELS[entry.audience]}</small>
+                    </div>
+                  </header>
+                  <p>{entry.description}</p>
                   <footer>
-                    <Link href={row.href}>Open live view<ArrowRight size={14} aria-hidden="true" /></Link>
-                    {definition ? <Link href={`/app/reports/${definition.id}/print`}>Print or PDF<Printer size={14} aria-hidden="true" /></Link> : null}
-                    {definition ? <a href={`/api/ops/reports/${definition.id}`}>Export CSV<Download size={14} aria-hidden="true" /></a> : null}
+                    <Link className={styles.primary} href={`/app/reports/${entry.id}`}>Open</Link>
+                    {entry.source.kind === "built" ? <Link href={`/app/reports/schedules/new?report=${entry.id}`}><CalendarClock size={14} aria-hidden="true" /> Schedule</Link> : null}
+                    <a href={`/api/ops/reports/${entry.id}`}><Download size={14} aria-hidden="true" /> CSV</a>
                   </footer>
                 </article>
-              );
-            })}
+              ))}
+            </div>
           </section>
-          <section className={styles.controlNote}>
-            <ShieldCheck size={19} aria-hidden="true" />
-            <div><strong>Financial bases remain separate.</strong><p>Recorded work cost, approved amount, vendor proposals, linked invoice amount, and unmatched invoice amount are never blended into one unexplained number.</p></div>
-          </section>
-        </>
-      )}
+        );
+      })}
+      {schedules}
     </div>
   );
 }

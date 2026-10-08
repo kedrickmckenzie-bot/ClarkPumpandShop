@@ -563,6 +563,26 @@ class SqlOpsRepository implements OpsRepository {
     const rows = await this.workOrderRows(scope, { ...query, cursor: undefined, offset: undefined, countOnly: true });
     return Number(rows[0]?.total_count ?? 0);
   }
+  private reportSchedule(row: Row): import("./reports/schedules").ReportSchedule {
+    return { id: text(row, "id"), organizationId: text(row, "organization_id"), reportId: text(row, "report_id"), title: text(row, "title"), optionsJson: text(row, "options_json"),
+      frequency: text(row, "frequency") as "weekly" | "monthly", weekday: maybeNumber(row, "weekday") ?? null, monthDay: maybeNumber(row, "month_day") ?? null, sendHour: Number(row.send_hour), timeZone: text(row, "time_zone"),
+      recipientsJson: text(row, "recipients_json"), status: text(row, "status") as "active" | "paused" | "removed", version: Number(row.version ?? 0), createdByMembershipId: maybeText(row, "created_by_membership_id"),
+      createdByName: text(row, "created_by_name"), createdAt: text(row, "created_at"), updatedAt: text(row, "updated_at"), nextRunAt: maybeText(row, "next_run_at") ?? null, lastRunAt: maybeText(row, "last_run_at") ?? null };
+  }
+  private reportRun(row: Row): import("./reports/schedules").ReportRun {
+    return { id: text(row, "id"), organizationId: text(row, "organization_id"), scheduleId: text(row, "schedule_id"), reportId: text(row, "report_id"), optionsJson: text(row, "options_json"),
+      periodLabel: text(row, "period_label"), runAt: text(row, "run_at"), createdAt: text(row, "created_at"), deliveryStatus: text(row, "delivery_status") as import("./reports/schedules").RunDelivery,
+      recipientCount: Number(row.recipient_count ?? 0), deliveredAt: maybeText(row, "delivered_at") ?? null };
+  }
+  async listReportSchedules(org: string) { return (await this.all("SELECT * FROM ops_report_schedules WHERE organization_id = ? AND status <> ? ORDER BY created_at DESC, id DESC LIMIT 200", [org, "removed"])).map(r => this.reportSchedule(r)); }
+  async getReportSchedule(org: string, id: string) { const row = await this.first("SELECT * FROM ops_report_schedules WHERE organization_id = ? AND id = ?", [org, id]); return row ? this.reportSchedule(row) : null; }
+  async listDueReportSchedules(now: string, limit: number) { return (await this.all("SELECT * FROM ops_report_schedules WHERE status = ? AND next_run_at IS NOT NULL AND next_run_at <= ? ORDER BY next_run_at, id LIMIT ?", ["active", now, Math.max(1, Math.min(200, limit))])).map(r => this.reportSchedule(r)); }
+  async getReportRun(org: string, id: string) { const row = await this.first("SELECT * FROM ops_report_runs WHERE organization_id = ? AND id = ?", [org, id]); return row ? this.reportRun(row) : null; }
+  async listReportRuns(org: string, limit: number) { return (await this.all("SELECT * FROM ops_report_runs WHERE organization_id = ? ORDER BY run_at DESC, id DESC LIMIT ?", [org, Math.max(1, Math.min(200, limit))])).map(r => this.reportRun(r)); }
+  async listReportRecipients(org: string) {
+    return (await this.all("SELECT m.id AS membership_id, u.display_name, u.email, m.role FROM ops_memberships m JOIN ops_users u ON u.id = m.user_id WHERE m.organization_id = ? AND m.status = ? AND u.status = ? AND u.email IS NOT NULL AND u.email <> '' ORDER BY u.display_name, m.id LIMIT 500", [org, "active", "active"]))
+      .map(r => ({ membershipId: text(r, "membership_id"), name: text(r, "display_name"), email: text(r, "email"), role: text(r, "role") }));
+  }
   async getOverviewSeenAt(org: string, membershipId: string) {
     const row = await this.first("SELECT seen_at FROM ops_overview_seen_marks WHERE organization_id = ? AND membership_id = ? ORDER BY seen_at DESC, id DESC LIMIT 1", [org, membershipId]);
     return row ? text(row, "seen_at") : undefined;

@@ -1,5 +1,6 @@
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
+import { runReportScheduleCycle } from "../lib/ops/reports/schedules";
 import handler from "vinext/server/app-router-entry";
 import { createOpsD1Repository } from "../lib/ops/d1-repository";
 import { runOutboxDeliveryCycle } from "../lib/ops/outbox-delivery";
@@ -64,10 +65,11 @@ const worker = {
       const repository = createOpsD1Repository(env.DB);
       const email = emailRuntimeFromEnvironment({ EMAIL_PROVIDER: env.EMAIL_PROVIDER, EMAIL_API_KEY: env.EMAIL_API_KEY, EMAIL_FROM: env.EMAIL_FROM, EMAIL_REPLY_TO: env.EMAIL_REPLY_TO, NEXT_PUBLIC_SITE_URL: env.NEXT_PUBLIC_SITE_URL });
       const transport = createNotificationEmailTransport({ repository, provider: email.provider, baseUrl: email.baseUrl });
+      const reportSchedules = await runReportScheduleCycle({ repository });
       const deliverySummary = await runOutboxDeliveryCycle({ repository }, transport);
       const escalationSummary = await runSlaEscalationCycle({ repository });
       const pmRecurrenceSummary = await runPmRecurrenceCycle({ repository });
-      console.log(JSON.stringify({ channel: "ops.jobs.cycle", runtime: "d1", transport: transport.name, outbox: deliverySummary, slaEscalation: escalationSummary, pmRecurrence: pmRecurrenceSummary }));
+      console.log(JSON.stringify({ channel: "ops.jobs.cycle", runtime: "d1", transport: transport.name, outbox: deliverySummary, reportSchedules, slaEscalation: escalationSummary, pmRecurrence: pmRecurrenceSummary }));
     })());
   },
 };

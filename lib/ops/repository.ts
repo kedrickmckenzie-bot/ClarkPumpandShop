@@ -236,6 +236,15 @@ export interface OpsRepository extends TaskRepository {
   listVendorJobFacts(scope: OrganizationScope, window: import("./vendor-scorecard").ScorecardWindow): Promise<import("./vendor-scorecard").VendorJobFact[]>;
   /** Exact number of jobs matching the list query (same rules as listWorkOrders). */
   countWorkOrders(scope: OrganizationScope, query: WorkOrderListQuery): Promise<number>;
+  /** Report schedules that are not removed, newest first. */
+  listReportSchedules(organizationId: string): Promise<import("./reports/schedules").ReportSchedule[]>;
+  getReportSchedule(organizationId: string, scheduleId: string): Promise<import("./reports/schedules").ReportSchedule | null>;
+  /** Active schedules whose next send time has come, across organizations (worker). */
+  listDueReportSchedules(now: string, limit: number): Promise<import("./reports/schedules").ReportSchedule[]>;
+  getReportRun(organizationId: string, runId: string): Promise<import("./reports/schedules").ReportRun | null>;
+  listReportRuns(organizationId: string, limit: number): Promise<import("./reports/schedules").ReportRun[]>;
+  /** Active people with an email, for choosing report recipients. */
+  listReportRecipients(organizationId: string): Promise<Array<{ membershipId: string; name: string; email: string; role: string }>>;
   /** The person's newest "Mark as seen" time on the Overview, if any. */
   getOverviewSeenAt(organizationId: string, membershipId: string): Promise<string | undefined>;
   listAiConversations(organizationId:string,workOrderId:string): Promise<import("./ai-conversations").AiConversation[]>;

@@ -4,6 +4,7 @@ import { createOpsPostgresRepository } from "../lib/ops/postgres-repository";
 import { runOutboxDeliveryCycle } from "../lib/ops/outbox-delivery";
 import { createNotificationEmailTransport, emailRuntimeFromEnvironment } from "../lib/ops/email-delivery";
 import { runPmRecurrenceCycle, runSlaEscalationCycle, runVendorComplianceCycle } from "../lib/ops/job-workers";
+import { runReportScheduleCycle } from "../lib/ops/reports/schedules";
 import { getPostgresPool } from "../lib/server/postgres-pool";
 
 // Idempotent platform-job entry point for PostgreSQL runtimes (Render
@@ -23,8 +24,9 @@ async function main() {
   const vendorCompliance = await runVendorComplianceCycle({ repository });
   const inspections = await runInspectionCycle({ repository });
   const routineFollowUps = await runRoutineFollowUpCycle({ repository });
+  const reportSchedules = await runReportScheduleCycle({ repository });
   const outbox = await runOutboxDeliveryCycle({ repository }, transport);
-  console.log(JSON.stringify({ channel: "ops.jobs.cycle", runtime: "postgres", transport: transport.name, outbox, inspections, slaEscalation, pmRecurrence, vendorCompliance, routineFollowUps }));
+  console.log(JSON.stringify({ channel: "ops.jobs.cycle", runtime: "postgres", transport: transport.name, outbox, reportSchedules, inspections, slaEscalation, pmRecurrence, vendorCompliance, routineFollowUps }));
 }
 
 try {
