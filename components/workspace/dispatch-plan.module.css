@@ -777,3 +777,14 @@
   outline-offset: -2px;
   background: #eef4ff;
 }
+/* Short screens (a phone turned sideways): no boxed-in scrolling. The page scrolls; the board still slides sideways. */
+@media (min-width: 701px) and (max-height: 600px) {
+  .plan,
+  .queue {
+    max-height: none;
+  }
+  .plan {
+    overflow-x: auto;
+    overflow-y: visible;
+  }
+}

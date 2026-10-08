@@ -3372,7 +3372,8 @@ export function buildProgramModel(
     });
     const spendTrendModel: TrendViewModel = { id: "actual-spend-trend", title: `${basis === "recorded" ? "Recorded work cost" : "Linked invoice amount"} — ${period.key === "ytd" ? "year to date" : `last ${period.months} months`}`, description: basis === "recorded" ? "Saved work costs grouped by service month, including matched invoice costs. Invoice totals are not added a second time." : "Confirmed USD invoice allocations grouped by invoice month. Charges awaiting matching are excluded. Use Trends to review other currencies.", points: monthKeys.map((key) => ({ id: key, label: monthLabel(key), value: monthly.get(key) ?? 0, formattedValue: money(monthly.get(key) ?? 0), link: { href: workspaceStartHref(basis === "recorded" ? workLink({ costMonth: key, hasCost: "true" }) : invoiceSourceHref(`${key}-01`, [monthEndDate(key), fixture.asOf.slice(0, 10)].sort()[0])), label: `Open ${monthLabel(key)} source records` } })), sourceLink: { href: workspaceStartHref(basis === "recorded" ? workLink({ hasCost: "true" }) : invoiceSourceHref(periodStart, fixture.asOf.slice(0, 10))), label: "Open all exact source records" } };
     const sourceWork = spendWork.filter((work) => (basisAmountByWork.get(work.id) ?? 0) > 0).sort((a, b) => (basisAmountByWork.get(b.id) ?? 0) - (basisAmountByWork.get(a.id) ?? 0) || a.number.localeCompare(b.number));
-    const spendPageSize = 25;
+    // Reports (CSV and print) ask for every record; the screen shows 25 at a time.
+    const spendPageSize = first(query.export) === "all" ? Math.max(sourceWork.length, 1) : 25;
     const requestedSpendPage = Number(first(query.page));
     const spendTotalPages = Math.max(1, Math.ceil(sourceWork.length / spendPageSize));
     const spendCurrentPage = Math.min(Number.isFinite(requestedSpendPage) && requestedSpendPage > 0 ? Math.floor(requestedSpendPage) : 1, spendTotalPages);
@@ -3511,7 +3512,7 @@ export function buildProgramModel(
         return Number(left.status === "operational") - Number(right.status === "operational") || rightLatest.localeCompare(leftLatest) || left.name.localeCompare(right.name);
       });
     const requestedPage = Number(first(query.page));
-    const pageSize = 25;
+    const pageSize = first(query.export) === "all" ? Math.max(filteredAssets.length, 1) : 25;
     const totalPages = Math.max(1, Math.ceil(filteredAssets.length / pageSize));
     const currentPage = Math.min(Number.isFinite(requestedPage) && requestedPage > 0 ? Math.floor(requestedPage) : 1, totalPages);
     const pageStart = (currentPage - 1) * pageSize;
@@ -3636,7 +3637,7 @@ export function buildProgramModel(
       .filter((item) => !statusFilter || item.status === statusFilter)
       .filter((item) => !occurrenceFilter || item.occurrence.id === occurrenceFilter);
     const requestedPage = Number(first(query.page));
-    const pageSize = pmView === "attention" ? 10 : 30;
+    const pageSize = first(query.export) === "all" ? Math.max(filteredOccurrenceStates.length, 1) : pmView === "attention" ? 10 : 30;
     const totalPages = Math.max(1, Math.ceil(filteredOccurrenceStates.length / pageSize));
     const currentPage = Math.min(Number.isFinite(requestedPage) && requestedPage > 0 ? Math.floor(requestedPage) : 1, totalPages);
     const pageStart = (currentPage - 1) * pageSize;
@@ -3732,7 +3733,7 @@ export function buildProgramModel(
     : lifecycleView === "all"
       ? scopeCandidates
       : liveRepairDecisions;
-  const lifecyclePageSize = 25;
+  const lifecyclePageSize = first(query.export) === "all" ? Math.max(candidates.length, 1) : 25;
   const requestedLifecyclePage = Number(first(query.page));
   const lifecycleTotalPages = Math.max(1, Math.ceil(candidates.length / lifecyclePageSize));
   const lifecycleCurrentPage = Math.min(Number.isFinite(requestedLifecyclePage) && requestedLifecyclePage > 0 ? Math.floor(requestedLifecyclePage) : 1, lifecycleTotalPages);

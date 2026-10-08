@@ -3,6 +3,7 @@ import {
   ArrowRight,
   Database,
   Download,
+  Printer,
   FileBarChart2,
   Layers3,
   ShieldCheck,
@@ -48,6 +49,7 @@ export function ReportingCenter({ model }: { model: ListPageViewModel }) {
                   </dl></details>
                   <footer>
                     <Link href={row.href}>Open live view<ArrowRight size={14} aria-hidden="true" /></Link>
+                    {definition ? <Link href={`/app/reports/${definition.id}/print`}>Print or PDF<Printer size={14} aria-hidden="true" /></Link> : null}
                     {definition ? <a href={`/api/ops/reports/${definition.id}`}>Export CSV<Download size={14} aria-hidden="true" /></a> : null}
                   </footer>
                 </article>

@@ -1113,7 +1113,8 @@
 
 /* Printing a page or report prints only the page, not the workspace frame. */
 @media print {
-  .sidebar, .topbarFrame { display: none !important; }
+  .sidebar, .topbarFrame, .skipLink { display: none !important; }
+  :global(html), :global(body) { background: #fff !important; }
   .shell { display: block !important; background: #fff !important; }
   .main { max-width: none !important; padding: 0 !important; margin: 0 !important; }
 }

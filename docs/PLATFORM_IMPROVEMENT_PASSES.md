@@ -4,6 +4,21 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Printable reports; dispatch scrolls on a sideways phone — October 8, 2026
+
+**Printable reports.** Every report on Reports now has **Print or PDF** next to Export CSV.
+- **Page:** `/app/reports/[reportId]/print` is a letter-size layout. On screen it is a preview with **Print or save as PDF**; on paper the app menus, skip link and gray canvas are hidden.
+- **What it shows:** the brand label, the report title, the company, who it covers, the period, and when and by whom it was prepared. Then "How this is counted" (the catalog definition), up to six summary figures, up to two breakdowns, and the full record table (header repeats on each page). Pages are numbered "Page X of Y".
+- **Same data as CSV:** the CSV export and the print page now share one loader (`lib/server/report-model.ts`), so both carry exactly the same scope, filters and records.
+- **Fixed, pre-existing:** spend, equipment, PM (fixture view) and repair-or-replace lists ignored `export=all` and stopped at 25 rows, both in CSV and print. The spend report now carries all 409 costed jobs instead of 25.
+- **Safety note:** if a source still pages (the PM schedule view), the printout says "Showing X–Y of Z. The live report lists the rest." rather than silently truncating.
+- **Checked:** all seven print pages render with no errors. Letter PDFs of Spending by store (2 pages) and Recorded maintenance spending (now complete) were generated and reviewed.
+- **Noticed, not changed:** Invoice reference review prints 236 records where its live list header says 237. Open maintenance work shows exactly 100 on both the live list and the print, which may be a list cap. Both are worth a follow-up.
+
+**Dispatch on a sideways phone.** On short screens (wider than 700px and at most 600px tall), Needs a tech and the board were boxed into about 140px each, and the page itself barely scrolled.
+- Those boxes now grow, and the page scrolls; the board still slides sideways for days.
+- Phones held upright are unchanged.
+
 ### Send a planned job back to Needs a tech — October 7, 2026
 
 Owner question: what if a job is dragged onto a tech by accident and should stay unassigned? Undo worked only right after the move. "Take off the plan" removed the date but left the job with that tech, and nothing happened when a job was dragged back onto Needs a tech.

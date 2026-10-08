@@ -1,7 +1,6 @@
 import { opsApiError } from "@/lib/server/ops-request-context";
 import { NextResponse } from "next/server";
-import { loadListModel, loadProgramModel } from "@/app/app/_data/operator-loader";
-import { reportCatalogEntry } from "@/lib/ops/report-catalog";
+import { loadReportModel } from "@/lib/server/report-model";
 
 export const dynamic = "force-dynamic";
 
@@ -13,19 +12,10 @@ function csvCell(value: string) {
 export async function GET(request: Request, { params }: { params: Promise<{ reportId: string }> }) {
   try {
   const { reportId } = await params;
-  const definition = reportCatalogEntry(reportId);
-  if (!definition) return NextResponse.json({ error: "Report definition not found." }, { status: 404 });
-
   const incoming = new URL(request.url).searchParams;
-  const query: Record<string, string> = { ...(definition.source.query ?? {}), export: "all" };
-  for (const key of ["store", "region", "category", "status", "period", "from", "costFrom", "costMonth"]) {
-    const value = incoming.get(key)?.trim();
-    if (value) query[key] = value;
-  }
-
-  const model = definition.source.kind === "list"
-    ? await loadListModel(definition.source.route, query)
-    : await loadProgramModel(definition.source.route, query);
+  const loaded = await loadReportModel(reportId, key => incoming.get(key));
+  if (!loaded) return NextResponse.json({ error: "Report definition not found." }, { status: 404 });
+  const { definition, model } = loaded;
   const table = model.table;
   if (!table) return NextResponse.json({ error: "This report has no source rows in the selected scope." }, { status: 409 });
 
