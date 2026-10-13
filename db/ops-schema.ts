@@ -926,7 +926,7 @@ export const opsComplianceSchedules = sqliteTable("ops_compliance_schedules", {
  name:text("name").notNull(),instructions:text("instructions").notNull(),requirementSource:text("requirement_source").notNull(),evidenceLabel:text("evidence_label").notNull(),assetId:text("asset_id"),kind:text("kind").notNull(),escalationDays:integer("escalation_days").notNull(),escalationTo:text("escalation_to").notNull(),firstDueDate:text("first_due_date").notNull(),
  intervalUnit:text("interval_unit").notNull(),intervalCount:integer("interval_count").notNull(),leadDays:integer("lead_days").notNull(),
  handler:text("handler").notNull(),membershipId:text("membership_id"),vendorId:text("vendor_id"),evidenceRequired:integer("evidence_required").notNull(),
- status:text("status").notNull(),createdAt:text("created_at").notNull(),
+ program:text("program"),status:text("status").notNull(),createdAt:text("created_at").notNull(),
 },t=>[
  uniqueIndex("idx_ops_compliance_org_id").on(t.organizationId,t.id),index("idx_ops_compliance_org_store").on(t.organizationId,t.storeId,t.id),
  foreignKey({columns:[t.organizationId,t.storeId],foreignColumns:[opsStores.organizationId,opsStores.id]}),
@@ -1054,6 +1054,18 @@ export const opsAiConversations = sqliteTable("ops_ai_conversations", {
   foreignKey({columns:[t.organizationId],foreignColumns:[opsOrganizations.id]}),
   foreignKey({columns:[t.organizationId,t.workOrderId],foreignColumns:[opsWorkOrders.organizationId,opsWorkOrders.id]}),
   check("chk_ops_ai_conversations",sql`${t.kind} IN ('checkout','diagnostic')`),
+]);
+/** Fuel tank (UST) operators designated for each store: Class A, B and C. Removing one keeps the row with removed_at set. */
+export const opsUstOperators = sqliteTable("ops_ust_operators", {
+  id: text("id").primaryKey(), organizationId: text("organization_id").notNull(), storeId: text("store_id").notNull(),
+  operatorClass: text("operator_class").notNull(), name: text("name").notNull(), certificateNumber: text("certificate_number"),
+  trainedOn: text("trained_on"), expiresOn: text("expires_on"), recordedByName: text("recorded_by_name").notNull(),
+  createdAt: text("created_at").notNull(), removedAt: text("removed_at"), removedByName: text("removed_by_name"),
+},t=>[
+  index("idx_ops_ust_operators_store").on(t.organizationId,t.storeId,t.operatorClass),
+  foreignKey({columns:[t.organizationId],foreignColumns:[opsOrganizations.id]}),
+  foreignKey({columns:[t.organizationId,t.storeId],foreignColumns:[opsStores.organizationId,opsStores.id]}),
+  check("chk_ops_ust_operators_class",sql`${t.operatorClass} IN ('A','B','C')`),
 ]);
 /** Refrigerant facts per piece of equipment. Each change adds a version; the highest version is current. Insert-only. */
 export const opsAssetRefrigerants = sqliteTable("ops_asset_refrigerants", {

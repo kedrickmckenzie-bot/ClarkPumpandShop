@@ -2049,6 +2049,7 @@ export interface OpsFixture {
   equipmentNotes?: import("./equipment-notes").EquipmentNote[];
   assetRefrigerants?: import("./refrigerant").AssetRefrigerant[];
   refrigerantEvents?: import("./refrigerant").RefrigerantEvent[];
+  ustOperators?: import("./ust").UstOperator[];
   equipmentDocumentPages?: Array<import("./document-pages").DocumentPage & { id: string; organizationId: string; createdAt: string }>;
   technicianProfiles?: TechnicianProfile[];
   internalSchedules?: import("./internal-schedule-types").InternalSchedule[];

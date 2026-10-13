@@ -4,6 +4,41 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Fuel tank compliance (UST-01) and c-store starter pack (CP-01) — October 13, 2026
+
+**What was done.**
+- **Ready-made schedules.** "New inspection schedule" starts with a list of 19 ready-made c-store schedules in five groups:
+  - Fuel tanks (UST)
+  - Fire and life safety
+  - Kitchen
+  - Plumbing
+  - Fuel dispensers
+
+  Picking one fills in the existing form (name, frequency, reminder lead, evidence, instructions, rule reference, usual handler, first due date in 30 days). The person still picks stores, who does it and the date, and can change anything. Frequencies follow the common federal or national rule, and the page says states and local authorities can be stricter. Schedules made this way keep a `program` label (migration 0087 adds `ops_compliance_schedules.program`).
+- **Compliance → Fuel tanks tab.**
+  - **Operators:** trained Class A, B and C tank operators per store, from new insert-and-mark-removed table `ops_ust_operators`.
+    - Tiles: stores missing an operator, training expired, training expiring in 60 days.
+    - Table: one row per store, "Missing" shown in red.
+    - Add and remove are for facilities and regional managers; every change is audited.
+  - **Tank checks:** the existing inspection list filtered to fuel-tank schedules (`queryInspections` gains a `program` filter in the fixture and SQL).
+  - A failed check uses the existing corrective work order flow. The page says it doesn't replace the tank monitor or file anything with the state.
+- **Fuel tank schedules covered:** monthly leak detection result, 30-day walkthrough, yearly walkthrough, yearly leak detection equipment test, and 3-year tests for spill buckets, overfill prevention, containment sumps and cathodic protection (EPA 40 CFR 280).
+- **Demo (fictional, insert-only, stable IDs, via the startup backfill and the showcase).**
+  - Monthly leak detection at all 15 stores. Store 106 is overdue, and store 111 has a failed diesel line test.
+  - Yearly equipment tests with PumpPro at five stores.
+  - A, B and C operators, except store 109, which is missing Class C. Store 108's Class B training expires within 60 days.
+
+**How it was tested.** `tests/ops-ust.test.ts`:
+- Templates fit the schedule rules and save their program.
+- Operator gap math.
+- Fixture vs SQLite parity for add (same submission saved once), remove (record kept) and the fuel-tank inspection filter.
+
+Historical-schema fixtures leave out the new rows, and the migration count is now 87.
+
+**Checks.** Seed, typecheck, unit tests, e2e, build and Render build pass. The first run caught 3 lint errors and the showcase inspection count (now 21 plus 35 fuel tank checks); after fixing them, lint and the affected tests pass.
+
+**Browser (Render build on PostgreSQL).** Fuel tanks shows 1 store missing an operator and 1 expiring. Adding Store 109's Class C clears the gap. Tank checks open on the open checks (overdue store 106 first). Picking a template fills the form. Phone width is 390 px with no sideways scroll. The invisible "Remove" button found in the browser was fixed.
+
 ### Refrigerant follow-ups (AIM-05), vendor contacts and arrival time (SD-02 part 2) — October 13, 2026
 
 **What was done.**
@@ -654,8 +689,8 @@ Compliance additions approved by the user on October 13, 2026, in this order:
 - [x] AIM-03 Asked where the work happens: vendor checkout (required on covered units, saved in the checkout transaction), the in-house technician job, and the work order and equipment pages for office entry from vendor paperwork.
 - [x] AIM-04 Compliance → Refrigerant page: open leak repairs, covered equipment, chronic leakers and units missing info, each opening the equipment's refrigerant log. Work order overview shows an open leak clock, or asks once a covered unit has been serviced with nothing recorded.
 - [x] AIM-05 Nameplate photo read by AI to fill refrigerant type and charge (person confirms). Printable refrigerant log per unit. Optional: create a repair work order straight from an open leak clock.
-- [ ] UST-01 Underground fuel tank compliance: monthly release detection results, 30-day walkthroughs, yearly equipment tests, 3-year spill/overfill/corrosion tests, A/B/C operator records. A failed result opens a work order with a deadline. Records results from the tank monitor; never replaces it.
-- [ ] CP-01 C-store compliance starter pack on the existing schedules: extinguishers, hood suppression, hood cleaning, backflow, grease trap, emergency lighting, fire alarm/sprinkler, pump accuracy.
+- [x] UST-01 Underground fuel tank compliance: monthly release detection results, 30-day walkthroughs, yearly equipment tests, 3-year spill/overfill/corrosion tests, A/B/C operator records. A failed result opens a work order with a deadline. Records results from the tank monitor; never replaces it.
+- [x] CP-01 C-store compliance starter pack on the existing schedules: extinguishers, hood suppression, hood cleaning, backflow, grease trap, emergency lighting, fire alarm/sprinkler, pump accuracy.
 
 Bugs found during the audit (small; can ride with any batch):
 

@@ -1,6 +1,7 @@
 import { buildNorthlinePresentationFixture } from "./fixtures";
 import { showcaseDocuments } from "./showcase-documents";
 import type { OpsFixture, StoredFile } from "./types";
+import { addUstDemo } from "./ust";
 import type { StoreTask } from "./store-task-types";
 
 /** Fresh showcase only. Never merge this over a customer's existing records. */
@@ -110,6 +111,8 @@ export function buildShowcaseFixture(anchorDate = new Date().toISOString(), opti
   f.workOrders.push({ id: correctiveId, organizationId: org, storeId: "store-northline-114", number: `CPS-${date(0).slice(0,4)}-3199`, problem: "Rear exit light did not illuminate during the store safety check", authorizedScope: "Inspect and repair the rear exit light. Verify operation and return a photo for inspection review.", categoryKey: "electrical", priority: "urgent", status: "accepted", version: 0, accountableParty: "Maria Santos", nextAction: "Repair exit light and return verification", dueAt: day(1), escalationTo: "Jordan Lee", createdAt: day(-2) });
   f.assignments.push({ id: "showcase-assignment-exit-light", organizationId: org, workOrderId: correctiveId, kind: "internal", internalMembershipId: "membership-northline-tech-1", status: "accepted", assignedAt: day(-2) });
   f.inspections.find(i => i.id === finding)!.correctiveWorkOrderId = correctiveId;
+  // The fuel tank story lives with the presentation data; add it back after the showcase resets inspections.
+  addUstDemo(f);
   audit("work_order", correctiveId, "work_order.created", day(-2), { inspectionId: finding });
 
   // Plans include proactive renewal, repeat repairs and a price still to obtain.

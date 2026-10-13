@@ -7,16 +7,16 @@ import { getServerOpsRepository } from "@/lib/server/ops-repository-provider";
 import { inspectionViews, type InspectionView } from "@/lib/ops/compliance-types";
 import styles from "@/components/workspace/compliance.module.css";
 const labels:Record<InspectionView,string>={scheduled:"Scheduled",all:"All inspections",upcoming:"Upcoming",overdue:"Overdue",pending:"Pending",passed:"Reviewed & closed",action_needed:"Open findings",performed:"Awaiting review",missing_docs:"Missing paperwork",expiring:"Documents expiring",due30:"Due in 30 days",due60:"Due in 60 days",due90:"Due in 90 days"};
-export default async function ComplianceWorkspace({searchParams,fixedStore}:{searchParams:Promise<{view?:string;offset?:string;store?:string;notice?:string;error?:string}>;fixedStore?:string}) {
+export default async function ComplianceWorkspace({searchParams,fixedStore,program}:{searchParams:Promise<{view?:string;offset?:string;store?:string;notice?:string;error?:string}>;fixedStore?:string;program?:"ust"}) {
  const session=await loadOperatorSession(),r=await getServerOpsRepository(),q={...await searchParams,...(fixedStore?{store:fixedStore}:{})};
- const today=new Date().toISOString().slice(0,10),view=inspectionViews.includes(q.view as InspectionView)?q.view as InspectionView:"all",offset=Math.min(100000,Math.max(0,Math.floor(Number(q.offset)||0)));
- const page=await r.queryInspections(session,{today,view,storeId:q.store,offset,limit:25}),stores=await r.searchStores(session,"",{limit:100});
+ const today=new Date().toISOString().slice(0,10),view=inspectionViews.includes(q.view as InspectionView)?q.view as InspectionView:program?"pending":"all",offset=Math.min(100000,Math.max(0,Math.floor(Number(q.offset)||0)));
+ const page=await r.queryInspections(session,{today,view,storeId:q.store,offset,limit:25,program}),stores=await r.searchStores(session,"",{limit:100});
  const edit=["facilities","regional"].includes(session.role);
- const createHref=`/app/compliance/new${q.store?`?store=${encodeURIComponent(q.store)}`:""}`;
- const href=(v:InspectionView,start=0)=>`${fixedStore?`/app/stores/${encodeURIComponent(fixedStore)}/compliance`:"/app/compliance"}?${new URLSearchParams({view:v,offset:String(start),...(q.store?{store:q.store}:{})})}`;
+ const createHref=program?"/app/compliance/new?template=ust-monthly-leak-detection#form":`/app/compliance/new${q.store?`?store=${encodeURIComponent(q.store)}`:""}`;
+ const href=(v:InspectionView,start=0)=>`${fixedStore?`/app/stores/${encodeURIComponent(fixedStore)}/compliance`:program?"/app/compliance/fuel-tanks":"/app/compliance"}?${new URLSearchParams({view:v,offset:String(start),...(q.store?{store:q.store}:{})})}`;
  return <div className={styles.page}>
- <header className={styles.header}><div>{fixedStore?<h2>Inspections and renewals</h2>:<h1>Compliance</h1>}<p>Inspections, renewals and the records behind them.</p><small>{fixedStore?"This store":session.scopeLabel} · As of {formatOperationsDate(`${today}T12:00:00Z`,"UTC")}</small></div>{edit?<Link className={styles.action} href={createHref}>New schedule</Link>:null}</header>
- {fixedStore?null:<ComplianceTabs active="inspections"/>}
+ <header className={styles.header}><div>{fixedStore?<h2>Inspections and renewals</h2>:program?<h2>Tank checks</h2>:<h1>Compliance</h1>}<p>{program?"Leak detection, walkthroughs and tests for underground fuel tanks.":"Inspections, renewals and the records behind them."}</p><small>{fixedStore?"This store":session.scopeLabel} · As of {formatOperationsDate(`${today}T12:00:00Z`,"UTC")}</small></div>{edit?<Link className={styles.action} href={createHref}>New schedule</Link>:null}</header>
+ {fixedStore||program?null:<ComplianceTabs active="inspections"/>}
  {q.notice?<p role="status" className={styles.notice}>{q.notice}</p>:null}{q.error?<p role="alert" className={styles.notice}>{q.error}</p>:null}
  <div className={styles.metrics}>{(["due30","overdue","performed","missing_docs","action_needed"] as InspectionView[]).map(v=><Link key={v} href={href(v)} className={styles.metric}>{labels[v]}<strong>{page.summary[v]}</strong></Link>)}</div>
  <nav className={styles.filters} aria-label="Compliance horizons">{(["due60","due90","scheduled","upcoming","expiring"] as InspectionView[]).map(v=><Link key={v} href={href(v)}>{labels[v]} · {page.summary[v]}</Link>)}</nav>

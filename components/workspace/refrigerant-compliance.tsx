@@ -28,11 +28,12 @@ interface Row extends RefrigerantEquipmentRow {
 }
 
 /** Compliance tabs shared by Inspections and Refrigerant. */
-export function ComplianceTabs({ active }: { active: "inspections" | "refrigerant" }) {
+export function ComplianceTabs({ active }: { active: "inspections" | "refrigerant" | "fuel-tanks" }) {
   return (
     <nav className={styles.filters} aria-label="Compliance areas">
       <Link href="/app/compliance" aria-current={active === "inspections" ? "page" : undefined}>Inspections</Link>
       <Link href="/app/compliance/refrigerant" aria-current={active === "refrigerant" ? "page" : undefined}>Refrigerant</Link>
+      <Link href="/app/compliance/fuel-tanks" aria-current={active === "fuel-tanks" ? "page" : undefined}>Fuel tanks</Link>
     </nav>
   );
 }

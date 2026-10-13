@@ -201,6 +201,7 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
   if (table === "ops_equipment_notes") fixture.equipmentNotes ??= [];
   if (table === "ops_asset_refrigerants") fixture.assetRefrigerants ??= [];
   if (table === "ops_refrigerant_events") fixture.refrigerantEvents ??= [];
+  if (table === "ops_ust_operators") fixture.ustOperators ??= [];
   if (table === "ops_equipment_document_pages") fixture.equipmentDocumentPages ??= [];
   const mapping: Record<string, keyof OpsFixture> = {
     ops_store_tasks: "storeTasks", ops_store_task_messages: "storeTaskMessages", ops_store_task_people: "storeTaskPeople", ops_divisions: "divisions", ops_regions: "regions", ops_taxonomy_nodes: "taxonomyNodes",
@@ -211,7 +212,7 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
     ops_capital_plans: "capitalPlans", ops_store_vendor_preferences: "storeVendorPreferences", ops_vendor_coverage: "vendorCoverage", ops_vendor_qualifications: "vendorQualifications", ops_vendor_compliance_documents: "vendorComplianceDocuments",
     ops_vendor_contracts: "vendorContracts", ops_contract_versions: "contractVersions", ops_contract_scopes: "contractScopes",
     ops_rate_card_lines: "rateCardLines", ops_service_level_policies: "serviceLevelPolicies", ops_scheduling_policies: "schedulingPolicies", ops_vendor_capacity: "vendorCapacity",
-    ops_technician_statuses: "technicianStatuses", ops_route_legs: "routeLegs", ops_equipment_documents: "equipmentDocuments", ops_ai_conversations: "aiConversations", ops_overview_seen_marks: "overviewSeenMarks", ops_report_schedules: "reportSchedules", ops_report_runs: "reportRuns", ops_equipment_notes: "equipmentNotes", ops_asset_refrigerants: "assetRefrigerants", ops_refrigerant_events: "refrigerantEvents", ops_equipment_document_pages: "equipmentDocumentPages", ops_technician_profiles: "technicianProfiles", ops_organizations: "organizations", ops_internal_schedules: "internalSchedules", ops_requests: "requests", ops_request_impact_assessments: "requestImpactAssessments", ops_work_orders: "workOrders",
+    ops_technician_statuses: "technicianStatuses", ops_route_legs: "routeLegs", ops_equipment_documents: "equipmentDocuments", ops_ai_conversations: "aiConversations", ops_overview_seen_marks: "overviewSeenMarks", ops_report_schedules: "reportSchedules", ops_report_runs: "reportRuns", ops_equipment_notes: "equipmentNotes", ops_asset_refrigerants: "assetRefrigerants", ops_refrigerant_events: "refrigerantEvents", ops_ust_operators: "ustOperators", ops_equipment_document_pages: "equipmentDocumentPages", ops_technician_profiles: "technicianProfiles", ops_organizations: "organizations", ops_internal_schedules: "internalSchedules", ops_requests: "requests", ops_request_impact_assessments: "requestImpactAssessments", ops_work_orders: "workOrders",
     ops_approval_policies: "approvalPolicies", ops_approval_requests: "approvalRequests", ops_approval_decisions: "approvalDecisions",
     ops_work_order_visit_holds: "workOrderVisitHolds", ops_work_order_assignments: "assignments", ops_work_order_issuances: "issuances",
     ops_vendor_responses: "vendorResponses", ops_work_order_estimate_requests: "estimateRequests",
@@ -602,6 +603,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async queryInspections(scope:OrganizationScope,q:InspectionQuery) {
     const stores=this.fixture.stores.filter(s=>s.organizationId===scope.organizationId&&(scope.storeIds===undefined||scope.storeIds.includes(s.id))&&(scope.regionIds===undefined||scope.regionIds.includes(s.regionId??"")));
     const base=(this.fixture.inspections??[]).map(r=>({...r,scheduledAt:(()=>{const a=this.fixture.serviceAppointments?.filter(a=>a.organizationId===r.organizationId&&a.workOrderId===r.workOrderId).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)||b.id.localeCompare(a.id))[0];return a?.status==="confirmed"?a.startsAt:undefined;})(),evidenceRequired:this.fixture.complianceSchedules?.find(s=>s.organizationId===r.organizationId&&s.id===r.scheduleId)?.evidenceRequired,evidenceCount:this.fixture.entityFiles.filter(f=>f.organizationId===r.organizationId&&f.entityType==="work_order"&&f.entityId===r.workOrderId).length})).filter(r=>r.organizationId===scope.organizationId&&stores.some(s=>s.id===r.storeId)&&(!q.storeId||r.storeId===q.storeId)&&(!q.scheduleId||r.scheduleId===q.scheduleId));
+    if(q.program){const keep=new Set((this.fixture.complianceSchedules??[]).filter(c=>c.organizationId===scope.organizationId&&c.program===q.program).map(c=>c.id));base.splice(0,base.length,...base.filter(r=>keep.has(r.scheduleId)));}
     const summary=Object.fromEntries(inspectionViews.map(v=>[v,base.filter(r=>matchesInspection(r,v,q.today)).length])) as Record<InspectionView,number>;
     const rows=base.filter(r=>matchesInspection(r,q.view??"all",q.today)).sort((a,b)=>a.dueDate.localeCompare(b.dueDate)||a.id.localeCompare(b.id));
     const items=rows.slice(q.offset??0,(q.offset??0)+Math.min(100,q.limit??25)).map(r=>{const store=stores.find(s=>s.id===r.storeId)!;const schedule=this.fixture.complianceSchedules!.find(s=>s.id===r.scheduleId&&s.organizationId===scope.organizationId)!;return {...r,name:schedule.name,storeNumber:store.storeNumber,storeName:store.name,handler:schedule.handler,assignedName:schedule.vendorId?this.fixture.vendors.find(v=>v.organizationId===r.organizationId&&v.id===schedule.vendorId)?.name??"Outside vendor":this.fixture.users.find(u=>u.id===this.fixture.memberships.find(m=>m.organizationId===r.organizationId&&m.id===schedule.membershipId)?.userId)?.displayName??"Internal team",evidenceLabel:schedule.evidenceLabel,lastCompleted:(this.fixture.inspections??[]).filter(h=>h.organizationId===r.organizationId&&h.scheduleId===r.scheduleId&&h.status==="passed"&&h.id!==r.id).map(h=>h.completedAt??"").sort().at(-1)};});
@@ -743,6 +745,11 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
       .filter(a => a.organizationId === scope.organizationId && a.status !== "retired" && stores.has(a.storeId) && (["refrigeration", "hvac"].includes(a.categoryKey) || current.has(a.id)))
       .map(a => { const store = stores.get(a.storeId)!; return { assetId: a.id, assetName: a.name, assetTag: a.assetTag, categoryKey: a.categoryKey, storeId: store.id, storeNumber: store.storeNumber, storeName: store.name, refrigerant: current.get(a.id) }; })
       .sort((a, b) => a.storeNumber.localeCompare(b.storeNumber, "en-US", { numeric: true }) || a.assetName.localeCompare(b.assetName) || a.assetId.localeCompare(b.assetId)));
+  }
+  async listUstOperators(scope: OrganizationScope) {
+    const stores = new Map(this.fixture.stores.filter(s => s.organizationId === scope.organizationId && storeAllowed(this.fixture, scope, s.id)).map(s => [s.id, s]));
+    return clone((this.fixture.ustOperators ?? []).filter(o => o.organizationId === scope.organizationId && !o.removedAt && stores.has(o.storeId))
+      .sort((a, b) => stores.get(a.storeId)!.storeNumber.localeCompare(stores.get(b.storeId)!.storeNumber, "en-US", { numeric: true }) || a.operatorClass.localeCompare(b.operatorClass) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id)));
   }
   async listRefrigerantEvents(org: string, assetIds: readonly string[]) {
     const wanted = new Set(assetIds);

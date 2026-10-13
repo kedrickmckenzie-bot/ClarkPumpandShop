@@ -5,6 +5,8 @@ export interface ComplianceSchedule {
   firstDueDate:string; intervalUnit:"once"|"days"|"months"; intervalCount:number; leadDays:number;
   handler:"internal"|"vendor"; membershipId?:string; vendorId?:string;
   evidenceRequired:number; status:"active"|"paused"; createdAt:string;
+  /** Set by a ready-made schedule, such as "ust" for fuel tanks, so related checks can be listed together. */
+  program?:string;
 }
 export interface Inspection {
   masterDocumentsJson?:string;
@@ -13,7 +15,7 @@ export interface Inspection {
   completedAt?:string; resultNote?:string; version:number; createdAt:string;
 }
 export type InspectionView = "all"|"upcoming"|"overdue"|"pending"|"passed"|"action_needed"|"performed"|"missing_docs"|"expiring"|"due30"|"due60"|"due90"|"scheduled";
-export interface InspectionQuery extends PageRequest { today:string; view?:InspectionView; storeId?:string; scheduleId?:string; }
+export interface InspectionQuery extends PageRequest { today:string; view?:InspectionView; storeId?:string; scheduleId?:string; program?:string; }
 export interface InspectionRow extends Inspection { name:string; storeNumber:string; storeName:string; handler:string; evidenceCount:number; evidenceLabel:string; lastCompleted?:string; scheduledAt?:string; assignedName:string; }
 export interface InspectionPage { items:InspectionRow[]; totalCount:number; summary:Record<InspectionView,number>; }
 export const inspectionViews:InspectionView[]=["all","upcoming","overdue","pending","passed","action_needed","performed","missing_docs","expiring","due30","due60","due90","scheduled"];

@@ -3,6 +3,7 @@ import { InspectionAssigneePicker } from "./inspection-assignee-picker";
 import { useState } from "react";
 import styles from "./compliance.module.css";
 import pmStyles from "@/components/ops/pm-schedule.module.css";
+import type { ComplianceTemplate } from "@/lib/ops/compliance-templates";
 
 type StoreOption = { id: string; storeNumber: string; name: string; formattedAddress?: string; regionName?: string };
 type Who = "team" | "vendor" | "person";
@@ -12,19 +13,20 @@ function VendorPicker({ storeId }: { storeId: string }) {
   return <div><InspectionAssigneePicker storeId={storeId} only="vendor" label="Vendor" name="assignmentVendorId" /><small>The vendor must cover every selected store.</small></div>;
 }
 
-export function ComplianceCreateForm({ stores, defaultStoreId, teamOwners = {} }: { defaultStoreId?: string; stores: StoreOption[]; teamOwners?: Record<string, string | null> }) {
+export function ComplianceCreateForm({ stores, defaultStoreId, teamOwners = {}, template, defaultFirstDue }: { defaultStoreId?: string; stores: StoreOption[]; teamOwners?: Record<string, string | null>; template?: ComplianceTemplate; defaultFirstDue?: string }) {
   const [submissionId] = useState(() => crypto.randomUUID());
   const [selected, setSelected] = useState<string[]>(defaultStoreId ? [defaultStoreId] : []);
-  const [search, setSearch] = useState(""), [region, setRegion] = useState(""), [unit, setUnit] = useState("months");
-  const [who, setWho] = useState<Who>("team");
+  const [search, setSearch] = useState(""), [region, setRegion] = useState(""), [unit, setUnit] = useState<string>(template?.intervalUnit ?? "months");
+  const [who, setWho] = useState<Who>(template?.who ?? "team");
   const visible = stores.filter((s) => (!region || s.regionName === region) && `Store ${s.storeNumber} ${s.name} ${s.formattedAddress ?? ""}`.toLowerCase().includes(search.trim().toLowerCase()));
   const single = selected.length === 1;
   const effectiveWho: Who = who === "person" && !single ? "team" : who;
   return <form action="/api/ops/compliance" method="post" encType="multipart/form-data" className={styles.form}>
     <input type="hidden" name="action" value="create" />
     <input type="hidden" name="submissionId" value={submissionId} />
-    <label>Inspection or renewal name<input name="name" required maxLength={160} placeholder="e.g. Fire extinguisher inspection" /></label>
-    <label>Type<select name="kind"><option value="inspection">Inspection</option><option value="permit">Permit / renewal</option></select></label>
+    {template ? <input type="hidden" name="program" value={template.group} /> : null}
+    <label>Inspection or renewal name<input name="name" required maxLength={160} placeholder="e.g. Fire extinguisher inspection" defaultValue={template?.name} /></label>
+    <label>Type<select name="kind" defaultValue={template?.kind ?? "inspection"}><option value="inspection">Inspection</option><option value="permit">Permit / renewal</option></select></label>
 
     <fieldset className={styles.form}>
       <legend>Stores</legend>
@@ -52,15 +54,15 @@ export function ComplianceCreateForm({ stores, defaultStoreId, teamOwners = {} }
       {effectiveWho === "person" && single ? <InspectionAssigneePicker key={selected[0]} storeId={selected[0]} /> : null}
     </fieldset>
 
-    <div className={styles.pair}><label>First due date<input type="date" name="firstDueDate" required /></label><label>Repeat<select name="intervalUnit" value={unit} onChange={(event) => setUnit(event.target.value)}><option value="once">One time</option><option value="days">Every number of days</option><option value="months">Every number of months</option></select></label></div>
-    {unit !== "once" ? <label>Every<input type="number" name="intervalCount" min="1" max="365" defaultValue="12" required /><small>{unit} · Monthly = 1 month; annual = 12 months</small></label> : <input type="hidden" name="intervalCount" value="1" />}
-    <label>Prepare and remind this many days before due<input type="number" name="leadDays" min="0" max="90" defaultValue="30" required /><small>The assignee receives a work order with a secure inspection link. Open items get weekly reminders.</small></label>
+    <div className={styles.pair}><label>First due date<input type="date" name="firstDueDate" required defaultValue={defaultFirstDue} /></label><label>Repeat<select name="intervalUnit" value={unit} onChange={(event) => setUnit(event.target.value)}><option value="once">One time</option><option value="days">Every number of days</option><option value="months">Every number of months</option></select></label></div>
+    {unit !== "once" ? <label>Every<input type="number" name="intervalCount" min="1" max="365" defaultValue={String(template?.intervalCount ?? 12)} required /><small>{unit} · Monthly = 1 month; annual = 12 months</small></label> : <input type="hidden" name="intervalCount" value="1" />}
+    <label>Prepare and remind this many days before due<input type="number" name="leadDays" min="0" max="90" defaultValue={String(template?.leadDays ?? 30)} required /><small>The assignee receives a work order with a secure inspection link. Open items get weekly reminders.</small></label>
     <label>Instructions & blank forms (optional)<input type="file" name="templates" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.txt" /><small>Included with each inspection work order. Up to 5 files · 8 MB total.</small></label>
-    <label>Required evidence<input name="evidenceLabel" required maxLength={300} defaultValue="Inspection report or photos" /></label>
-    <label>Paperwork required to close?<select name="evidenceRequired" defaultValue="1"><option value="1">Yes</option><option value="0">No — result and notes are enough</option></select></label>
+    <label>Required evidence<input name="evidenceLabel" required maxLength={300} defaultValue={template?.evidenceLabel ?? "Inspection report or photos"} /></label>
+    <label>Paperwork required to close?<select name="evidenceRequired" defaultValue={String(template?.evidenceRequired ?? 1)}><option value="1">Yes</option><option value="0">No — result and notes are enough</option></select></label>
     <details><summary>Instructions, requirement and escalation</summary><div className={styles.form}>
-      <label>Instructions<textarea name="instructions" rows={3} maxLength={4000} /></label>
-      <label>Requirement / reference<input name="requirementSource" maxLength={500} placeholder="Agency, permit, company policy or reference URL" /></label>
+      <label>Instructions<textarea name="instructions" rows={3} maxLength={4000} defaultValue={template?.instructions} /></label>
+      <label>Requirement / reference<input name="requirementSource" maxLength={500} placeholder="Agency, permit, company policy or reference URL" defaultValue={template?.requirementSource} /></label>
       {single ? <label>Equipment tag (optional)<input name="assetTag" maxLength={100} /><small>Leave blank for a store-wide inspection.</small></label> : null}
       <div className={styles.pair}><label>Escalate days before due<input name="escalationDays" type="number" min="0" max="90" defaultValue="0" /></label><label>Escalation owner<input name="escalationTo" defaultValue="Facilities coordinator" required maxLength={160} /></label></div><small>Escalations notify the facilities team and identify this owner.</small>
     </div></details>

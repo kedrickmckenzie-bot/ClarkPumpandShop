@@ -413,7 +413,7 @@ class SqlOpsRepository implements OpsRepository {
   async latestInspection(org:string,scheduleId:string) { const r=await this.first("SELECT * FROM ops_inspections WHERE organization_id = ? AND schedule_id = ? ORDER BY due_date DESC LIMIT 1",[org,scheduleId]);return r?complianceRow<Inspection>(r):null; }
   async queryInspections(scope:OrganizationScope,q:InspectionQuery) {
     const params:unknown[]=[];let where=scopeWhere(scope,"s",params);
-    if(q.storeId){where+=" AND i.store_id = ?";params.push(q.storeId);}if(q.scheduleId){where+=" AND i.schedule_id = ?";params.push(q.scheduleId);}
+    if(q.storeId){where+=" AND i.store_id = ?";params.push(q.storeId);}if(q.scheduleId){where+=" AND i.schedule_id = ?";params.push(q.scheduleId);}if(q.program){where+=" AND c.program = ?";params.push(q.program);}
     const appointment="(SELECT a.status FROM ops_service_appointments a WHERE a.organization_id=i.organization_id AND a.work_order_id=i.work_order_id ORDER BY a.created_at DESC,a.id DESC LIMIT 1)";
     const scheduled=`CASE WHEN ${appointment} = 'confirmed' THEN (SELECT a.starts_at FROM ops_service_appointments a WHERE a.organization_id=i.organization_id AND a.work_order_id=i.work_order_id ORDER BY a.created_at DESC,a.id DESC LIMIT 1) ELSE NULL END`;
     const assigned="COALESCE((SELECT v.name FROM ops_vendors v WHERE v.organization_id=c.organization_id AND v.id=c.vendor_id),(SELECT u.display_name FROM ops_memberships m JOIN ops_users u ON u.id=m.user_id WHERE m.organization_id=c.organization_id AND m.id=c.membership_id),'Unassigned')";
@@ -608,6 +608,14 @@ class SqlOpsRepository implements OpsRepository {
     rows.sort((a, b) => text(a, "store_number").localeCompare(text(b, "store_number"), "en-US", { numeric: true }) || text(a, "asset_name").localeCompare(text(b, "asset_name")) || text(a, "asset_id").localeCompare(text(b, "asset_id")));
     return rows.map(row => ({ assetId: text(row, "asset_id"), assetName: text(row, "asset_name"), assetTag: text(row, "asset_tag"), categoryKey: text(row, "category_key"), storeId: text(row, "store_id"), storeNumber: text(row, "store_number"), storeName: text(row, "store_name"),
       refrigerant: row.refrigerant == null ? undefined : assetRefrigerantFrom(row) }));
+  }
+  async listUstOperators(scope: OrganizationScope) {
+    const params: unknown[] = [];
+    const scoped = scopeWhere(scope, "s", params);
+    const rows = await this.all(`SELECT o.*, s.store_number FROM ops_ust_operators o JOIN ops_stores s ON s.organization_id = o.organization_id AND s.id = o.store_id WHERE ${scoped} AND o.removed_at IS NULL ORDER BY s.store_number, o.operator_class, o.name, o.id`, params);
+    rows.sort((a, b) => text(a, "store_number").localeCompare(text(b, "store_number"), "en-US", { numeric: true }) || text(a, "operator_class").localeCompare(text(b, "operator_class")) || text(a, "name").localeCompare(text(b, "name")) || text(a, "id").localeCompare(text(b, "id")));
+    return rows.map(row => ({ id: text(row, "id"), organizationId: text(row, "organization_id"), storeId: text(row, "store_id"), operatorClass: text(row, "operator_class") as import("./ust").UstOperatorClass, name: text(row, "name"),
+      certificateNumber: maybeText(row, "certificate_number"), trainedOn: maybeText(row, "trained_on"), expiresOn: maybeText(row, "expires_on"), recordedByName: text(row, "recorded_by_name"), createdAt: text(row, "created_at"), removedAt: maybeText(row, "removed_at"), removedByName: maybeText(row, "removed_by_name") }));
   }
   async listRefrigerantEvents(org: string, assetIds: readonly string[]) {
     const events: import("./refrigerant").RefrigerantEvent[] = [];

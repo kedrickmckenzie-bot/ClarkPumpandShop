@@ -42,3 +42,6 @@
 .page .table td a:not(.rowAction):hover{text-decoration:underline;text-underline-offset:3px}
 
 .teamOwners{padding:12px 14px;background:#f8fafc;border-left:3px solid #2457d6}.teamOwners ul{margin:6px 0 0;padding-left:18px;display:grid;gap:4px;max-height:220px;overflow:auto}
+
+/* A quiet text button inside a table cell (the page button style is a filled blue button). */
+.page .textButton{display:inline;padding:2px 0;border:0;background:none!important;color:#1d4ed8!important;font-size:13px;font-weight:600;text-decoration:underline;text-underline-offset:2px;cursor:pointer}

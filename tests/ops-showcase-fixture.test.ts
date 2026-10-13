@@ -17,7 +17,9 @@ describe("refreshed showcase",()=>{
       const verificationWork=f.workOrders.find(w=>w.number==="CPS-2026-0201");
       if(verificationWork) expect(f.workflowTasks.filter(t=>t.workOrderId===verificationWork.id&&t.taskType==="verify_repair").every(t=>t.assigneeName==="Store team")).toBe(true);
       expect(f.storeTasks).toHaveLength(5);expect(f.capitalPlans).toHaveLength(5);
-      expect(f.inspections).toHaveLength(21);
+      expect(f.inspections!.filter(i=>!i.id.startsWith("ust-demo-"))).toHaveLength(21);
+      // The fuel tank story: two months of leak detection at 15 stores plus five yearly equipment tests.
+      expect(f.inspections!.filter(i=>i.id.startsWith("ust-demo-"))).toHaveLength(35);
       expect(f.capitalPlans!.filter(p=>p.targetMonth).every(p=>p.targetMonth!>anchor.slice(0,7))).toBe(true);
       expect(f.inspections!.some(i=>matchesInspection(i,"overdue",anchor))).toBe(true);
       expect(f.inspections!.some(i=>i.status==="passed"&&f.entityFiles.some(e=>e.entityId===i.workOrderId))).toBe(true);
