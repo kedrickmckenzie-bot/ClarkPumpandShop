@@ -16,7 +16,7 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 **Still open.** SD-02 part 2: vendor phone and email with tap-to-call on the work order; ask for an ETA when a vendor accepts; refresh the vendor "Your next step" after Accept (SB-03).
 
-**Proposed next (waiting on the user).** AIM refrigerant compliance driven by refrigerant type and full charge on equipment. Then UST fuel-tank compliance. Then a c-store compliance starter pack using the existing schedules (extinguishers, hood suppression, backflow, grease trap, emergency lighting, fire alarm/sprinkler, pump accuracy).
+**Approved next (user, Oct 13).** Refrigerant type + full charge (lb) on equipment, not a checkbox; fill them from a nameplate photo read by AI and confirmed by a person. Remote systems (walk-ins, racks) need the installer or vendor to supply the full charge. Order: AIM refrigerant compliance driven by refrigerant type and full charge on equipment. Then UST fuel-tank compliance. Then a c-store compliance starter pack using the existing schedules (extinguishers, hood suppression, backflow, grease trap, emergency lighting, fire alarm/sprinkler, pump accuracy). Not built yet.
 
 ### Slam-dunk audit (features and usability) — October 13, 2026
 
