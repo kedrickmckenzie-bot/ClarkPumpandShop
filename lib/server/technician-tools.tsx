@@ -8,6 +8,7 @@ import { plainNextAction } from "@/lib/ops/dispatch-calendar";
 import { FileLinks } from "@/components/workspace/file-links";
 import { RecordFiles } from "@/components/workspace/record-files";
 import { EquipmentDocuments } from "@/components/workspace/equipment-documents";
+import { StoreContact } from "@/components/workspace/store-contact";
 import styles from "@/components/workspace/internal-dispatch.module.css";
 const openStatuses=["approved","issued","accepted","scheduled","in_progress","waiting_on_vendor","waiting_on_parts"];
 async function context() {const value=await getOpsRequestContext(["technician"]);return {...value,scope:await internalDispatchScope(value.repository,value.session)};}
@@ -18,13 +19,9 @@ export async function TechnicianStore({id,cursor}:{id:string;cursor?:string}) {
   if(!await repository.getStoreDetail(scope,id))return unavailable("Store","/app/stores");
   const store=(await repository.getStore(scope.organizationId,id))!;
   const scoped={...scope,storeIds:[id]};
-  const [equipment,jobs,managers]=await Promise.all([repository.searchAssets(scoped,"",{limit:25}),repository.listWorkOrders(scoped,{storeId:id,statuses:openStatuses,limit:25,cursor}),repository.listNotificationRecipients(scope.organizationId,"store_manager",{storeId:id})]);
-  const contacts=await Promise.all(managers.map(manager=>repository.getUserInOrganization(scope.organizationId,manager.userId)));
-  const address=[store.address1,store.address2,`${store.city}, ${store.state} ${store.postalCode}`].filter(Boolean).join(", ");
-  return <div className={styles.workspace}><header className={styles.jobHeader}><Link href="/app/stores">← Stores</Link><h1>Store {store.storeNumber}</h1><p>{store.name}</p><p>{address}</p>
-    <div className={styles.rowActions}><a className={`${styles.btn} ${styles.btnPrimary}`} href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`} target="_blank" rel="noreferrer">Directions</a>{store.phone?<a className={`${styles.btn} ${styles.btnSecondary}`} href={`tel:${store.phone}`}>Call store · {store.phone}</a>:null}</div>
-  </header><section className={styles.jobBody}><h2 className={styles.subHeading}>Store manager</h2>{contacts.length?contacts.filter(person=>person!==null).map(person=><p key={person.id}>{person.displayName}{person.phone?<> · <a href={`tel:${person.phone}`}>{person.phone}</a></>:null} · <a href={`mailto:${person.email}`}>Email</a></p>):<p>No manager contact recorded. Ask your maintenance manager.</p>}
-    {store.accessNotes?<><h2 className={styles.subHeading}>How to get in</h2><p style={{whiteSpace:"pre-wrap"}}>{store.accessNotes}</p></>:null}</section>
+  const [equipment,jobs]=await Promise.all([repository.searchAssets(scoped,"",{limit:25}),repository.listWorkOrders(scoped,{storeId:id,statuses:openStatuses,limit:25,cursor})]);
+  return <div className={styles.workspace}><header className={styles.jobHeader}><Link href="/app/stores">← Stores</Link><h1>Store {store.storeNumber}</h1><p>{store.name}</p></header>
+    <StoreContact repository={repository} store={store}/>
     <section className={styles.jobBody}><h2 className={styles.subHeading}>Open jobs</h2>{jobs.items.length?<ul className={styles.historyList}>{jobs.items.map(job=><li key={job.id}><Link href={`/app/work-orders/${encodeURIComponent(job.id)}`}>{job.problem}</Link><p>{job.internalAssigneeName??job.vendorName??"Manager arranging work"} · {dispatchStatus(job).label}</p></li>)}</ul>:<p>No open jobs at this store.</p>}{jobs.nextCursor?<p>Showing {jobs.items.length} of {jobs.totalCount} · <Link href={`?jobsCursor=${encodeURIComponent(jobs.nextCursor)}`}>Show more jobs</Link></p>:null}</section>
     <section className={styles.jobBody}><h2 className={styles.subHeading}>Equipment</h2>{equipment.items.length?<ul>{equipment.items.map(asset=><li key={asset.id}><Link href={`/app/equipment/${encodeURIComponent(asset.id)}`}>{asset.name} · {asset.assetTag}</Link></li>)}</ul>:<p>No equipment recorded at this store yet.</p>}{equipment.nextCursor?<Link href={`/app/equipment?store=${encodeURIComponent(id)}`}>See more equipment</Link>:null}</section>
     <TechnicianHistory repository={repository} scope={scoped} storeId={id} limit={5} zone={store.timeZone}/><Link href={`/app/work-history?store=${encodeURIComponent(id)}`}>All work history at this store</Link>

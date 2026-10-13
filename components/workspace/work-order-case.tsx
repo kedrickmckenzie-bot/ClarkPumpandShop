@@ -56,7 +56,9 @@ import styles from "./work-order-case.module.css";
 import { WorkOrderVisitHistory } from "./work-order-visit-history";
 import { domainLabel } from "@/lib/product/domain-label";
 import { workspaceStartHref } from "@/lib/ops/navigation-trail";
-import { DEFAULT_OPERATIONS_TIME_ZONE, formatOperationsDateTime } from "@/lib/ops/local-time";
+import { DEFAULT_OPERATIONS_TIME_ZONE } from "@/lib/ops/local-time";
+import { plainDue } from "@/lib/ops/plain-time";
+import { problemTitle } from "@/lib/product/problem-title";
 import type { WorkOrderCaseView } from "@/lib/ops/work-order-case";
 import { HeldWorkActions, type HeldWorkActionsModel } from "@/components/workspace/held-work-actions";
 import { VendorResponseActions, type VendorResponseActionsModel } from "@/components/workspace/vendor-response-actions";
@@ -73,6 +75,7 @@ interface WorkOrderCaseProps {
   emailHistory?: ReactNode;
   costPrompts?: ReactNode;
   warrantyContext?: ReactNode;
+  storeContact?: ReactNode;
   prices?: ReactNode;
   canAttachInvoice?: boolean;
   canAssignTask?: boolean;
@@ -129,10 +132,13 @@ function sentence(value: string | undefined) {
   return domainLabel(value);
 }
 
+/** "Due tomorrow 2 PM" or "3 days late", in the store's time zone. */
 function dueLabel(value: string | undefined, timeZone = DEFAULT_OPERATIONS_TIME_ZONE) {
   if (!value || !Number.isFinite(Date.parse(value))) return "Not set";
-  return formatOperationsDateTime(value, timeZone);
+  const text = plainDue(value, new Date().toISOString(), timeZone).text.replace(/^Due /u, "");
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
+
 
 function DataStatePanel({ state }: { state: DataState }) {
   if (state.kind === "ready") return null;
@@ -567,6 +573,7 @@ export function WorkOrderCase({
   emailHistory,
   costPrompts,
   warrantyContext,
+  storeContact,
   prices,
   canAttachInvoice = false,
   canAssignTask = false,
@@ -597,6 +604,8 @@ export function WorkOrderCase({
   const recordedCost = factByLabel(model, "Recorded work cost");
   const recordOrigin = factByLabel(model, "Record origin");
   const originalRequest = sectionById(model, "original-request");
+  // People remember the problem, not the number: the problem is the title and the number sits above it.
+  const problem = problemTitle(originalRequest?.description ?? model.page.description);
   const relatedReports = sectionById(model, "related-reports");
   const authorization = sectionById(model, "authorization");
   const visits = sectionById(model, "visits");
@@ -645,8 +654,8 @@ export function WorkOrderCase({
         <div className={styles.caseIdentityRow}>
           <Link className={styles.backLink} href={model.backLink.href} aria-label={model.backLink.label}><ArrowLeft aria-hidden="true" size={18} /></Link>
           <div className={styles.caseIdentity}>
-            <span>{model.page.eyebrow ?? "Operator work order"}</span>
-            <h1>{model.page.title}</h1>
+            <span>Work order {model.page.title}</span>
+            <h1>{problem.title || model.page.title}</h1>
             {store ? <FactValue fact={store} /> : <small>{model.page.scopeLabel}</small>}
           </div>
           <span className={`${styles.statusPill} ${toneStyles[canonicalTone]}`}><CircleDot aria-hidden="true" size={14} />{canonicalStatus}</span>
@@ -658,12 +667,12 @@ export function WorkOrderCase({
         {canonicalCase.stage !== "closed" ? <section className={styles.accountableHeader} aria-label="Next step">
           <div><span>Next action</span><strong>{canonicalCase.primaryNextAction.label}</strong></div>
           <div><span>Who acts next</span><strong>{canonicalCase.nextActionOwner}</strong></div>
-          <div><span>Next step due</span><strong>{dueLabel(canonicalCase.dueAt, canonicalCase.timeZone)}</strong></div>
+          <div><span>Due</span><strong>{dueLabel(canonicalCase.dueAt, canonicalCase.timeZone)}</strong></div>
           {headerFacts.map((fact) => <div key={fact.label}><span>{fact.label}</span><strong>{fact.href ? <Link href={fact.href}>{fact.value}</Link> : fact.value}</strong></div>)}
           <div><span>Escalates to</span><strong>{canonicalCase.escalationDestination}</strong></div>
           {/* The facts needed to act, on every tab: what is wrong, who has it, and what last happened. */}
           {activeView !== "overview" ? <dl className={styles.headerContext}>
-            <div><dt>Problem</dt><dd>{originalRequest?.description ?? model.page.description}</dd></div>
+            {problem.cut ? <div><dt>Problem</dt><dd>{originalRequest?.description ?? model.page.description}</dd></div> : null}
             <div><dt>Handled by</dt><dd>{assigned ? `${assigned.value}${assigned.helperText ? ` · ${assigned.helperText}` : ""}` : "Not assigned yet"}</dd></div>
             {latestUpdate ? <div><dt>Latest update</dt><dd>{latestUpdate.title}{latestUpdate.timestampLabel ? ` · ${latestUpdate.timestampLabel}` : ""}</dd></div> : null}
           </dl> : null}
@@ -691,7 +700,7 @@ export function WorkOrderCase({
               <span>{originalRequest?.title ?? "Service need"}</span>
               {originalRequest?.action ? <Link href={originalRequest.action.href}>{originalRequest.action.label}<ArrowRight aria-hidden="true" size={15} /></Link> : null}
             </div>
-            <h2>{originalRequest?.description ?? model.page.description}</h2>
+            {problem.cut ? <h2>{originalRequest?.description ?? model.page.description}</h2> : null}
             <p>
               {originalRequest
                 ? `${sectionFact(originalRequest, "Request")?.value ?? "Work order"} · ${sectionFact(originalRequest, "Request") ? "Submitted" : "Created"} by ${sectionFact(originalRequest, "Reported by")?.value ?? "Not recorded"} · ${sectionFact(originalRequest, "Reported")?.value ?? "Time not recorded"}`
@@ -703,13 +712,11 @@ export function WorkOrderCase({
             <div><dt>Priority</dt><dd>{sentence(control.priority)}</dd></div>
             <div><dt>Handled by</dt><dd><FactValue fact={assigned} /></dd></div>
             {latestUpdate ? <div><dt>Latest update</dt><dd>{latestUpdate.title}{latestUpdate.timestampLabel ? ` · ${latestUpdate.timestampLabel}` : ""}</dd></div> : null}
-
-
-
           </dl>
+          {storeContact ? <div className={styles.caseContact}>{storeContact}</div> : null}
         </section>
       ) : (
-        <p className={styles.serviceNeed}>{model.page.description}</p>
+        problem.cut ? <p className={styles.serviceNeed}>{model.page.description}</p> : null
       )}
 
       <MutationReceipt code={updated} />

@@ -3,6 +3,7 @@ import { JobPreparationFields } from "@/components/workspace/job-preparation-fie
 import { getAiClient } from "@/lib/server/ai-provider";
 import { EquipmentDocuments } from "@/components/workspace/equipment-documents";
 import { TechnicianHistory } from "@/components/workspace/technician-history";
+import { StoreContact } from "@/components/workspace/store-contact";
 import { dispatchPlanLabel, dispatchTime, dueLabel } from "@/lib/ops/dispatch-board";
 import Link from "next/link";
 import { civilDate, plainNextAction } from "@/lib/ops/dispatch-calendar";
@@ -12,6 +13,8 @@ import { roleCan } from "@/components/ops/role-policy";
 import { InternalResultFields, InternalVendorHandoffFields } from "@/components/workspace/internal-result-fields";
 import { DispatchVersionFields } from "@/components/workspace/internal-dispatch-fields";
 import { getOpsRequestContext } from "@/lib/server/ops-request-context";
+import { loadOperatorSession } from "@/app/app/_data/operator-loader";
+import { redirect } from "next/navigation";
 import { internalDispatchScope } from "@/lib/server/internal-dispatch-context";
 import { dispatchIdentity, internalTarget } from "@/lib/ops/internal-dispatch";
 import { internalWorkResultLabel } from "@/lib/ops/work-order-outcome";
@@ -29,6 +32,9 @@ const fileLimit = { files: 5, bytes: 8 * 1024 * 1024 };
 export default async function InternalJob({ params, searchParams }: { params: Promise<{ id: string }>; searchParams?:Promise<{saved?:string}> }) {
   const { id } = await params;
   const saved=(await searchParams)?.saved;
+  // Owners, store managers and finance see the same job on its regular work-order page.
+  const viewer = await loadOperatorSession();
+  if (!["technician", "facilities", "regional"].includes(viewer.role)) redirect(`/app/work-orders/${encodeURIComponent(id)}`);
   const context = await getOpsRequestContext(["technician", "facilities", "regional"]);
   const { repository: r, session: s } = context;
   const org = s.organizationId;
@@ -82,6 +88,7 @@ export default async function InternalJob({ params, searchParams }: { params: Pr
     : plainNextAction(work.nextAction);
   const urgent = ["urgent", "emergency"].includes(work.priority);
   const organization=await r.getOrganization(org), zone=store?.timeZone??organization!.timeZone;
+  const contact=store?await StoreContact({repository:r,store}):null;
   const recent=await TechnicianHistory({repository:r,scope:await internalDispatchScope(r,s),storeId:work.storeId,assetId:work.asset?.id,excludeId:id,limit:5,title:work.asset?"Recent work on this equipment":"Recent work at this store",zone});
   const backHref = manager ? "/app/dispatch" : "/app/my-work";
   const aiHelp = Boolean(getAiClient());
@@ -93,9 +100,10 @@ export default async function InternalJob({ params, searchParams }: { params: Pr
         {work.problem}
         {urgent ? <span className={`${styles.badge} ${styles.badgeUrgent}`}>{work.priority === "emergency" ? "Emergency" : "Urgent"}</span> : null}
       </h1>
-      <p>Store {work.storeNumber} · {work.storeName}{store?.address1 ? ` · ${store.address1}` : ""}{store?.city ? `, ${store.city}` : ""}</p>
+      <p>Store {work.storeNumber} · {work.storeName}</p>
       <p className={styles.muted}>Work order {work.number}</p>
     </header>
+    {contact}
 
     {saved?<p className={styles.notice} role="status">Saved. Job updated.</p>:null}
     <section className={styles.jobBody}>

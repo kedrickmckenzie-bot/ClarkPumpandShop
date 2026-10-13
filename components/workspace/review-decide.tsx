@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ReviewRouteButton } from "./review-routing";
 import { plainNextAction } from "@/lib/ops/dispatch-calendar";
-import { formatOperationsDate, formatOperationsDateTime } from "@/lib/ops/local-time";
+import { plainDay, plainDue } from "@/lib/ops/plain-time";
 import type { DecideRow, DecideSection, DecideStage } from "@/lib/server/review-decide";
 import styles from "./review-decide.module.css";
 
@@ -18,7 +18,7 @@ function Row({ row, stage, asOf, canRoute }: { row: DecideRow; stage: DecideStag
   const recordId = row.workOrderId ?? row.serviceRequestId;
   const decision = stage === "new" ? decisionButton[row.taskType ?? ""] : undefined;
   const kind = row.workOrderId ? "work" : "request";
-  const late = row.dueAt && row.dueAt < asOf;
+  const due = row.dueAt ? plainDue(row.dueAt, asOf) : undefined;
   const urgent = row.priority === "critical" || row.priority === "high";
   return <li className={styles.row}>
     <div className={styles.main}>
@@ -30,8 +30,8 @@ function Row({ row, stage, asOf, canRoute }: { row: DecideRow; stage: DecideStag
       <p className={styles.meta}>
         {row.storeLabel ?? "Companywide"}
         {row.workNumber ?? row.requestReference ? ` · ${row.workNumber ?? row.requestReference}` : ""}
-        {row.reportedAt ? ` · reported ${formatOperationsDate(row.reportedAt)}` : ""}
-        {row.dueAt ? <> · <span className={late ? styles.late : undefined}>{late ? "Late, was due" : "Due"} {formatOperationsDateTime(row.dueAt)}</span></> : null}
+        {row.reportedAt ? ` · reported ${plainDay(row.reportedAt, asOf)}` : ""}
+        {due ? <> · <span className={due.late ? styles.late : undefined}>{due.text}</span></> : null}
       </p>
     </div>
     <div className={styles.actions}>

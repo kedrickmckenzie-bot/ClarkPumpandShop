@@ -163,6 +163,7 @@ describe.sequential("PostgreSQL migration and deterministic seed on a real engin
     );
     expect(scopedStoreManagers).toHaveLength(1);
     expect(scopedStoreManagers[0]?.email).toBe(`store${fixture.stores[0].storeNumber}.manager@clark-demo.example`);
+    expect(scopedStoreManagers[0]?.phone).toBe(fixture.users.find((user) => user.email === scopedStoreManagers[0]?.email)?.phone);
     const scopedRegionalManagers = await repository.listNotificationRecipients(
       fixture.organizations[0].id,
       "regional_manager",

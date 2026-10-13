@@ -7,7 +7,7 @@ import type { AttentionPage } from "@/lib/ops/attention-query";
 import { formatOperationsDate } from "@/lib/ops/local-time";
 import { priceLabel } from "@/lib/ops/lifecycle-price-evidence";
 import { recordedMoneyLabel } from "@/lib/ops/work-review";
-import { presentDashboard, presentDashboardJourney } from "./dashboard-presenter";
+import { presentDashboard, presentDashboardJourney, type TodoCounts } from "./dashboard-presenter";
 import { presentAttentionRow } from "./attention-presenter";
 import { presentDashboardCharts, type DashboardChartPages } from "./dashboard-charts";
 import { presentInvoiceSpotlight } from "./dashboard-context-presenter";
@@ -15,6 +15,8 @@ import { presentInvoiceSpotlight } from "./dashboard-context-presenter";
 export interface DashboardQueryInputs {
   activity: DashboardActivitySummary; attention: AttentionPage; charts: DashboardChartPages;
   context: DashboardContext; lifecycle: DashboardLifecycleSummary;
+  /** Review's section counts, so the Overview's to-do number is the sidebar's. */
+  todo?: TodoCounts;
 }
 export function presentQueryDashboard(data: DashboardQueryInputs, session: OperatorSession, window: DashboardWindow): DashboardPageViewModel {
   const candidate = data.lifecycle.spotlight;
@@ -37,6 +39,7 @@ export function presentQueryDashboard(data: DashboardQueryInputs, session: Opera
     pageBase: { scopeLabel: session.scopeLabel, periodLabel: `Rolling 12 months from ${formatOperationsDate(window.costFrom)}`, updatedLabel: `Status as of ${formatOperationsDate(window.asOf)}` },
     journey: presentDashboardJourney(data.activity, data.attention.followUpCount),
     review: { items: data.attention.items.map(item => presentAttentionRow(item, window.asOf)), totalCount: data.attention.totalCount, mineCount: data.attention.mineCount },
+    todo: data.todo,
     repairComparisonCount: data.lifecycle.repairComparisonCount, replacementEstimateLabel,
     store: data.context.store, ...presentDashboardCharts(data.charts, data.activity, window, session.organizationName), spotlight,
     invoiceSpotlight: presentInvoiceSpotlight(data.context.invoice),

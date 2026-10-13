@@ -1,4 +1,5 @@
 import { providerKindLabel, providerName, providerTag } from "@/lib/product/provider-label";
+import { plainDue } from "@/lib/ops/plain-time";
 import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import { workStatusLabel } from "@/lib/product/work-status-label";
 import { workWarrantyMarkers } from "@/lib/ops/work-warranty-review";
@@ -223,17 +224,25 @@ function creationHref(path: string, query: OperatorSearchParameters) {
   return params.size ? `${path}?${params}` : path;
 }
 
-function workRow(row: WorkOrderListRow): TableRowViewModel {
+/** "Pine Valley" instead of "Clark Pump and Shop - Pine Valley": the company name repeats on every row otherwise. */
+function shortStoreName(name: string, organizationName?: string) {
+  if (!organizationName) return name;
+  for (const dash of [" - ", " – ", " — "]) if (name.startsWith(organizationName + dash)) return name.slice(organizationName.length + dash.length);
+  return name;
+}
+
+function workRow(row: WorkOrderListRow, organizationName?: string, now = new Date().toISOString()): TableRowViewModel {
+  const due = row.dueAt ? plainDue(row.dueAt, now) : undefined;
   return {
     id: row.id,
     label: row.number,
     href: `/app/work-orders/${row.id}`,
     cells: [
       { key: "work", value: row.number },
-      { key: "store", value: `Store ${row.storeNumber}`, secondary: row.storeName, link: { href: `/app/stores/${row.storeId}`, label: "Open store" } },
+      { key: "store", value: `Store ${row.storeNumber}`, secondary: shortStoreName(row.storeName, organizationName), link: { href: `/app/stores/${row.storeId}`, label: "Open store" } },
       { key: "assignment", link: row.vendorId ? { href: `/app/vendors/${row.vendorId}`, label: "Open vendor" } : undefined, value: providerName({ kind: row.assignmentKind, vendorName: row.vendorName, internalName: row.internalAssigneeName, internalTarget: row.internalTarget }), secondary: row.assignmentKind === "choose_later" ? undefined : providerKindLabel(row.assignmentKind), providerTag: providerTag(row.assignmentKind) },
       { key: "equipment", value: row.assetName ?? "Not linked", secondary: row.assetTag },
-      { key: "next", expandable: true, value: row.problem, secondary: `${row.accountableParty}${row.dueAt ? ` · Follow up ${formatOperationsDate(row.dueAt)}` : ""}` },
+      { key: "next", expandable: true, value: row.problem, secondary: `${row.accountableParty}${due ? ` · ${due.late ? due.text : `Follow up ${due.text.replace(/^Due /u, "")}`}` : ""}` },
       { key: "cost", value: row.recordedCostLineCount === 0 ? "Not recorded" : money(row.recordedCostMinor, row.currency), link: { href: `/app/work-orders/${row.id}?view=cost`, label: "Review recorded cost" } },
       { key: "status", value: workStatusLabel(row.status,row.assignmentKind), tone: toneForStatus(row.status) },
       { key: "updated", value: formatOperationsDateTime(row.updatedAt ?? row.createdAt), link: { href: `/app/work-orders/${row.id}?view=activity`, label: "Review history" } },
@@ -312,7 +321,7 @@ function visitRow(row: VisitListRow): TableRowViewModel {
     { key: "store", value: `Store ${row.storeNumber}`, secondary: row.storeName, link: { href: `/app/stores/${row.storeId}`, label: "Open store" } },
     { key: "vendor", value: row.providerName, secondary: providerKindLabel(row.providerKind), providerTag: providerTag(row.providerKind), link: row.vendorId ? { href: `/app/vendors/${row.vendorId}`, label: "Open vendor" } : undefined },
     { key: "work", value: row.workOrders?.length ? row.workOrders.map((work) => work.number).join(" · ") : row.workOrderNumber ?? "No work order linked", secondary: row.workOrders?.length === 1 ? row.workOrders[0].problem : row.workOrders?.length ? `${row.workOrders.length} linked jobs; each has its own outcome` : row.arrivalNote, link: row.workOrders?.length === 1 ? { href: `/app/work-orders/${row.workOrders[0].id}`, label: "Open work order" } : row.workOrders?.length ? { href: `/app/visits/${row.id}`, label: "Review all linked jobs" } : row.workOrderId ? { href: `/app/work-orders/${row.workOrderId}`, label: "Open work order" } : { href: `/app/visits/${row.id}`, label: "Review visit and work-order links" } },
-    { key: "observed", value: observed, secondary: "Store-local display · approximate presence, not labor" },
+    { key: "observed", value: observed },
     { key: "evidence", value: sentence(row.locationResult), tone: row.locationResult === "verified" ? "positive" : "warning" },
     { key: "outcome", value: row.workOrders?.length ? row.workOrders.map((work) => `${row.workOrders!.length > 1 ? `${work.number}: ` : ""}${work.outcome ? sentence(work.outcome) : "Outcome not recorded"}`).join(" · ") : row.outcome ? sentence(row.outcome) : row.status === "active" ? "No checkout recorded" : "Review work outcomes", tone: row.status === "active" ? "info" : "neutral", link: { href: `/app/visits/${row.id}`, label: "Review recorded work outcomes" } },
   ] };
@@ -397,7 +406,7 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
       upcomingAppointmentAfter: upcomingAppointments ? getServerOpsReportingAsOf() : undefined,
       change: sinceWindowFromQuery(first(query.change), first(query.changedFrom), first(query.changedTo)),
     }), costEvidence ? Promise.resolve({ approvedWorkOrders: 0, storesWithApprovedWork: 0, storesWithMultipleApprovedJobs: 0 }) : repository.getHeldWorkPortfolioSummary(scope)]);
-    result = work; rows = work.items.map(heldPlan ? heldWorkRow : (row) => ({ ...workRow(row), action: (row.status === "completed_pending_review" || row.needsConfirmation) && roleCan(session, "confirm_observable_result") ? { label: "Confirm work", href: `/app/work-orders/${row.id}?view=confirmation#work-verification` } : undefined })); title = heldPlan ? "Approved work waiting for a suitable visit" : upcomingAppointments ? "Work with a confirmed upcoming appointment" : "Work orders"; eyebrow = heldPlan ? "Held-work portfolio" : upcomingAppointments ? "Scheduled service" : "Maintenance work"; description = heldPlan ? "Review what is authorized, when each job must be reconsidered, and which stores can combine approved work without losing each job's outcome or cost trail." : upcomingAppointments ? "Every result has a vendor-confirmed appointment in the selected scope. Each work order appears once even if its schedule has revisions." : "See who is handling each job and what happens next."; placeholder = "Search number, problem, store, vendor, or category";
+    result = work; rows = work.items.map(heldPlan ? heldWorkRow : (row) => ({ ...workRow(row, session.organizationName), action: (row.status === "completed_pending_review" || row.needsConfirmation) && roleCan(session, "confirm_observable_result") ? { label: "Confirm work", href: `/app/work-orders/${row.id}?view=confirmation#work-verification` } : undefined })); title = heldPlan ? "Approved work waiting for a suitable visit" : upcomingAppointments ? "Work with a confirmed upcoming appointment" : "Work orders"; eyebrow = heldPlan ? "Held-work portfolio" : upcomingAppointments ? "Scheduled service" : "Maintenance work"; description = heldPlan ? "Review what is authorized, when each job must be reconsidered, and which stores can combine approved work without losing each job's outcome or cost trail." : upcomingAppointments ? "Every result has a vendor-confirmed appointment in the selected scope. Each work order appears once even if its schedule has revisions." : "See who is handling each job and what happens next."; placeholder = "Search number, problem, store, vendor, or category";
     const warranty = await workWarrantyMarkers(repository,scope,work.items.map(row=>row.id),getServerOpsReportingAsOf().slice(0,10));
     rows.forEach(row=>{if(warranty.get(row.id)){const cell=row.cells.find(c=>c.key==="work");if(cell)cell.secondary="May be covered by warranty";}});
     const change = sinceWindowFromQuery(first(query.change), first(query.changedFrom), first(query.changedTo));
@@ -471,7 +480,7 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
       repository.listVisits(scope, { ...request, search: q, status: first(query.status), review: first(query.review) === "true", ...visitContext }),
       repository.getVisitPortfolioSummary(scope, { ...visitContext, now: getServerOpsReportingAsOf() }),
     ]);
-    result = visits; rows = visits.items.map(visitRow); title = first(query.review) === "true" ? "Visits needing review" : first(query.status) === "active" ? "Visits without checkout" : "Service visits"; eyebrow = "Observed service"; description = "See who arrived, why, the evidence captured, and which visits need review—without treating presence as certified labor."; placeholder = "Search technician, vendor, store, or work order";
+    result = visits; rows = visits.items.map(visitRow); title = first(query.review) === "true" ? "Visits needing review" : first(query.status) === "active" ? "Visits without checkout" : "Service visits"; eyebrow = "Visits"; description = "Who came, when, and for which job. Times are store time; visit length is approximate, not billed labor."; placeholder = "Search technician, vendor, store, or work order";
     const withContext = (status?: string, review?: string) => {
       const params = new URLSearchParams(Object.entries({ store: visitContext.storeId, vendor: visitContext.vendorId, status, review }).filter((entry): entry is [string, string] => Boolean(entry[1])));
       return `/app/visits${params.size ? `?${params}` : ""}`;
@@ -592,7 +601,7 @@ export async function buildQuerySearchModel(repository: OpsRepository, session: 
   const totals: Record<string, number | undefined> = { stores: stores.totalCount, work: work.totalCount, vendors: vendors.totalCount, equipment: assets.totalCount, visits: visits.totalCount, requests: requests.totalCount, invoices: invoices?.totalCount, people: people.length };
   const groups = [
     { id: "stores", label: "Stores", rows: stores.items.map(storeRow), resultCount: stores.totalCount ?? stores.items.length, columns: columns.stores, hasMore: Boolean(stores.nextCursor), moreLink: { href: `/app/stores?${new URLSearchParams({ q: raw })}`, label: "Review matching stores" } },
-    { id: "work", label: "Work orders", rows: work.items.map(workRow), resultCount: work.totalCount ?? work.items.length, columns: columns["work-orders"], hasMore: Boolean(work.nextCursor), moreLink: { href: `/app/work-orders?${new URLSearchParams({ q: raw, status: "all" })}`, label: "Review matching work orders" } },
+    { id: "work", label: "Work orders", rows: work.items.map(row => workRow(row, session.organizationName)), resultCount: work.totalCount ?? work.items.length, columns: columns["work-orders"], hasMore: Boolean(work.nextCursor), moreLink: { href: `/app/work-orders?${new URLSearchParams({ q: raw, status: "all" })}`, label: "Review matching work orders" } },
     { id: "vendors", label: "Vendors", rows: vendors.items.map(vendorRow), resultCount: vendors.totalCount ?? vendors.items.length, columns: columns.vendors, hasMore: Boolean(vendors.nextCursor), moreLink: { href: `/app/vendors?${new URLSearchParams({ q: raw })}`, label: "Review matching vendors" } },
     ...(session.demoEdition === "accountability" ? [] : [{ id: "equipment", label: "Equipment", rows: assets.items.map(searchAssetRow), resultCount: assets.totalCount ?? assets.items.length, columns: [{ key: "result", label: "Equipment" }, { key: "context", label: "Store and equipment classification" }, { key: "serial", label: "Serial number" }, { key: "status", label: "Operating state" }], hasMore: Boolean(assets.nextCursor), moreLink: { href: `/app/equipment?${new URLSearchParams({ q: raw })}`, label: "Review matching equipment" } }]),
     ...(session.role === "finance" ? [] : [{ id: "visits", label: "Service visits", rows: visits.items.map(visitRow), resultCount: visits.totalCount ?? visits.items.length, columns: columns.visits, hasMore: Boolean(visits.nextCursor), moreLink: { href: `/app/visits?${new URLSearchParams({ q: raw })}`, label: "Review matching visits" } }]),

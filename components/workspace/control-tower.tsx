@@ -246,7 +246,7 @@ export function ControlTower({ model, capitalSummary, operatingSummary }: { mode
       break;
     case "operations":
     default:
-      // The "Needs your action" tile opens the review queue; the work summary lines replace the stage tiles here.
+      // The "To do" tile opens Review; the work summary lines replace the stage tiles here.
       content = <>{metrics}{capitalSummary}{equipment}{spendSummary}<details className={styles.section}><summary>More insights</summary>{insights}{spotlight}</details></>;
   }
 

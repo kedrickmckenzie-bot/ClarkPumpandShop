@@ -1,4 +1,6 @@
+import type { TodoCounts } from "./dashboard-presenter";
 import { applicableOutcomeVerification, applicableVisitWorkOutcomes, latestRecordedWorkOutcome, normalizeWorkOutcomes } from "@/lib/ops/work-order-outcome";
+import { problemTitle } from "@/lib/product/problem-title";
 import { matchesSearchTerms, searchTerms } from "@/lib/ops/search-terms";
 import { providerDetail, providerKindLabel, providerName, providerTag } from "@/lib/product/provider-label";
 import { needsEquipmentChoice } from "@/lib/ops/equipment-linking";
@@ -8,7 +10,7 @@ import { buildVendorServiceReport } from "@/lib/ops/vendor-service-report";
 import { recordedMoneyLabel } from "@/lib/ops/work-review";
 import { equipmentType } from "@/lib/ops/equipment-browse";
 import { attentionAccess, reviewQueueExceptionCopy } from "./attention-presenter";
-import { attentionFromFixture, type AttentionPage } from "@/lib/ops/attention-query";
+import { attentionFromFixture, type AttentionPage, type AttentionQuery } from "@/lib/ops/attention-query";
 import { dashboardActivityFromFixture, dashboardBreakdownFromFixture, rollingYearStart, type DashboardActivitySummary, type DashboardBreakdownKind } from "@/lib/ops/dashboard-query";
 import { DASHBOARD_CHART_LIMITS, type DashboardChartPages } from "./dashboard-charts";
 import { workStatusLabel } from "@/lib/product/work-status-label";
@@ -827,7 +829,7 @@ function actionsForSession(
           doneWhen: (task?.taskType === "review_warranty" ? WARRANTY_REVIEW_DONE : task?.completionCriteria) ?? (follow ? "Record the follow-up result" : quote ? "Vendor submits a quote or declines" : proposal ? "Review this version when choosing a quote" : approval ? "Authorized reviewer records a decision" : item.reason),
         };
       }),
-      reasonLabel: exceptionCopy?.label ?? (externalWait ? "Waiting on another party" : item.lane === "mine" ? "Needs my action" : item.lane === "upcoming" ? "Upcoming review" : "Team work"),
+      reasonLabel: exceptionCopy?.label ?? (externalWait ? "Waiting on another party" : item.lane === "mine" ? "Assigned to me" : item.lane === "upcoming" ? "Upcoming review" : "Team work"),
       storeLabel: item.storeId ? storeLabel(storeById.get(item.storeId)) : "Companywide",
       recordLabel: work?.number ?? request?.reference ?? vendor?.name ?? categoryLabel,
       dueAt: item.dueAt,
@@ -1225,7 +1227,17 @@ export function buildAccountabilityDashboardModel(
 }
 
 /** Compatibility fixture adapter for reports/tests; the live home loader uses repository queries. */
-export function buildDashboardModel(fixture: OpsFixture, session: OperatorSession, prepared?: { activity: DashboardActivitySummary; attention: AttentionPage; charts?: DashboardChartPages; context?: DashboardContext; lifecycle?: DashboardLifecycleSummary }): DashboardPageViewModel {
+/** The Overview "To do" counts: the same new + stuck + to-check population as Review. */
+export function todoCountsFromFixture(fixture: OpsFixture, session: OperatorSession): TodoCounts | undefined {
+  if (!["facilities", "regional"].includes(session.role)) return undefined;
+  const scope = { organizationId: session.organizationId, storeIds: session.storeIds, regionIds: session.regionIds };
+  const access = attentionAccess(session);
+  const count = (query: Partial<AttentionQuery>) => attentionFromFixture(fixture, scope, access, { asOf: fixture.asOf, limit: 1, ...query }).totalCount;
+  const [newCount, stuck, done] = [count({ stage: "new" }), count({ stage: "stuck" }), count({ stage: "done" })];
+  return { total: newCount + stuck + done, newCount, stuck, done, mine: count({ stage: "decide", lane: "mine" }) };
+}
+
+export function buildDashboardModel(fixture: OpsFixture, session: OperatorSession, prepared?: { activity: DashboardActivitySummary; attention: AttentionPage; charts?: DashboardChartPages; context?: DashboardContext; lifecycle?: DashboardLifecycleSummary; todo?: TodoCounts }): DashboardPageViewModel {
   const scope = { organizationId: session.organizationId, storeIds: session.storeIds, regionIds: session.regionIds };
   const window = { asOf: fixture.asOf, costFrom: rollingYearStart(fixture.asOf), costTo: fixture.asOf.slice(0, 10), currency: "USD" };
   const activity = prepared?.activity ?? dashboardActivityFromFixture(fixture, scope, window);
@@ -1233,7 +1245,10 @@ export function buildDashboardModel(fixture: OpsFixture, session: OperatorSessio
   const charts = prepared?.charts ?? Object.fromEntries((Object.keys(DASHBOARD_CHART_LIMITS) as DashboardBreakdownKind[]).map(kind => [kind, dashboardBreakdownFromFixture(fixture, scope, window, { kind, limit: DASHBOARD_CHART_LIMITS[kind] })])) as DashboardChartPages;
   const context = prepared?.context ?? dashboardContextFromFixture(fixture, scope);
   const lifecycle = prepared?.lifecycle ?? dashboardLifecycleFromFixture(fixture, scope, fixture.asOf);
-  return presentQueryDashboard({ activity, attention, charts, context, lifecycle }, session, window);
+  // The same to-do number as Review and the sidebar: New + Stuck + Done, with your share.
+  // Prepared dashboards bring their own counts; only the plain fixture path counts here.
+  const todo = prepared ? prepared.todo : todoCountsFromFixture(fixture, session);
+  return presentQueryDashboard({ activity, attention, charts, context, lifecycle, todo }, session, window);
 }
 const columns: Record<OperatorListRoute, TableColumnViewModel[]> = {
   "action-center": [
@@ -1644,7 +1659,7 @@ function visitRows(fixture: OpsFixture, scoped: ScopedFixture, query: OperatorSe
           { key: "store", value: storeLabel(store), link: store ? { href: `/app/stores/${store.id}`, label: "Open store" } : undefined },
           { key: "vendor", value: visit.providerName, secondary: providerKindLabel(visit.providerKind), providerTag: providerTag(visit.providerKind) },
           { key: "work", value: work?.number ?? "No work order", secondary: visit.unmatchedReason },
-          { key: "observed", value: visit.checkedOutAt ? `${dateTime(visit.checkedInAt, storeTimeZone)} – ${dateTime(visit.checkedOutAt, storeTimeZone)}` : `Since ${dateTime(visit.checkedInAt, storeTimeZone)}`, secondary: "Store-local time · approximate presence, not labor" },
+          { key: "observed", value: visit.checkedOutAt ? `${dateTime(visit.checkedInAt, storeTimeZone)} – ${dateTime(visit.checkedOutAt, storeTimeZone)}` : `Since ${dateTime(visit.checkedInAt, storeTimeZone)}` },
           { key: "evidence", value: checkIn?.location?.result ? sentence(checkIn.location.result) : "No location evidence", tone: checkIn?.location?.result === "verified" ? "positive" : "warning" },
           { key: "outcome", value: visit.outcome ? sentence(visit.outcome) : "No checkout recorded", tone: visit.status === "active" ? "info" : "neutral" },
         ],
@@ -2907,7 +2922,7 @@ export function buildListModel(
           label: "Responsibility",
           options: [
             { value: "all", label: `All (${allAttention.length})`, href: hrefWithoutQueryKey(route, query, "lane"), selected: !actionLane },
-            { value: "mine", label: `Needs my action (${allAttention.filter((item) => item.attentionLane === "mine").length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), type: actionType, priority: actionPriority, lane: "mine" }), selected: actionLane === "mine" },
+            { value: "mine", label: `Assigned to me (${allAttention.filter((item) => item.attentionLane === "mine").length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), type: actionType, priority: actionPriority, lane: "mine" }), selected: actionLane === "mine" },
             { value: "team", label: `Team work (${allAttention.filter((item) => item.attentionLane === "team").length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), type: actionType, priority: actionPriority, lane: "team" }), selected: actionLane === "team" },
             { value: "waiting", label: `Waiting on others (${allAttention.filter((item) => item.attentionLane === "waiting").length})`, href: hrefWithQuery(routePath(route), { q: first(query.q), type: actionType, priority: actionPriority, lane: "waiting" }), selected: actionLane === "waiting" },
             { value: "history", label: "Completed task history", href: hrefWithQuery(routePath(route), { q: first(query.q), type: actionType, priority: actionPriority, lane: "history" }), selected: actionLane === "history" },
@@ -2957,7 +2972,7 @@ export function buildListModel(
             : meta.title,
       eyebrow: route === "visits" && visitStatus === "upcoming" ? "Scheduled service" : meta.eyebrow,
       description: route === "visits" && visitStatus === "active"
-        ? `${totalRows} active visit${totalRows === 1 ? "" : "s"} · ${visitTotal} total visits in scope. Location and time are presence evidence, not certified labor.`
+        ? `${totalRows} active visit${totalRows === 1 ? "" : "s"} · ${visitTotal} total visits in scope. Visit length is approximate, not billed labor.`
         : route === "visits" && visitStatus === "upcoming"
           ? "Vendor-confirmed appointments that have not started yet. Times display in each store’s local time."
           : route === "work-orders" && visitPlan === "ready"
@@ -4061,9 +4076,10 @@ export function buildDetailModel(
     return {
       state: { kind: "ready" },
       page: {
-        title: request.reference,
-        eyebrow: "Store issue / preserved source report",
-        description: request.problem,
+        // The problem is the title; the reference number sits above it.
+        title: problemTitle(request.problem).title || request.reference,
+        eyebrow: `Store report ${request.reference}`,
+        description: problemTitle(request.problem).cut ? request.problem : "",
         scopeLabel: storeLabel(store),
         primaryAction: convertedWork
           ? { label: `Open ${convertedWork.number}`, href: `/app/work-orders/${convertedWork.id}` }
@@ -4074,7 +4090,7 @@ export function buildDetailModel(
             : latestApprovalState === "pending" || latestApprovalState === "escalated"
               ? { label: `Approval needed: ${latestApprovalRequest ? approvalRoleLabels[latestApprovalRequest.requiredRole] : "manager"}`, href: "#approval-decision" }
               : !impactReviewed
-                ? { label: "Review request facts", href: "#request-review" }
+                ? { label: "Review this report", href: "#request-review" }
                 : undefined,
         secondaryAction: store ? { label: "Open store", href: `/app/stores/${store.id}` } : undefined,
       },
@@ -5235,7 +5251,7 @@ export function buildCreateWorkOrderModel(
       eyebrow: "Preventive maintenance",
       description: "Create a work order for this scheduled maintenance, then choose who will do it.",
       scopeLabel: `${session.scopeLabel} · PM occurrence, work order, visit, and outcome remain linked`,
-    } : { title: "Create work order", eyebrow: "Service control", description: "Choose the store and describe the problem. You can add the other details later.", scopeLabel: session.scopeLabel },
+    } : { title: "Create work order", eyebrow: "New work", description: "Choose the store and describe the problem. You can add the other details later.", scopeLabel: session.scopeLabel },
     submitAction: "/api/ops/work-orders",
     cancelLink: sourceVisit
       ? { label: "Back to service visit", href: `/app/visits/${encodeURIComponent(sourceVisit.id)}` }

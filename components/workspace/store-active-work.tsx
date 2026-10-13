@@ -4,11 +4,13 @@ import { oneLine } from "@/lib/product/one-line";
 import { providerKindLabel, providerName } from "@/lib/product/provider-label";
 import { roleCanAccessListRoute } from "@/components/ops/role-policy";
 import { formatOperationsDateTime } from "@/lib/ops/local-time";
+import { plainDayTime, plainDue } from "@/lib/ops/plain-time";
 import { completionSummary } from "@/lib/ops/work-order-outcome";
 import { storeWorkspaceContext } from "@/lib/server/store-workspace-context";
 import { getServerOpsReportingAsOf } from "@/lib/server/ops-repository-provider";
 import styles from "./store-tasks.module.css";
 
+const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 const OPEN_STATUSES = ["draft", "awaiting_approval", "approved", "issued", "accepted", "scheduled", "in_progress", "waiting_on_vendor", "waiting_on_parts", "completed_pending_review", "resolved"] as const;
 const SHOWN = 8;
 
@@ -28,7 +30,7 @@ export async function StoreActiveWork({ id }: { id: string }) {
   const base = `/app/stores/${encodeURIComponent(id)}`;
   const openCount = open.totalCount ?? open.items.length;
   const rows = [...open.items].sort((a, b) => (a.dueAt ?? "9999").localeCompare(b.dueAt ?? "9999")).slice(0, SHOWN);
-  const nowIso = new Date().toISOString();
+  const nowIso = getServerOpsReportingAsOf();
   const confirmCount = confirm.totalCount ?? confirm.items.length;
   // Each confirmation says who recorded the result and when (from the outcome record), next to the button.
   const outcomes = await Promise.all(confirm.items.slice(0, 3).map((work) => repository.listWorkOutcomesForWorkOrder(session.organizationId, work.id)));
@@ -58,7 +60,7 @@ export async function StoreActiveWork({ id }: { id: string }) {
     <section className={`${styles.page} ${styles.panel} ${styles.fullWidth}`} aria-labelledby="store-upcoming">
       <header className={styles.header}><h2 id="store-upcoming">Upcoming visits</h2><Link href={`/app/visits?${new URLSearchParams({ status: "upcoming", store: id })}`}>{(upcoming.totalCount ?? 0) > upcoming.items.length ? `All ${upcoming.totalCount} upcoming visits →` : "All upcoming visits →"}</Link></header>
       {upcoming.items.length ? <ul className={styles.decisionList}>{upcoming.items.map((visit) => <li key={visit.id}>
-        <div><strong>{formatOperationsDateTime(visit.startsAt, visit.timeZone)}</strong><p>{visit.vendorName} · <Link href={`/app/work-orders/${encodeURIComponent(visit.workOrderId)}?view=service`}>{visit.workOrderNumber}</Link> · {visit.problem}</p></div>
+        <div><strong>{capitalize(plainDayTime(visit.startsAt, nowIso, visit.timeZone))}</strong><p>{visit.vendorName} · <Link href={`/app/work-orders/${encodeURIComponent(visit.workOrderId)}?view=service`}>{visit.workOrderNumber}</Link> · {visit.problem}</p></div>
       </li>)}</ul> : <p className={styles.muted}>No confirmed visits coming up.</p>}
     </section>
     <section className={`${styles.page} ${styles.panel} ${styles.fullWidth}`} aria-labelledby="store-active-work">
@@ -68,8 +70,8 @@ export async function StoreActiveWork({ id }: { id: string }) {
         <tbody>{rows.map((work) => <tr key={work.id}>
           <td data-label="Job"><Link href={`/app/work-orders/${encodeURIComponent(work.id)}`}>{oneLine(work.problem)}</Link><p className={styles.muted}>{work.number}{work.priority === "urgent" || work.priority === "emergency" ? ` · ${work.priority === "urgent" ? "Urgent" : "Emergency"}` : ""}</p></td>
           <td data-label="Who's handling it">{work.accountableParty}{work.assignmentKind !== "choose_later" ? <p className={styles.muted}>{providerKindLabel(work.assignmentKind)}: {providerName({ kind: work.assignmentKind, vendorName: work.vendorName, internalName: work.internalAssigneeName })}</p> : null}</td>
-          <td data-label="Next step">{work.nextAction}{work.assignmentKind==="internal"?<>{work.schedule?<p>When: {dispatchPlanLabel(work.schedule,store.timeZone??"America/New_York")}</p>:null}{work.targetCompletionAt?<p>Finish by: {formatOperationsDateTime(work.targetCompletionAt,store.timeZone)}</p>:null}</>:null}</td>
-          <td data-label="Due">{work.dueAt ? <>{formatOperationsDateTime(work.dueAt, store.timeZone)}{work.dueAt < nowIso ? <p className={styles.muted}>Overdue</p> : null}</> : "No date"}</td>
+          <td data-label="Next step">{work.nextAction}{work.assignmentKind==="internal"?<>{work.schedule?<p>When: {dispatchPlanLabel(work.schedule,store.timeZone??"America/New_York")}</p>:null}{work.targetCompletionAt?<p>Finish by: {plainDayTime(work.targetCompletionAt,nowIso,store.timeZone)}</p>:null}</>:null}</td>
+          <td data-label="Due">{work.dueAt ? (() => { const due = plainDue(work.dueAt, nowIso, store.timeZone); return due.late ? <strong className={styles.late}>{due.text}</strong> : capitalize(due.text.replace(/^Due /u, "")); })() : "No date"}</td>
         </tr>)}</tbody>
       </table></div> : <p className={styles.muted}>No open work at this store.</p>}
       {openCount > rows.length ? <p className={styles.muted}><Link href={allHref}>Show all {openCount} open jobs</Link></p> : null}

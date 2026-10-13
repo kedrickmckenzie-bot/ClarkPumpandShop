@@ -894,7 +894,7 @@ async function receiveUploads(input: {
     return {
       received: input.uploads.length,
       attached: 0,
-      label: `${input.uploads.length} ${input.uploads.length === 1 ? "file was" : "files were"} received, but attachment storage needs operator review.`,
+      label: `Your report was sent, but ${input.uploads.length === 1 ? "the photo" : "the photos"} didn't upload. Please show ${input.uploads.length === 1 ? "it" : "them"} to your manager.`,
     };
   }
 }
@@ -1055,7 +1055,7 @@ const gateway: PublicOperationsGateway = {
     return {
       serviceDecisionsClosed,
       organizationName: source.organizationName,
-      organizationSupport: "Contact the facilities team through the original service message if you need help.",
+      organizationSupport: "Questions? Call the store, or reply to the message that sent you this link.",
       vendorName: source.vendor.name,
       operatorWorkOrderNumber: source.workOrderNumber,
       revision: source.revision,
@@ -1068,6 +1068,7 @@ const gateway: PublicOperationsGateway = {
         number: source.store.storeNumber,
         name: source.store.name,
         address: source.store.formattedAddress,
+        phone: source.store.phone,
         timeZone: source.store.timeZone,
       },
       service: {

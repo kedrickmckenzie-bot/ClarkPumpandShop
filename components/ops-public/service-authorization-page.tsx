@@ -66,9 +66,9 @@ export function ServiceAuthorizationPage({ token, authorization, forms=[] }: { t
           <section className={styles.card}>
             <div className={styles.cardHeader}><h2 className={styles.cardTitle}>Where to go</h2><Building2 aria-hidden="true" color="#315dcc" size={22} /></div>
             <div className={styles.stack}>
-              <div className={styles.detail}><span className={styles.detailLabel}>Location</span><p className={styles.detailValue}><MapPin aria-hidden="true" size={16} /> {authorization.store.address}</p></div>
-              {authorization.store.phone ? <div className={styles.detail}><span className={styles.detailLabel}>Store phone</span><p className={styles.detailValue}><Phone aria-hidden="true" size={16} /> {authorization.store.phone}</p></div> : null}
-              {authorization.service.accessNotes ? <div className={styles.detail}><span className={styles.detailLabel}>Access notes</span><p className={styles.detailValue}>{authorization.service.accessNotes}</p></div> : null}
+              <div className={styles.detail}><span className={styles.detailLabel}>Location</span><p className={styles.detailValue}><MapPin aria-hidden="true" size={16} /> {authorization.store.address}</p><a className={styles.textLink} href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(authorization.store.address)}`} target="_blank" rel="noreferrer">Directions <ArrowRight aria-hidden="true" size={16} /></a></div>
+              {authorization.store.phone ? <div className={styles.detail}><span className={styles.detailLabel}>Store phone</span><p className={styles.detailValue}><a href={`tel:${authorization.store.phone.replace(/[^\d+]/gu, "")}`}><Phone aria-hidden="true" size={16} /> {authorization.store.phone}</a></p></div> : null}
+              {authorization.service.accessNotes ? <div className={styles.detail}><span className={styles.detailLabel}>How to get in</span><p className={styles.detailValue}>{authorization.service.accessNotes}</p></div> : null}
             </div>
           </section>
 

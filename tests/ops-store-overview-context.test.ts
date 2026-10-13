@@ -48,9 +48,9 @@ describe("store overview upcoming visits", () => {
     const start = markup.indexOf('id="store-upcoming"'), section = markup.slice(start, markup.indexOf("</section>", start));
     expect(section.indexOf("CPS-TEST-b")).toBeGreaterThan(-1);
     expect(section.indexOf("CPS-TEST-b")).toBeLessThan(section.indexOf("CPS-TEST-a"));
-    // Store-local (Eastern) appointment time, not the deadline.
-    expect(section).toContain("Oct 3, 2026, 10:30 AM EDT");
-    expect(section).not.toContain("Oct 1, 2026, 4:00 PM");
+    // Store-local (Eastern) appointment time in plain words, not the deadline: Saturday is two days after NOW.
+    expect(section).toContain("Sat 10:30 AM");
+    expect(section).not.toContain("4 PM");
     for (const hidden of ["CPS-TEST-cancelled", "CPS-TEST-past", "CPS-TEST-deadline"]) expect(section).not.toContain(hidden);
     expect(section).toContain('href="/app/visits?status=upcoming&amp;store=store-northline-104"');
   });

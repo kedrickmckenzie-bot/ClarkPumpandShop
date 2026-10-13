@@ -35,8 +35,8 @@ export function NotificationSettings({ model, notice, children }: { children?: R
     <header className={styles.heading}><div><p>Company setup</p><h1>Notification delivery</h1><span>Choose which workflow events create email and who receives it.</span></div><Link href="/app/admin">Back to setup</Link></header>
     {notice ? <div className={styles.notice}>{notice}</div> : null}
     <div className={model.providerConfigured ? styles.statusGood : styles.statusWarning}>
-      <strong>{model.providerConfigured ? `${model.providerLabel} email is configured` : "Email provider is not configured"}</strong>
-      <span>{model.providerConfigured ? `Messages send from ${model.fromAddress}. Delivery attempts remain visible in job health.` : "Rules can be prepared now, but enabled email will retry and surface a delivery failure until EMAIL_PROVIDER, EMAIL_API_KEY, and EMAIL_FROM are configured."}</span>
+      <strong>{model.providerConfigured ? `Email is on (${model.providerLabel})` : "Email isn't turned on yet"}</strong>
+      <span>{model.providerConfigured ? `Messages send from ${model.fromAddress}.` : "You can set who gets what now. Nothing is emailed until your account's email service is turned on."}</span>
     </div>
     {children}
     <div className={`${styles.tableWrap} ${styles.notificationTable}`}><table><caption>Notification rules for {model.organizationName}</caption><thead><tr><th>Workflow event</th><th>Recipients</th><th>Save</th></tr></thead><tbody>

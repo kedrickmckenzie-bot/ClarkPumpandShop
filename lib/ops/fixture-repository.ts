@@ -694,7 +694,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
       .filter(membership => !scope || store && this.fixture.scopeGrants.some(grant => grant.membershipId === membership.id && grantCoversStore(grant, store)))
       .flatMap(membership => {
         const user = this.fixture.users.find(candidate => candidate.id === membership.userId && candidate.status === "active");
-        return user ? [{ membershipId: membership.id, userId: user.id, email: user.email, displayName: user.displayName, role }] : [];
+        return user ? [{ membershipId: membership.id, userId: user.id, email: user.email, displayName: user.displayName, role, phone: user.phone }] : [];
       }));
   }
   async getMembership(organizationId: OpsId, membershipId: OpsId) { return clone(this.fixture.memberships.find((row) => row.organizationId === organizationId && row.id === membershipId) ?? null); }
@@ -1220,7 +1220,8 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
       revision: issuance.revision,
       status: workOrder.status,
       assignmentStatus: assignment.status,
-      store: snapshot.store ?? { id: store.id, storeNumber: store.storeNumber, name: store.name, formattedAddress: formatAddress(store) },
+      // Contact details and access notes are current store facts, not part of the frozen authorization.
+      store: { ...(snapshot.store ?? { id: store.id, storeNumber: store.storeNumber, name: store.name, formattedAddress: formatAddress(store) }), timeZone: snapshot.store?.timeZone ?? store.timeZone, accessNotes: store.accessNotes, phone: store.phone },
       vendor: snapshot.vendor ?? { id: vendor.id, name: vendor.name },
       problem: snapshot.problem ?? workOrder.problem,
       priority: snapshot.priority ?? workOrder.priority,

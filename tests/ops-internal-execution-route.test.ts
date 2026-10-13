@@ -49,6 +49,10 @@ describe("P2 authenticated result, visit and file boundaries", () => {
     const checkScreen = async (assigned = true) => {
       const html = renderToStaticMarkup(await InternalJob({ params: Promise.resolve({ id: job.id }) }));
       expect(html).toContain(safety.nextAction);
+      // Who to call and how to get there sit at the top of the job.
+      expect(html).toContain('href="tel:6065550101"');
+      expect(html).toContain(">Directions<");
+      expect(html).toContain('href="tel:6065550121"');
       expect(html).not.toContain('>Save result<');
       if (assigned) expect(html).toContain('>Flag a problem<');
       else expect(html).toContain("Any technician can take it");

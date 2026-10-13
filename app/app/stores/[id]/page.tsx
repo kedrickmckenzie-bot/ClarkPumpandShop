@@ -1,5 +1,7 @@
 import { TechnicianStore } from "@/lib/server/technician-tools";
 import { StoreAccessNotes } from "@/components/workspace/store-access-notes";
+import { StoreContact } from "@/components/workspace/store-contact";
+import { storeWorkspaceContext } from "@/lib/server/store-workspace-context";
 import { StoreOpenReports } from "@/components/workspace/store-open-reports";
 import { StoreActiveWork, StoreContextRow } from "@/components/workspace/store-active-work";
 import { StoreWorkspaceNav, storeSectionTab } from "@/components/workspace/store-workspace-nav";
@@ -38,7 +40,7 @@ export default async function StoreDetailPage({ params, searchParams }: { params
       embeddedSections
       embeddedSectionIds={tab?.sections}
       hideFacts
-      beforeFacts={<><StoreWorkspaceNav id={id} active={section ?? "overview"} />{ready && !section ? <><StoreContextRow id={id} /><StoreAccessNotes id={id} saved={query.saved==="access"}/><StoreOpenReports id={id} /><StoreActiveWork id={id} /></> : null}</>}
+      beforeFacts={<><StoreWorkspaceNav id={id} active={section ?? "overview"} />{ready && !section ? <><StoreOverviewContact id={id} /><StoreContextRow id={id} /><StoreAccessNotes id={id} saved={query.saved==="access"}/><StoreOpenReports id={id} /><StoreActiveWork id={id} /></> : null}</>}
       after={!section && (canCreateQr || canSetupEquipment || canSetupPm) ? (
         <>
           {canCreateQr ? (
@@ -68,4 +70,10 @@ export default async function StoreDetailPage({ params, searchParams }: { params
       ) : undefined}
     />
   );
+}
+
+// Access notes show in the editable box below, so the contact row leaves them out here.
+async function StoreOverviewContact({ id }: { id: string }) {
+  const { repository, store } = await storeWorkspaceContext(id);
+  return <StoreContact repository={repository} store={store} accessNotes={false} />;
 }

@@ -18,8 +18,11 @@ export async function WorkflowSummary({
     dispatchScope = await internalDispatchScope(repository, session),
     asOf = new Date().toISOString(),
     access = attentionAccess(session);
-  const [review, needs, stuck, overdue, waiting] = await Promise.all([
-    repository.listAttention(scope, access, { asOf, stage: "decide", limit: 1 }),
+  // Managers see the to-do number on the Overview tile; the owner sees it here. Stuck and late checks are parts of it,
+  // so they are not repeated as separate lines.
+  const owner = session.role === "executive";
+  const [review, needs, waiting] = await Promise.all([
+    owner ? repository.listAttention(scope, access, { asOf, stage: "decide", limit: 1 }) : Promise.resolve(undefined),
     repository.listWorkOrders(dispatchScope, {
       internalOnly: true,
       maintenanceTeamOnly: true,
@@ -29,29 +32,16 @@ export async function WorkflowSummary({
       statuses: ["approved", "issued", "accepted", "scheduled"],
       limit: 1,
     }),
-    repository.listAttention(scope, access, { asOf, stage: "stuck", limit: 1 }),
-    repository.listAttention(scope, access, {
-      asOf,
-      stage: "confirmation_overdue",
-      limit: 1,
-    }),
     repository.countWorkOrders(scope, { stage: "vendor-or-parts" }),
   ]);
   return (
     <nav aria-label="Work to arrange" className={styles.lines}>
-      <Link href="/app/action-center">
-        <strong>{review.totalCount}</strong> to review <span>Review →</span>
-      </Link>
+      {review ? <Link href="/app/action-center">
+        <strong>{review.totalCount}</strong> to do <span>Review →</span>
+      </Link> : null}
       <Link href="/app/dispatch?view=plan">
         <strong>{needs.totalCount ?? 0}</strong> need a tech{" "}
         <span>Dispatch →</span>
-      </Link>
-      <Link href="/app/action-center?lane=all&stage=stuck">
-        <strong>{stuck.totalCount}</strong> stuck <span>Review →</span>
-      </Link>
-      <Link href="/app/action-center?lane=all&stage=confirmation_overdue">
-        <strong>{overdue.totalCount}</strong> confirmations overdue{" "}
-        <span>Review →</span>
       </Link>
       <Link href="/app/work-orders?stage=vendor-or-parts">
         <strong>{waiting}</strong> waiting on a vendor or parts{" "}

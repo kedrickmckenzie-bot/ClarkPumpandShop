@@ -147,7 +147,7 @@ describe("role-specific operator experiences", () => {
     expect(hrefs).not.toContain("/app/work-orders/new");
     expect(dashboard.spotlight).toBeUndefined();
     expect(dashboard.priorityActions.map((action) => action.categoryLabel)).toEqual([
-      "Issue intake",
+      "Report a problem",
       "Needs your response",
       "Being handled",
       "Upcoming visits",

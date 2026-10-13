@@ -440,7 +440,7 @@ export function TechnicianVisitFlow({
     const hasAdditionalWork = checkedIn && unmatchedVendorId !== "unlisted" && Boolean(context?.heldWork.length) && !additionalWorkDone;
     return (
       <PublicFrame backHref={storeOptionsHref} organizationName={portal.organizationName} context={`Store ${portal.store.number} · Technician visit`} mode={portal.mode}>
-        <div className={styles.hero}><div><span className={styles.eyebrow}>Server-confirmed receipt</span><h1 className={styles.title}>{checkedIn ? "You’re checked in" : "Visit completed"}</h1></div></div>
+        <div className={styles.hero}><div><span className={styles.eyebrow}>Saved</span><h1 className={styles.title}>{checkedIn ? "You’re checked in" : "Visit completed"}</h1></div></div>
         {hasAdditionalWork && checkedIn ? <p className={styles.lede}>{receipt.vendorName} · Arrived {formatPublicDateTime(receipt.checkedInAt, portal.store.timeZone)}</p> : <ServerReceipt receipt={receipt} headingOverride={checkedIn ? "Visit details" : undefined} timeZone={portal.store.timeZone} />}
         {hasAdditionalWork && context ? <section className={styles.card} aria-labelledby="additional-work-title">
           <h2 id="additional-work-title">Other approved work at this store</h2><p>Would you like to handle any of these during this visit?</p>

@@ -1,6 +1,6 @@
 import Link from "next/link";
+import { plainDay } from "@/lib/ops/plain-time";
 import type { OperatingRisk, OperatingRiskPage } from "@/lib/ops/operating-risks";
-import { formatOperationsDate } from "@/lib/ops/local-time";
 import styles from "./operating-problems.module.css";
 
 export function OperatingProblems({ rows: result }: { rows: OperatingRiskPage }) {
@@ -8,7 +8,7 @@ export function OperatingProblems({ rows: result }: { rows: OperatingRiskPage })
   function list(items: OperatingRisk[]) {
     return <ul className={styles.list}>{items.map(row => <li key={row.id}>
       <Link href={`/app/requests/${row.id}`}><strong>Store {row.storeNumber} · {row.problem}</strong></Link>
-      <span>{row.state === "unable_to_operate" ? "Unable to operate" : "Limited operations"} · Reported {formatOperationsDate(row.reportedAt, "UTC")}</span>
+      <span>{row.state === "unable_to_operate" ? "Unable to operate" : "Limited operations"} · Reported {plainDay(row.reportedAt, new Date().toISOString())}</span>
       <Link href={`/app/requests/${row.id}`}>Review report →</Link>
     </li>)}</ul>;
   }

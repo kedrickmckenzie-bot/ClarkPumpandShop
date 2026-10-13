@@ -7,10 +7,10 @@ export default function OperatorNotFound() {
     <div className={styles.accessUnavailable}>
       <div>
         <span><ShieldAlert aria-hidden="true" size={26} /></span>
-        <p className={styles.eyebrow}>Not available in this role</p>
-        <h1>This record or workspace is outside your current access scope.</h1>
-        <p>Use the visible navigation for this role, or switch the fictional demo persona to preview another authorized experience.</p>
-        <Link className={styles.primaryButton} href="/app/overview">Return to overview</Link>
+        <p className={styles.eyebrow}>Not available</p>
+        <h1>You can&apos;t open this page</h1>
+        <p>It may be for a different role, belong to stores you don&apos;t cover, or no longer exist. Ask your facilities lead if you need it.</p>
+        <Link className={styles.primaryButton} href="/app/overview">Go to Overview</Link>
       </div>
     </div>
   );

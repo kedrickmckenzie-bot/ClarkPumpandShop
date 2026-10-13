@@ -145,7 +145,7 @@ export function StoreReportForm({ token, portal }: { token: string; portal: Stor
   if (receipt) {
     return (
       <PublicFrame backHref={storeOptionsHref} organizationName={portal.organizationName} context={`Store ${portal.store.number} · Report an issue`} mode={portal.mode}>
-        <div className={styles.hero}><div><span className={styles.eyebrow}>Server-confirmed receipt</span><h1 className={styles.title}>Report received</h1></div></div>
+        <div className={styles.hero}><div><span className={styles.eyebrow}>Sent</span><h1 className={styles.title}>Report received</h1></div></div>
         <ServerReceipt receipt={receipt} />
       </PublicFrame>
     );

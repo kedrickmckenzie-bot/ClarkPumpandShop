@@ -246,7 +246,7 @@ export function RequestReviewPanel({ model }: { model: RequestReviewViewModel })
                 {model.canPrepareWorkOrder && model.createWorkOrderHref ? <input type="hidden" name="continueTo" value={model.createWorkOrderHref} /> : null}
                 {hiddenImpactInputs}
                 <MutationError message={impactMutation.state.error} />
-                <div className={styles.formFooter}><span className={styles.formMeta}>Confirm the known facts without inventing details. Unknown answers remain visibly unknown.</span><button className={styles.primaryButton} type="submit" disabled={impactMutation.state.pending}>{impactMutation.state.pending ? "Recording…" : model.canPrepareWorkOrder ? "Confirm & create work order" : "Confirm request facts"}<ShieldCheck aria-hidden="true" size={17} /></button></div>
+                <div className={styles.formFooter}><span className={styles.formMeta}>Leave anything you don&apos;t know blank. You can add it later.</span><button className={styles.primaryButton} type="submit" disabled={impactMutation.state.pending}>{impactMutation.state.pending ? "Recording…" : model.canPrepareWorkOrder ? "Confirm & create work order" : "Confirm request facts"}<ShieldCheck aria-hidden="true" size={17} /></button></div>
               </form>
             )}
           </div> : null}

@@ -13,6 +13,8 @@ import { buildInvoiceEvidenceModel as buildEvidenceModel, invoiceEvidenceParamet
 import { invoiceReporting } from "@/lib/ops/invoice-reporting";
 import { scopedInvoiceRecords } from "@/lib/ops/dashboard-cohorts";
 import { ControlTower } from "@/components/workspace/control-tower";
+import { attentionAccess } from "@/app/app/_data/attention-presenter";
+import { attentionFromFixture } from "@/lib/ops/attention-query";
 
 vi.mock("server-only", () => ({}));
 const fixture = buildNorthlinePresentationFixture();
@@ -27,7 +29,8 @@ it("keeps the full review count while sending only the seven visible home rows",
   const model = buildDashboardModel(fixture, viewer);
   const sourceRows = fixtureRows(viewer, "/app/action-center");
   expect(sourceRows.length).toBeGreaterThan(7);
-  expect(model.metrics.find(metric => metric.id === "open-items")?.value).toBe(String(sourceRows.length));
+  // The To do tile is Review's three sections (New + Stuck + Done), the same count as the sidebar.
+  expect(model.metrics.find(metric => metric.id === "open-exceptions")?.value).toBe(String(todoCount(viewer)));
   expect(model.priorityActions).toHaveLength(7);
   expect(model.priorityActions.map(row => row.id)).toEqual(sourceRows.slice(0, 7).map(row => row.id));
 });
@@ -43,6 +46,14 @@ async function queryRows(viewer: OperatorSession, href: string) {
   }
   return rows;
 }
+/** Review's to-do count (New + Stuck + Done), counted both as one stage and as its three sections. */
+function todoCount(viewer: OperatorSession) {
+  const scope = { organizationId: viewer.organizationId, storeIds: viewer.storeIds, regionIds: viewer.regionIds }, access = attentionAccess(viewer);
+  const count = (stage: "decide" | "new" | "stuck" | "done") => attentionFromFixture(fixture, scope, access, { asOf: fixture.asOf, stage, limit: 1 }).totalCount;
+  expect(count("new") + count("stuck") + count("done")).toBe(count("decide"));
+  return count("decide");
+}
+
 function fixtureRows(viewer: OperatorSession, href: string) {
   const route = new URL(href, "https://local.test").pathname.split("/").at(-1) as OperatorListRoute;
   const rows = [];
@@ -65,7 +76,9 @@ describe("Pass 2 dashboard source contracts", () => {
         expect(found.length, metric.id).toBe(Number(metric.value));
         expect(new Set(found.map((row) => row.id)).size).toBe(found.length);
       } else if (path === "/app/action-center") {
-        expect(fixtureRows(viewer, metric.link.href).length, metric.id).toBe(Number(metric.value));
+        // The To do tile opens Review's three sections (New + Stuck + Done); other tiles open their exact rows.
+        if (metric.id === "open-exceptions" && metric.label === "To do") expect(todoCount(viewer), metric.id).toBe(Number(metric.value));
+        else expect(fixtureRows(viewer, metric.link.href).length, metric.id).toBe(Number(metric.value));
       } else if (metric.id === "recorded-cost") {
         expect(metric.value).toBe(money(costs.reduce((sum, row) => sum + row.amount.amountMinor, 0)));
         const spend = buildProgramModel(fixture, viewer, "spend", query(metric.link.href));
@@ -120,11 +133,11 @@ describe("Pass 2 dashboard source contracts", () => {
     expect(foundVendor.every((row) => fixture.workOrders.find((work) => work.id === row.id)!.status !== "approved")).toBe(true);
     expect((await queryRows(viewer, "/app/work-orders?stage=vendor-response&status=closed"))).toEqual([]);
     const html = renderToStaticMarkup(createElement(ControlTower, { model }));
-    // The Overview keeps the "Needs your action" tile; the item list lives only in the review queue.
+    // The Overview keeps one "To do" tile; the item list lives only in Review.
     expect(html).not.toContain('id="attention-heading"');
-    expect(html).toContain("Needs your action");
-    expect(html).toContain('href="/app/action-center?lane=mine"');
-    expect(html).toContain("Open items");
+    expect(html).toContain("To do");
+    expect(html).toContain('href="/app/action-center"');
+    expect(html).toContain("Open work orders");
     expect(html).toContain("Where maintenance dollars go");
     for (const breakdown of model.breakdowns.filter(row => row.id.startsWith("recorded-cost-by-"))) {
       for (const segment of breakdown.segments) expect(html).toContain(segment.link.href.replaceAll("&", "&amp;"));

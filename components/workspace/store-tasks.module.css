@@ -10,3 +10,5 @@
 
 /* One line of store context: counts that open their lists. */
 .contextRow{display:flex;flex-wrap:wrap;gap:8px}.page .contextRow a,.contextRow a{display:inline-flex;align-items:center;min-height:36px;padding:6px 12px;border:1px solid #c9d3e1;border-radius:6px;background:#fff;color:#1d4ed8;font-size:15px;font-weight:600;text-decoration:none}.contextRow a:hover,.contextRow a:focus-visible{border-color:#1d4ed8;background:#eff6ff}
+
+.late { color: #b42318; font-weight: 700; }

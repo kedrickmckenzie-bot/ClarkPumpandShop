@@ -1966,6 +1966,8 @@ export interface NotificationRecipient {
   email: string;
   displayName: string;
   role: NotificationRecipientRole;
+  /** For tap-to-call contact lines; email delivery ignores it. */
+  phone?: string;
 }
 
 export interface SavedView {

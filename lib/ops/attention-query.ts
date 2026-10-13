@@ -117,7 +117,7 @@ export function attentionFromFixture(fixture: OpsFixture, scope: OrganizationSco
 
 export function attentionSearchText(row: AttentionQueueRow) {
   const copy=row.sourceKind === "exception" ? reviewQueueExceptionCopy[row.reason as keyof typeof reviewQueueExceptionCopy] : undefined;
-  const responsibility=row.lane==="waiting"?"Waiting on another party":row.lane==="mine"?"Needs my action":row.lane==="upcoming"?"Upcoming review":"Team work";
+  const responsibility=row.lane==="waiting"?"Waiting on another party":row.lane==="mine"?"Assigned to me":row.lane==="upcoming"?"Upcoming review":"Team work";
   return [row.title,row.reason,row.owner,row.storeLabel??"Companywide",row.workNumber,row.requestReference,row.vendorName,copy?.title,copy?.label,responsibility].join(" ").toLowerCase();
 }
 export function attentionScope(scope:OrganizationScope,query:Pick<AttentionQuery,"store">):OrganizationScope {

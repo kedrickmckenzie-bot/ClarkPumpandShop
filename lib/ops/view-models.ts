@@ -240,7 +240,9 @@ export interface ServiceAuthorizationView {
     name: string;
     formattedAddress: string;
     timeZone?: string;
+    /** Current store contact details; they are not part of the frozen authorization. */
     accessNotes?: string;
+    phone?: string;
   };
   vendor: { id: OpsId; name: string };
   problem: string;

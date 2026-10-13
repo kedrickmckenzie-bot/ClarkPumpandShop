@@ -48,7 +48,7 @@ export function presentAttentionRow(item: AttentionQueueRow, asOf: string): Acti
     id: item.id, title: copy?.title ?? item.title, description: exception ? item.title : item.reason, categoryLabel,
     attentionType: exception ? "service_record" : item.sourceKind === "vendor_reminder" ? "vendor_task" : "follow_up",
     attentionLane: item.lane, attentionGroup: item.group, sourceCount: item.sourceCount,
-    reasonLabel: copy?.label ?? (waiting ? "Waiting on another party" : item.lane === "mine" ? "Needs my action" : item.lane === "upcoming" ? "Upcoming review" : "Team work"),
+    reasonLabel: copy?.label ?? (waiting ? "Waiting on another party" : item.lane === "mine" ? "Assigned to me" : item.lane === "upcoming" ? "Upcoming review" : "Team work"),
     storeLabel: item.storeLabel ?? "Companywide", recordLabel: item.workNumber ?? item.requestReference ?? item.vendorName ?? categoryLabel,
     dueAt: item.dueAt, dueLabel: history ? item.completedAt ? `Ended ${date(item.completedAt)}` : "End date not recorded" : inspectionReview ? item.completedAt ? `Results recorded ${date(item.completedAt)}` : "Results recorded" : exception ? `Open since ${date(item.dueAt!)}` : !item.dueAt ? "No deadline — reason recorded" : overdue && waiting ? `Missed promised date ${date(item.dueAt)}` : overdue ? `Overdue since ${date(item.dueAt)}` : `Due ${date(item.dueAt)}`,
     ownerLabel: item.owner, priorityLabel: history ? "Completed / canceled" : overdue ? "Overdue" : item.priority === "critical" ? "Critical" : item.priority[0].toUpperCase() + item.priority.slice(1),

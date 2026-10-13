@@ -245,6 +245,7 @@ export interface OpsRepository extends TaskRepository {
   listReportRuns(organizationId: string, limit: number): Promise<import("./reports/schedules").ReportRun[]>;
   /** Active people with an email, for choosing report recipients. */
   listReportRecipients(organizationId: string): Promise<Array<{ membershipId: string; name: string; email: string; role: string }>>;
+  /** The store's own managers (active, granted this store), for calling the store. Name order. */
   /** The person's newest "Mark as seen" time on the Overview, if any. */
   getOverviewSeenAt(organizationId: string, membershipId: string): Promise<string | undefined>;
   listAiConversations(organizationId:string,workOrderId:string): Promise<import("./ai-conversations").AiConversation[]>;

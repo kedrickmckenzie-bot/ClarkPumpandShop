@@ -122,7 +122,7 @@ describe("vendor performance workspace", () => {
 
     const markup = renderToStaticMarkup(createElement(VendorPerformanceDetail, { model: detail }));
     expect(markup).toContain("Not enough history");
-    expect(markup).toContain("Numbers, not a grade");
+    expect(markup).toContain("not proof of quality or billing");
     expect(markup).not.toContain("Overall score");
   });
 

@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { getOpsRequestContext } from "@/lib/server/ops-request-context";
+import { loadOperatorSession } from "@/app/app/_data/operator-loader";
+import { technicianOnlyNotice } from "@/components/workspace/role-only-notice";
 import { internalDispatchScope } from "@/lib/server/internal-dispatch-context";
 import { RecordForm } from "@/components/ops/record-form";
 import { orderedStops, dispatchJob, dueLabel, type DispatchJob } from "@/lib/ops/dispatch-board";
@@ -9,6 +11,8 @@ import styles from "@/components/workspace/internal-dispatch.module.css";
 
 export default async function NextStatus({ searchParams }: { searchParams: Promise<{ saved?: string }> }) {
   const saved = (await searchParams).saved === "1";
+  const viewer = await loadOperatorSession();
+  if (viewer.role !== "technician") return technicianOnlyNotice(viewer.role);
   const c = await getOpsRequestContext(["technician"]),
     r = c.repository,
     scope = await internalDispatchScope(r, c.session),

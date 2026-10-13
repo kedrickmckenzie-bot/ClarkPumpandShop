@@ -4,7 +4,6 @@ import { approvalRequestState } from "@/lib/ops/approval-governance";
 import { rollingYearStart } from "@/lib/ops/dashboard-query";
 import { presentEquipmentIssues, buildEquipmentIssueRanking } from "./equipment-issues-presenter";
 import { attentionAccess } from "./attention-presenter";
-import { yourActionBreakdown } from "@/lib/ops/your-actions";
 import { FIRST_LOOK_DAYS, SINCE_KINDS, SINCE_LABELS, sinceHref, sinceStartFor } from "@/lib/ops/since-last-looked";
 import { REPEAT_DAYS, repeatProblemWindow } from "@/lib/ops/equipment-issues";
 import { REPEAT_WORK_MIN_JOBS } from "@/lib/ops/replacement-intelligence";
@@ -19,7 +18,7 @@ import { buildPmReviewPreview, buildPmReviewSources } from "./pm-review-presente
 
 import { loadDashboardChartPages } from "./dashboard-charts";
 import { presentQueryDashboard } from "./dashboard-query-presenter";
-import { ownerSpendMetric, ownerSpendWindows } from "./dashboard-presenter";
+import { ownerSpendMetric, ownerSpendWindows, type TodoCounts } from "./dashboard-presenter";
 import { buildStoreCostRanking } from "./store-cost-presenter";
 import "server-only";
 
@@ -405,7 +404,8 @@ export async function loadDashboardModel() {
     repository.getDashboardLifecycle(scope, asOf),
     repository.listEquipmentIssues(scope, window, { limit: 5 }),
   ]);
-  const model = presentQueryDashboard({ activity, attention, charts, context, lifecycle }, session, window);
+  const todo = await loadTodoCounts(repository, scope, session, asOf);
+  const model = presentQueryDashboard({ activity, attention, charts, context, lifecycle, todo }, session, window);
   model.equipmentIssues = presentEquipmentIssues(issues, window, session);
   const [repeat, since] = await Promise.all([
     loadRepeatProblems(repository, scope, session, asOf),
@@ -413,14 +413,7 @@ export async function loadDashboardModel() {
   ]);
   model.repeatProblems = repeat ? { ...repeat, allIssuesHref: model.equipmentIssues?.href } : undefined;
   model.sinceLastLooked = since;
-  // "Needs your action" says what its number is made of, so it never silently disagrees with Review.
-  const yours = model.metrics?.find(metric => metric.id === "open-exceptions");
-  if (yours && attention.mineCount) {
-    const breakdown = await yourActionBreakdown(repository, scope, attentionAccess(session), asOf);
-    yours.value = String(breakdown.total);
-    yours.supportingText = breakdown.text;
-  }
-  // The Overview keeps the "Needs your action" count tile (it opens the queue); the item list lives in the review queue only.
+  // The "To do" tile opens Review; the item list lives in Review only.
   if (session.role === "executive") {
     // A compact work-status line: where open work stands, each count opening its list.
     const [toStart, underway, held, confirming] = await Promise.all([
@@ -445,6 +438,19 @@ export async function loadDashboardModel() {
     model.metrics = [ownerSpendMetric(current, prior, windows), ...model.metrics.filter((metric) => metric.id !== "open-exceptions").map((metric) => metric.id === "recorded-cost" ? { ...metric, label: "Recorded work cost · last 12 months", supportingText: `${new Date(`${window.costFrom}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })} – ${new Date(`${window.costTo}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}` } : metric)];
   }
   return enforceDashboardLinkPolicy(model, session);
+}
+
+/** The one to-do number: Review's New + Stuck + Done (the sidebar's count), its parts, and how many are yours. */
+async function loadTodoCounts(repository: OpsRepository, scope: OrganizationScope, session: OperatorSession, asOf: string): Promise<TodoCounts | undefined> {
+  if (!["facilities", "regional"].includes(session.role)) return undefined;
+  const access = attentionAccess(session);
+  const [fresh, stuck, done, mine] = await Promise.all([
+    repository.listAttention(scope, access, { asOf, stage: "new", limit: 1 }),
+    repository.listAttention(scope, access, { asOf, stage: "stuck", limit: 1 }),
+    repository.listAttention(scope, access, { asOf, stage: "done", limit: 1 }),
+    repository.listAttention(scope, access, { asOf, stage: "decide", lane: "mine", limit: 1 }),
+  ]);
+  return { total: fresh.totalCount + stuck.totalCount + done.totalCount, newCount: fresh.totalCount, stuck: stuck.totalCount, done: done.totalCount, mine: mine.totalCount };
 }
 
 /** Repeat problems: 3+ repair calls on one unit in the last 60 days, from the same issue rule as the ranking. */
@@ -603,7 +609,7 @@ export async function loadCreateRequestModel(query: OperatorSearchParameters = {
   if(requested&&(!selected||!pmStoreAllowed(session,selected)))notFound();
   const stores=page.items.map(s=>({value:s.id,label:`Store ${s.storeNumber} · ${s.name}`}));
   if(selected&&!stores.some(s=>s.value===selected.id))stores.unshift({value:selected.id,label:`Store ${selected.storeNumber} · ${selected.name}`});
-  return {state:{kind:"ready"},page:{title:"Report an issue",eyebrow:"Issue intake",description:"Choose a store and describe the problem.",scopeLabel:session.scopeLabel},submitAction:"/api/ops/requests",cancelLink:{label:"Back to requests",href:"/app/requests"},stores,storeLookup:Boolean(page.nextCursor),storeNextCursor:page.nextCursor,defaultStoreId:selected?.id??(!page.nextCursor&&stores.length===1?stores[0].value:undefined),priorityOptions:[{value:"routine",label:"Routine"},{value:"urgent",label:"Urgent"},{value:"emergency",label:"Emergency"}]};
+  return {state:{kind:"ready"},page:{title:"Report an issue",eyebrow:"New report",description:"Choose a store and describe the problem.",scopeLabel:session.scopeLabel},submitAction:"/api/ops/requests",cancelLink:{label:"Back to requests",href:"/app/requests"},stores,storeLookup:Boolean(page.nextCursor),storeNextCursor:page.nextCursor,defaultStoreId:selected?.id??(!page.nextCursor&&stores.length===1?stores[0].value:undefined),priorityOptions:[{value:"routine",label:"Routine"},{value:"urgent",label:"Urgent"},{value:"emergency",label:"Emergency"}]};
 }
 
 export async function loadCreateWorkOrderModel(searchParams: OperatorSearchParameters = {}) {

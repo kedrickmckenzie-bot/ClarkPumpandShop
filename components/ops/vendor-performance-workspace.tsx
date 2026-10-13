@@ -212,7 +212,7 @@ function VendorPerformanceListComplete({ model }: { model: VendorPerformanceList
 
       <section className={styles.methodBanner}>
         <span><ShieldCheck aria-hidden="true" size={21} /></span>
-        <div><strong>How vendor measures work</strong><p>Response, visits, open follow-ups, documents, and cost stay separate. The platform shows what happened; it does not automatically grade a vendor or decide whether a bill is valid.</p></div>
+        <div><strong>How vendor measures work</strong><p>Each number shows what happened. These numbers don&apos;t grade vendors or decide whether a bill is right.</p></div>
       </section>
     </div>
   );
@@ -446,10 +446,6 @@ function VendorPerformanceDetailComplete({ model, tab = "contact" }: { model: Ve
 
       {model.serviceReport ? <VendorServiceReport model={model.serviceReport} vendorId={vendor.id}/> : null}
 
-      <section className={styles.methodBanner}>
-        <span><ShieldCheck aria-hidden="true" size={21} /></span>
-        <div><strong>Numbers, not a grade</strong><p>Each measure explains what is counted. Response rates appear after three observations, and visit time is approximate—not certified labor.</p></div>
-      </section>
       </>) : null}
 
       <div className={styles.evidenceStack}>
@@ -650,7 +646,7 @@ function VendorPerformanceDetailComplete({ model, tab = "contact" }: { model: Ve
 
       <footer className={styles.boundaryNote}>
         <ExternalLink aria-hidden="true" size={17} />
-        <p><strong>Before making a decision:</strong> these numbers describe recorded activity. They do not prove service quality, billed labor, invoice validity, or vendor fault. Open the supporting work first.</p>
+        <p>These numbers show recorded activity, not proof of quality or billing. Open the work behind any number before deciding.</p>
       </footer>
     </div>
   );

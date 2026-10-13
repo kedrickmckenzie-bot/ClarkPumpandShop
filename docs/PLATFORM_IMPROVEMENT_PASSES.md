@@ -4,6 +4,20 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### SD-01 plain words and one to-do number; SD-02 store contacts (part 1) — October 13, 2026
+
+**What was done.**
+- **One to-do number.** The Overview "To do" tile, the Review sidebar count and the owner summary all use the same Review count (new + stuck + to check), with "N yours" shown inside it. "Open items" is now "Open work orders". "Needs my action" is now "Assigned to me" everywhere, including the SQL search text.
+- **Plain words.** Problems are page titles on work orders and store reports, with the number above them. Dates read "Due today 1:15 PM", "Late · was due yesterday 4 PM", "15 days late", using the store's own day (`lib/ops/plain-time.ts`). Repeated disclaimers are trimmed, receipts show a short reference, and the email settings say plainly that nothing is emailed until email is turned on.
+- **No dead ends.** Technician-only pages show a friendly "Not for your role" notice for other roles instead of crashing. Other roles opening a technician job go to the normal work order. The app's not-found page is plain.
+- **Store contacts (SD-02 part 1).** One shared contact row: Call store, store manager (tap to call), Directions and "How to get in". It appears on the store page, the work order overview, the technician job page and the technician store page. The vendor link now uses live store phone and access notes (not the frozen copy), with tap-to-call and Directions. Store-manager phones come from the existing store-manager lookup (no new query).
+
+**How it was tested.** New tests: plain dates, including the store-time-zone day boundary. Updated tests: To do reconciliation (prepared dashboards bring their own To do counts), contact links on the technician job, manager phone through PostgreSQL. Full checks: seed, typecheck, lint, 1,576 unit/integration tests (with PostgreSQL), 68 end-to-end tests, build and Render build all pass. Browser (Render build on PostgreSQL): Overview To do reads "27 · 11 new · 9 stuck · 7 to check · 15 yours", matching Review 27. Store 104 and work order CPS-2026-0117 show the contact row. The technician job on a 390 px phone shows Call store, Robin Carter, Directions and How to get in. A store manager opening a technician page sees the friendly notice.
+
+**Still open.** SD-02 part 2: vendor phone and email with tap-to-call on the work order; ask for an ETA when a vendor accepts; refresh the vendor "Your next step" after Accept (SB-03).
+
+**Proposed next (waiting on the user).** AIM refrigerant compliance driven by refrigerant type and full charge on equipment. Then UST fuel-tank compliance. Then a c-store compliance starter pack using the existing schedules (extinguishers, hood suppression, backflow, grease trap, emergency lighting, fire alarm/sprinkler, pump accuracy).
+
 ### Slam-dunk audit (features and usability) — October 13, 2026
 
 **What was done.** Full audit at the user's request. No product code changed. Full findings, evidence and sources are in [PLATFORM_AUDIT_2026-10-13.md](PLATFORM_AUDIT_2026-10-13.md); the proposed checklist is in "Slam-dunk audit — proposed work" below.
@@ -550,18 +564,32 @@ Browser evidence covers facilities → Chris → pool → Maria → return → D
 
 Proposed by the audit in [PLATFORM_AUDIT_2026-10-13.md](PLATFORM_AUDIT_2026-10-13.md). **Not authorized yet**; start only after the user picks items. Keep these IDs. Item letters in brackets point to the audit's findings.
 
-- [ ] SD-01 Plain words and one to-do number. One "To do" count everywhere, problems as page titles, relative dates, no repeated disclaimers or raw receipt IDs, friendly no-access pages. [A4–A8]
-- [ ] SD-02 Contacts everywhere. Store card on store, work order, technician job and vendor link: phone, manager, hours, map, access notes. Vendor contacts and rates. Tap to call or navigate. ETA asked when a vendor accepts. [C1, C2, C4, C5, B7]
+- [x] SD-01 Plain words and one to-do number. One "To do" count everywhere, problems as page titles, relative dates, no repeated disclaimers or raw receipt IDs, friendly no-access pages. [A4–A8]
+- [ ] SD-02 (store card done Oct 13; vendor contacts and ETA still open) Contacts everywhere. Store card on store, work order, technician job and vendor link: phone, manager, hours, map, access notes. Vendor contacts and rates. Tap to call or navigate. ETA asked when a vendor accepts. [C1, C2, C4, C5, B7]
 - [ ] SD-03 Faster daily flows. Send form first, "Create & send" for a known vendor, photos on create and report, duplicate warning, compact sortable work list with priority and due, business-hours due times. [B1–B4, B11, B14]
 - [ ] SD-04 Getting-started checklist and a People page (invite, role, stores). Responsibilities shown as a simple grid. [A1, A2, B15]
 - [ ] SD-05 Store manager phone home (report, needs me, who's coming, open at my store), a report-tracking link for employees, compact phone lists. [B6, B8, B9]
 - [ ] SD-06 Owner pack: leadership scorecard, agreed trends fixes, optional budget pacing, "money caught" page, no always-empty columns. [D1, D4, D5, C6–C8]
 - [ ] SD-07 PM that runs itself: monthly/quarterly picker, who does it, automatic work order and send ahead of due, short checklist with readings, month calendar. [B10]
+  - **User decision (October 13): saved (held) jobs never ride along automatically.**
+    - About 3 days before an automatic PM is sent, one Review item lists that vendor's eligible saved jobs at the store, pre-ticked, with "Send with these" or "PM only".
+    - If nobody answers by send time, the PM goes alone and the saved jobs stay saved.
+    - A per-company "auto-include saved jobs under $X" setting may come later, off by default.
+    - Today's safeguards stay as they are: the pre-send "include these?" choice when a person sends work, and a technician already onsite picking up pre-approved saved jobs within the job's dollar limit.
+  - Current state, verified in code: the next PM occurrence is created automatically. Turning an occurrence into a work order and sending it is still manual. PM plans store a preferred/backup vendor, but no screen sets it.
 - [ ] SD-08 Notifications: in-app bell, email when configured, texts for emergencies, daily digest, after-hours path. Needs providers. [B5, E1, E3]
 - [ ] SD-09 Equipment at a glance: specs on top, "same problem N times", repair-or-replace summary, nameplate photo, equipment QR stickers. [C3, E5]
 - [ ] SD-10 Ask TraceOps and better search: ranking, a top result, plain-language questions answered with linked records. [B13, D2]
 - [ ] SD-11 Help built in: one-line menu descriptions, "?" tips, glossary, teaching empty states. [A3]
-- [ ] SD-12 Owner can report and create (setting), Spanish public pages, refrigerant log (verify the AIM Act rule text first). [B12, E4, E6]
+- [ ] SD-12 Owner can report and create (setting), Spanish public pages, refrigerant log. [B12, E4, E6]
+  - **Refrigerant log, checked against EPA's January 2026 fact sheet.** From January 1, 2026, appliances with 15+ lb of HFC (or a substitute with GWP > 53) are covered, except residential/light-commercial AC. Rules:
+    - Calculate the leak rate every time refrigerant is added.
+    - Threshold for commercial refrigeration is 20%; for comfort cooling, 10%.
+    - Repair within 30 days, with initial and follow-up verification tests (follow-up within 10 days).
+    - Keep records for 3 years.
+    - Report units leaking 125% or more of full charge per year to EPA by March 1.
+    - Retrofit or retirement plan within 30 days if not repaired.
+  - **Product idea:** vendor checkout asks "refrigerant added? type and pounds"; the platform calculates, sets the repair deadline and keeps the record. Wording must say "keeps records", never "makes you compliant".
 
 Bugs found during the audit (small; can ride with any batch):
 

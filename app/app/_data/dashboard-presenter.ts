@@ -10,6 +10,8 @@ export interface DashboardPresentationData {
   costTo: string;
   journey: DashboardPageViewModel["journey"];
   review: { items: ActionItemViewModel[]; totalCount: number; mineCount: number };
+  /** Review's three sections (the one to-do number used in the sidebar and on Review) and how many are yours. */
+  todo?: TodoCounts;
   repairComparisonCount: number;
   replacementEstimateLabel: string;
   store?: { id: string; storeNumber: string };
@@ -22,6 +24,15 @@ export interface DashboardPresentationData {
   trend: TrendViewModel;
   spotlight?: DashboardPageViewModel["spotlight"];
   invoiceSpotlight?: DashboardPageViewModel["spotlight"];
+}
+
+export interface TodoCounts { total: number; newCount: number; stuck: number; done: number; mine: number }
+
+/** One to-do number everywhere: the same count as Review and the sidebar, with its parts and your share. */
+function todoMetric(todo: TodoCounts | undefined, review: DashboardPresentationData["review"]): MetricViewModel {
+  if (!todo) return { id: "open-exceptions", label: "Assigned to you", value: String(review.mineCount), supportingText: "Your next decisions and follow-ups", tone: review.mineCount ? "warning" : "positive", link: { href: "/app/action-center?lane=mine", label: "Open your items" } };
+  const parts = [`${todo.newCount} new`, `${todo.stuck} stuck`, `${todo.done} to check`, `${todo.mine} yours`];
+  return { id: "open-exceptions", label: "To do", value: String(todo.total), supportingText: parts.join(" · "), tone: todo.total ? "warning" : "positive", link: { href: "/app/action-center", label: "Open Review" } };
 }
 
 function money(amountMinor: number) { return cachedNumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(amountMinor / 100); }
@@ -140,7 +151,7 @@ export function presentDashboard(data: DashboardPresentationData, session: Opera
         { id: "recorded-cost", label: "Recorded work cost", value: money(activity.recordedCostMinor), supportingText: "Rolling source cost for this store", link: { href: "/app/spend", label: "Explain the total" } },
       ],
       priorityActions: [
-        dashboardShortcut({ id: "store-report", title: "Report a new store issue", description: "Describe what needs attention.", categoryLabel: "Issue intake", dueLabel: "When needed", ownerLabel: "Store team", tone: "info", href: "/app/requests/new", linkLabel: "Report an issue" }),
+        dashboardShortcut({ id: "store-report", title: "Report a new store issue", description: "Describe what needs attention.", categoryLabel: "Report a problem", dueLabel: "When needed", ownerLabel: "Store team", tone: "info", href: "/app/requests/new", linkLabel: "Report an issue" }),
         dashboardShortcut({ id: "store-response", title: `${review.mineCount} need${review.mineCount === 1 ? "s" : ""} your response`, description: review.mineCount ? "These are decisions or confirmations assigned to the store-manager role, not every item facilities is handling." : "Nothing needs your response.", categoryLabel: "Needs your response", dueLabel: review.mineCount ? "Review now" : "Nothing waiting", ownerLabel: "Store manager", tone: review.mineCount ? "warning" : "positive", href: "/app/action-center?lane=mine", linkLabel: "Open your actions" }),
         dashboardShortcut({ id: "store-work", title: `${activity.openWork} work order${activity.openWork === 1 ? " is" : "s are"} being handled`, description: "See the next action and who owns it.", categoryLabel: "Being handled", dueLabel: "Current", ownerLabel: "Store and maintenance", tone: activity.openWork ? "info" : "positive", href: "/app/work-orders?status=open", linkLabel: "Open current work" }),
         dashboardShortcut({ id: "store-upcoming", title: `${activity.upcomingAppointments} upcoming confirmed appointment${activity.upcomingAppointments === 1 ? "" : "s"}`, description: "See confirmed vendor visits.", categoryLabel: "Upcoming visits", dueLabel: activity.upcomingAppointments ? "Scheduled" : "None scheduled", ownerLabel: "Vendor and facilities", href: "/app/visits?status=upcoming", linkLabel: "Open upcoming visits" }),
@@ -170,16 +181,16 @@ export function presentDashboard(data: DashboardPresentationData, session: Opera
     journey: journey,
     metrics: isFacilities
       ? [
-          { id: "open-exceptions", label: "Needs your action", value: String(review.mineCount), supportingText: "Your next decisions and follow-ups", tone: review.mineCount ? "warning" : "positive", link: { href: "/app/action-center?lane=mine", label: "Open your actions" } },
+          todoMetric(data.todo, review),
           { id: "upcoming-visits", label: "Upcoming visits", value: String(activity.upcomingAppointments), supportingText: "Confirmed vendor appointments", tone: "info", link: { href: "/app/visits?status=upcoming", label: "See expected visits" } },
           { id: "active-visits", label: "Visits without checkout", value: String(activity.activeVisits), supportingText: `${activity.totalVisits} total visits recorded`, tone: activity.activeVisits ? "info" : "neutral", link: { href: "/app/visits?status=active", label: "Review open visits" } },
-          { id: "open-items", label: "Open items", value: String(review.totalCount), supportingText: "All open items visible to you", link: { href: "/app/action-center?lane=all", label: "Open all items" } },
+          { id: "open-work", label: "Open work orders", value: String(activity.openWork), supportingText: "Every open job across your stores", tone: activity.openWork ? "info" : "positive", link: { href: "/app/work-orders?status=open", label: "Open work orders" } },
         ]
       : [
           { id: "open-work", label: "Open work", value: String(activity.openWork), supportingText: "Each item has an owner, next step, and due date", tone: activity.openWork ? "info" : "positive", link: { href: "/app/work-orders?status=open", label: "Open regional work" } },
-          { id: "open-exceptions", label: "Needs your action", value: String(review.mineCount), supportingText: "Your next decisions and follow-ups", tone: review.mineCount ? "warning" : "positive", link: { href: "/app/action-center?lane=mine", label: "Open your actions" } },
+          todoMetric(data.todo, review),
           { id: "active-visits", label: "Visits without checkout", value: String(activity.activeVisits), supportingText: `${activity.totalVisits} recorded visits in regional scope`, tone: activity.activeVisits ? "info" : "neutral", link: { href: "/app/visits?status=active", label: "Review open visits" } },
-          { id: "open-items", label: "Open items", value: String(review.totalCount), supportingText: "All open items visible to you", link: { href: "/app/action-center?lane=all", label: "Open all items" } },
+          { id: "recorded-cost", label: "Recorded work cost", value: money(activity.recordedCostMinor), supportingText: "Last 12 months in your region", link: { href: "/app/spend", label: "Explain the total" } },
         ],
     priorityActions: review.items,
     prioritySection: { display: "summary", title: "Review queue", description: isFacilities ? "Items waiting for a decision, update, or owner." : "Items waiting for action across stores in your region.", link: { href: "/app/action-center", label: "Open review queue" } },
