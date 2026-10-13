@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { assignWorkOrder, createStore } from "@/lib/ops/commands";
 import { POST } from "@/app/api/ops/work-orders/route";
 import { CreateWorkOrderForm } from "@/components/ops/forms";
@@ -316,6 +316,10 @@ describe("work-order vendor path entry", () => {
   });
 
   it("creates manager-approved held work without assigning a vendor or exposing a price", async () => {
+    // The hold deadline below is a fixed date and must stay in the future, so only the clock is pinned.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-01T12:00:00.000Z"));
+    onTestFinished(() => { vi.useRealTimers(); });
     const repository = configureContext();
     const before = repository.snapshot();
 

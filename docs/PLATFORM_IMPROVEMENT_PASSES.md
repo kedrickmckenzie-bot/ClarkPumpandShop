@@ -4,6 +4,36 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Slam-dunk audit (features and usability) — October 13, 2026
+
+**What was done.** Full audit at the user's request. No product code changed. Full findings, evidence and sources are in [PLATFORM_AUDIT_2026-10-13.md](PLATFORM_AUDIT_2026-10-13.md); the proposed checklist is in "Slam-dunk audit — proposed work" below.
+
+**How it was tested.**
+- Production build on a local PostgreSQL copy of the demo.
+- 7 roles × 78 pages on desktop and phone, about 600 visits.
+- Journeys walked: store QR report (phone) → work order → vendor link accept (phone) → store-QR check-in and checkout (phone); technician My work (phone); search.
+
+**Headline result.**
+- The engine is strong.
+- The experience still reads like an audit trail, hides basic contacts, and splits "what needs me" across several numbers.
+- It lacks the first-week adoption pieces: setup checklist, people, help and notifications.
+- Measured median page load about 0.9 s locally; no sideways scrolling on phones.
+
+**Bugs logged, not fixed (SB-01–SB-10).**
+- My-work pages crash for non-technician roles.
+- The vendor link drops the store phone and access notes.
+- Night-time due times.
+- Overview to-do counts disagree.
+
+**Also fixed: a test that broke when the real date passed it.** `tests/ops-bid-service-entry.test.ts` sends a fixed hold deadline of October 10, 2026, which the app correctly rejects once that date is past. The test now pins only the clock to October 1 for that one case. Other tests contain late-October and November dates; most pass their own clock, but a future check run may surface another one.
+
+**Checks.**
+- First full run: seed, typecheck, lint, test:e2e, build and build:render passed; unit tests had only the date-bound failure above.
+- After the fix: typecheck, lint and the full unit suite (with PostgreSQL) re-run before pushing.
+
+**Next.** Wait for the user to pick from SD-01–SD-12. The recommended start is SD-01 (plain words, one to-do number) plus SD-02 (contacts everywhere).
+
+
 ### Reports rebuilt for owners and leadership; report scheduling — October 8, 2026
 
 **Reports are now purpose-built documents.** Each opens with a period picker (last month, this month so far, last quarter, year to date, last 12 months, or a named month), store and area filters, and **Summary** or **Every record**. Every number derives from source cost lines, assignments, visits, PM occurrences and invoice allocations (`lib/ops/reports/*`).
@@ -515,6 +545,36 @@ P1 is not yet cleared for P2. The independent audit reran all 24 focused dispatc
 Implementation is in the existing managed planning worktree on `codex/internal-dispatch-p1`, based on `861630053e7fdff3686926047399f55a9be10495`. It adds person/pool/manager assignment, atomic claim/return/reassignment, current access assertions, bounded Dispatch/My work queries, internal next-visit intake/closure, adapter/schema parity and insert-only demo enrichment. The original checkout and preview are unchanged. Required checks pass: seed, typecheck, lint, 202 files / 1,259 tests, 66 workflow tests, Sites build and Render build. P1 is ready for the independent Astra audit; see [the concrete audit handoff](internal-dispatch/P1_HANDOFF.md) and [acceptance evidence](internal-dispatch/ACCEPTANCE.md).
 
 Browser evidence covers facilities → Chris → pool → Maria → return → Devon across independent sessions, a rejected stale claim, reload/search agreement, and phone held-work creation plus audited “Not needed” cancellation. New field execution/results and schedules are P2/P3. IM-07 and IM-09 remain partial overall; P1 implements their intake/eligibility/queue portions only.
+
+## Slam-dunk audit — proposed work (October 13, 2026)
+
+Proposed by the audit in [PLATFORM_AUDIT_2026-10-13.md](PLATFORM_AUDIT_2026-10-13.md). **Not authorized yet**; start only after the user picks items. Keep these IDs. Item letters in brackets point to the audit's findings.
+
+- [ ] SD-01 Plain words and one to-do number. One "To do" count everywhere, problems as page titles, relative dates, no repeated disclaimers or raw receipt IDs, friendly no-access pages. [A4–A8]
+- [ ] SD-02 Contacts everywhere. Store card on store, work order, technician job and vendor link: phone, manager, hours, map, access notes. Vendor contacts and rates. Tap to call or navigate. ETA asked when a vendor accepts. [C1, C2, C4, C5, B7]
+- [ ] SD-03 Faster daily flows. Send form first, "Create & send" for a known vendor, photos on create and report, duplicate warning, compact sortable work list with priority and due, business-hours due times. [B1–B4, B11, B14]
+- [ ] SD-04 Getting-started checklist and a People page (invite, role, stores). Responsibilities shown as a simple grid. [A1, A2, B15]
+- [ ] SD-05 Store manager phone home (report, needs me, who's coming, open at my store), a report-tracking link for employees, compact phone lists. [B6, B8, B9]
+- [ ] SD-06 Owner pack: leadership scorecard, agreed trends fixes, optional budget pacing, "money caught" page, no always-empty columns. [D1, D4, D5, C6–C8]
+- [ ] SD-07 PM that runs itself: monthly/quarterly picker, who does it, automatic work order and send ahead of due, short checklist with readings, month calendar. [B10]
+- [ ] SD-08 Notifications: in-app bell, email when configured, texts for emergencies, daily digest, after-hours path. Needs providers. [B5, E1, E3]
+- [ ] SD-09 Equipment at a glance: specs on top, "same problem N times", repair-or-replace summary, nameplate photo, equipment QR stickers. [C3, E5]
+- [ ] SD-10 Ask TraceOps and better search: ranking, a top result, plain-language questions answered with linked records. [B13, D2]
+- [ ] SD-11 Help built in: one-line menu descriptions, "?" tips, glossary, teaching empty states. [A3]
+- [ ] SD-12 Owner can report and create (setting), Spanish public pages, refrigerant log (verify the AIM Act rule text first). [B12, E4, E6]
+
+Bugs found during the audit (small; can ride with any batch):
+
+- [ ] SB-01 `/app/my-work/next`, `/check-in` and `/[id]` crash (React #441) for non-technician roles; show a friendly message instead. [F1]
+- [ ] SB-02 Public report photo storage message is unclear when private storage isn't configured; production needs S3-compatible storage (P6-03). [F2]
+- [ ] SB-03 Vendor link "Your next step" doesn't refresh after Accept. [F3]
+- [ ] SB-04 Accountability package Overview links to hidden Review and Dispatch. [F4]
+- [ ] SB-05 Overview "Needs your action" and "to review" counts disagree. [F5]
+- [ ] SB-06 Vendor link never shows the store phone; access notes are missing from the frozen store copy made when work is sent. [F6]
+- [ ] SB-07 Due times fall at night (now + 24 h). [F7]
+- [ ] SB-08 Inconsistent request reference formats. [F8]
+- [ ] SB-09 Leftover second tab set and "Review this record" block at the bottom of the equipment page. [F9]
+- [ ] SB-10 Technician compliance page logs a 403 for a background request. [F10]
 
 ## Internal dispatch planning packet — October 3, 2026
 
