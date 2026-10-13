@@ -20,7 +20,7 @@ export function getAiClient(): AiClient | undefined {
   return {
     provider: "anthropic",
     model,
-    async json({ system, prompt, schema, effort = "low", maxTokens = 4000, tier = "smart" }) {
+    async json({ system, prompt, schema, effort = "low", maxTokens = 4000, tier = "smart", images = [] }) {
       const chosen = tier === "fast" ? fastModel : model;
       let response;
       try {
@@ -28,7 +28,7 @@ export function getAiClient(): AiClient | undefined {
           model: chosen,
           max_tokens: maxTokens,
           system,
-          messages: [{ role: "user", content: prompt }],
+          messages: [{ role: "user", content: images.length ? [...images.map((image) => ({ type: "image" as const, source: { type: "base64" as const, media_type: image.mediaType, data: image.base64 } })), { type: "text" as const, text: prompt }] : prompt }],
           // Haiku models don't take an effort setting.
           output_config: { ...(chosen.startsWith("claude-haiku") ? {} : { effort }), format: betaZodOutputFormat(schema) },
           // If this model declines, Anthropic retries on a suitable model instead of failing the tech.

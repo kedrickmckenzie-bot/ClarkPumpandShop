@@ -508,7 +508,7 @@ function VendorUpdateSummary({ model }: { model: VendorResponseActionsModel }) {
   return (
     <section className={styles.vendorUpdate} aria-label="Latest vendor update">
       <div><small>Latest vendor update</small><strong>{responseLabel}</strong><p>{model.responderName}</p></div>
-      {model.proposedAtLabel ? <div><small>Proposed service time</small><strong>{model.proposedAtLabel}</strong></div> : null}
+      {model.proposedAtLabel ? <div><small>{model.kind === "accepted" ? "Expected arrival" : "Proposed service time"}</small><strong>{model.proposedAtLabel}</strong></div> : null}
       <div><small>Vendor message</small><strong>{model.message ?? "No additional message recorded"}</strong></div>
     </section>
   );

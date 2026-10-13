@@ -118,3 +118,17 @@ describe("refrigerant at vendor checkout", () => {
     expect(repository.snapshot().auditEvents.some((event) => event.eventType === "asset.refrigerant_service_recorded" && event.aggregateId === "asset-104-beer-cave")).toBe(true);
   });
 });
+
+describe("reading an equipment tag photo", () => {
+  it("passes the photo to the AI, matches the refrigerant to our list and never invents missing facts", async () => {
+    const { readEquipmentTag } = await import("@/lib/ops/refrigerant-tag");
+    const calls: unknown[] = [];
+    const ai = (answer: object) => ({ provider: "test", model: "m", async json(request: { images?: unknown[]; schema: { parse(value: unknown): unknown } }) { calls.push(request.images); return request.schema.parse(answer); } }) as never;
+    const photo = { mediaType: "image/jpeg" as const, base64: "abc" };
+    expect(await readEquipmentTag(ai({ refrigerant: "r404a", chargePounds: 26.25, manufacturer: "Heatcraft", model: "PTN060", serial: "T21B0001", confidence: "high" }), photo))
+      .toEqual({ refrigerant: "R-404A", chargeLb: "26.3", manufacturer: "Heatcraft", model: "PTN060", serial: "T21B0001", lowConfidence: false, unrecognized: undefined });
+    expect(calls[0]).toEqual([photo]);
+    const unknown = await readEquipmentTag(ai({ refrigerant: "R-999X", chargePounds: null, manufacturer: "", model: "", serial: "", confidence: "low" }), photo);
+    expect(unknown).toMatchObject({ refrigerant: undefined, unrecognized: "R-999X", chargeLb: undefined, lowConfidence: true });
+  });
+});

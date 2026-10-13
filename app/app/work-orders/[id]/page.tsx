@@ -9,7 +9,7 @@ import {LinkedStoreTasks, canCreateStoreTasks} from "@/components/workspace/link
 import { WorkFiles } from "@/components/workspace/work-files";
 import {WorkWarrantyContext} from "@/components/workspace/work-warranty-context";
 import { WorkStoreContact } from "@/components/workspace/store-contact";
-import { RefrigerantPanel, WorkRefrigerantNotice } from "@/components/workspace/refrigerant-panel";
+import { RefrigerantPanel, WorkRefrigerantNotice, tagFromQuery } from "@/components/workspace/refrigerant-panel";
 import { WorkInspectionContext } from "@/components/workspace/work-inspection-context";
 import { WorkEmailHistory } from "@/components/workspace/work-email-history";
 import { WorkCostPrompts } from "@/components/workspace/work-cost-prompts";
@@ -172,7 +172,7 @@ export default async function WorkOrderDetailPage({ params, searchParams }: { pa
       headerFacts={headerFacts}
       warrantyContext={<WorkWarrantyContext workOrderId={id}/>}
       storeContact={view === "overview" ? <WorkStoreContact workOrderId={id}/> : undefined}
-      refrigerant={view === "equipment" && headerDetail?.asset ? <RefrigerantPanel assetId={headerDetail.asset.id} workOrderId={id} returnTo={`/app/work-orders/${encodeURIComponent(id)}?view=equipment`} saved={(query as Record<string, unknown>).saved === "refrigerant"}/> : view === "overview" ? <WorkRefrigerantNotice workOrderId={id}/> : undefined}
+      refrigerant={view === "equipment" && headerDetail?.asset ? <RefrigerantPanel assetId={headerDetail.asset.id} workOrderId={id} returnTo={`/app/work-orders/${encodeURIComponent(id)}?view=equipment`} saved={(query as Record<string, unknown>).saved === "refrigerant"} tag={tagFromQuery(query as Record<string, string | string[] | undefined>)}/> : view === "overview" ? <WorkRefrigerantNotice workOrderId={id}/> : undefined}
       sentWork={view === "service" ? <><InternalAssignmentPanel workOrderId={id}/><InternalPlanningPanel workOrderId={id}/><SentWorkOrders workOrderId={id}/></> : undefined}
       emailHistory={["overview","activity"].includes(view) ? <><LinkedStoreTasks kind="work" id={id} hideEmpty/><WorkFiles workOrderId={id}/><WorkInspectionContext workOrderId={id}/><WorkEmailHistory workOrderId={id}/></> : undefined}
       costPrompts={["overview", "service"].includes(view) ? <WorkCostPrompts workOrderId={id}/> : undefined}

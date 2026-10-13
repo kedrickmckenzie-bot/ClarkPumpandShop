@@ -16,6 +16,8 @@ export interface AiClient {
     /** "fast" for simple form-filling and note-writing, "smart" for troubleshooting judgment. Each can use a different (cheaper) model. */
     tier?: "fast" | "smart";
     maxTokens?: number;
+    /** Photos to read with the prompt, such as an equipment tag. */
+    images?: { mediaType: "image/jpeg" | "image/png" | "image/webp" | "image/gif"; base64: string }[];
   }): Promise<z.infer<Schema>>;
   /**
    * Optional internet look-up. Returns a short plain summary and the pages it came from.

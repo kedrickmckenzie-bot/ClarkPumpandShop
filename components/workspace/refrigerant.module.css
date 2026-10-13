@@ -41,3 +41,8 @@
   .table tr { padding: 8px 0; border-bottom: 1px solid #edf1f5; }
   .table td { padding: 2px 0; border: 0; }
 }
+.quiet { padding: 0; border-style: dashed; }
+.quiet .drawer { border: 0; }
+.warn { margin: 0; padding: 8px 12px; border: 1px solid #f5c26b; border-radius: 5px; background: #fffaeb; }
+.secondary { justify-self: start; min-height: 40px; padding: 7px 16px; border: 1px solid var(--product-action, #2563eb) !important; border-radius: 6px; background: #ffffff !important; color: var(--product-action, #2563eb) !important; font: inherit; font-weight: 650; cursor: pointer; }
+.button { display: inline-flex; align-items: center; min-height: 40px; padding: 7px 16px; border-radius: 6px; background: var(--product-action, #2563eb); color: #ffffff !important; font-weight: 650; text-decoration: none !important; }

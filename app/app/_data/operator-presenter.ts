@@ -5293,6 +5293,8 @@ export function buildCreateWorkOrderModel(
       storeId: sourceRequest?.storeId ?? sourceVisit?.storeId ?? sourcePmOccurrence?.storeId ?? requestedAsset?.storeId ?? requestedStore,
       assetId: sourcePmOccurrence?.assetId ?? requestedAsset?.id,
       categoryKey: sourcePmProgram?.tradeKey ?? requestedAsset?.categoryKey,
+      // A suggested problem from a link (such as "Repair the refrigerant leak"); the person can change it.
+      ...(first(query.problem) ? { problem: first(query.problem)!.slice(0, 500) } : {}),
       ...(sourcePmOccurrence ? {
         problem: [sourcePmProgram?.name ?? sourcePmPlan?.name ?? "Complete scheduled preventive maintenance", sourcePmProgram?.completionCriteria, sourcePmPlan?.accessRequirements].filter(Boolean).join("\n"),
         priority: "planned" as const,

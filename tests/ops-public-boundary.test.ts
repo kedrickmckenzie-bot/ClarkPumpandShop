@@ -529,6 +529,12 @@ describe("public service and visit capability boundaries", () => {
     expect(response?.proposedAt).toBe("2026-10-06T13:30:00.000Z");
   });
 
+  it("keeps an optional expected arrival on an acceptance, in the store's local time", async () => {
+    const gateway = getPublicOperationsGateway(), repository = getNorthlineFixtureRepository();
+    const receipt = await gateway.respondToServiceAuthorization(PUBLIC_DEMO_LINKS.serviceToken, { response: "accepted", responderName: "Vendor", proposedArrival: "2026-10-06T09:30" });
+    expect(await repository.getVendorResponse(NORTHLINE_ORGANIZATION_ID, receipt.receiptId)).toMatchObject({ response: "accepted", proposedAt: "2026-10-06T13:30:00.000Z" });
+  });
+
   it("accepts a question after vendor acceptance without resetting service", async () => {
     const gateway = getPublicOperationsGateway();
     const repository = getNorthlineFixtureRepository();

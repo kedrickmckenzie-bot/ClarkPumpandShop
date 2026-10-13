@@ -4,6 +4,23 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Refrigerant follow-ups (AIM-05), vendor contacts and arrival time (SD-02 part 2) — October 13, 2026
+
+**What was done.**
+- **Asked only when it matters.** Vendor checkout asks about refrigerant only on units the EPA leak rules cover, and the answer is required there. Small units aren't asked; their records can still be added from the equipment page.
+- **Equipment outside Refrigeration/HVAC** (a foodservice cooler, say) shows a small "Has refrigerant? Add it" link. Once refrigerant facts are added, the full section appears.
+- **Tag photo.** "Fill in from a photo of the tag" sends one photo to the AI, which reads type, charge (converted to pounds), maker, model and serial.
+  - The form comes back filled in with "Check each box, then save". It warns when the photo was hard to read, and when the printed refrigerant isn't in our list.
+  - Nothing is saved until the person saves, and the photo isn't kept.
+  - The option only shows when AI is turned on. `AiClient.json` now takes optional images.
+- **Printable refrigerant log** per unit (`/app/equipment/[id]/refrigerant-log`): facts, leak repairs, and every record with date, amount, leak rate, technician, EPA cert and who recorded it.
+- **Create repair work order** from an open leak clock. It opens the new work order with the store, equipment and "Repair the refrigerant leak … (EPA repair due …)" filled in. The new-work-order form now accepts a suggested problem in the link.
+- **Vendor contacts.** The work order's contact row adds "Call [vendor]" and "Email [vendor]" for the outside vendor on the job.
+- **Arrival time.** "Accept work" asks "When do you expect to arrive?" (optional, store time). The work order shows it as "Expected arrival".
+- **SB-03.** The vendor page refreshes after any response, so "Your next step" is current.
+
+**How it was tested.** New tests: the tag reader (photo passed through, refrigerant matched to our list, nothing invented when unreadable), and acceptance with an expected arrival in store time. Related vendor, public checkout and refrigerant suites pass. Full checks below.
+
 ### AIM refrigerant compliance (AIM-01 to AIM-04) — October 13, 2026
 
 **What was done.**
@@ -604,7 +621,7 @@ Browser evidence covers facilities → Chris → pool → Maria → return → D
 Proposed by the audit in [PLATFORM_AUDIT_2026-10-13.md](PLATFORM_AUDIT_2026-10-13.md). **Not authorized yet**; start only after the user picks items. Keep these IDs. Item letters in brackets point to the audit's findings.
 
 - [x] SD-01 Plain words and one to-do number. One "To do" count everywhere, problems as page titles, relative dates, no repeated disclaimers or raw receipt IDs, friendly no-access pages. [A4–A8]
-- [ ] SD-02 (store card done Oct 13; vendor contacts and ETA still open) Contacts everywhere. Store card on store, work order, technician job and vendor link: phone, manager, hours, map, access notes. Vendor contacts and rates. Tap to call or navigate. ETA asked when a vendor accepts. [C1, C2, C4, C5, B7]
+- [x] SD-02 Contacts everywhere. Store card on store, work order, technician job and vendor link: phone, manager, hours, map, access notes. Vendor contacts and rates. Tap to call or navigate. ETA asked when a vendor accepts. [C1, C2, C4, C5, B7]
 - [ ] SD-03 Faster daily flows. Send form first, "Create & send" for a known vendor, photos on create and report, duplicate warning, compact sortable work list with priority and due, business-hours due times. [B1–B4, B11, B14]
 - [ ] SD-04 Getting-started checklist and a People page (invite, role, stores). Responsibilities shown as a simple grid. [A1, A2, B15]
 - [ ] SD-05 Store manager phone home (report, needs me, who's coming, open at my store), a report-tracking link for employees, compact phone lists. [B6, B8, B9]
@@ -636,7 +653,7 @@ Compliance additions approved by the user on October 13, 2026, in this order:
 - [x] AIM-02 Append-only refrigerant log, with the leak math (EPA annualizing method) and the rule and limit copied onto each record. 30-day repair clock, follow-up leak check (about 10 days), chronic-leaker check (125% in a calendar year, report by March 1). Wording keeps records and does the math; it never says "makes you compliant".
 - [x] AIM-03 Asked where the work happens: vendor checkout (required on covered units, saved in the checkout transaction), the in-house technician job, and the work order and equipment pages for office entry from vendor paperwork.
 - [x] AIM-04 Compliance → Refrigerant page: open leak repairs, covered equipment, chronic leakers and units missing info, each opening the equipment's refrigerant log. Work order overview shows an open leak clock, or asks once a covered unit has been serviced with nothing recorded.
-- [ ] AIM-05 Nameplate photo read by AI to fill refrigerant type and charge (person confirms). Printable refrigerant log per unit. Optional: create a repair work order straight from an open leak clock.
+- [x] AIM-05 Nameplate photo read by AI to fill refrigerant type and charge (person confirms). Printable refrigerant log per unit. Optional: create a repair work order straight from an open leak clock.
 - [ ] UST-01 Underground fuel tank compliance: monthly release detection results, 30-day walkthroughs, yearly equipment tests, 3-year spill/overfill/corrosion tests, A/B/C operator records. A failed result opens a work order with a deadline. Records results from the tank monitor; never replaces it.
 - [ ] CP-01 C-store compliance starter pack on the existing schedules: extinguishers, hood suppression, hood cleaning, backflow, grease trap, emergency lighting, fire alarm/sprinkler, pump accuracy.
 
@@ -644,7 +661,7 @@ Bugs found during the audit (small; can ride with any batch):
 
 - [ ] SB-01 `/app/my-work/next`, `/check-in` and `/[id]` crash (React #441) for non-technician roles; show a friendly message instead. [F1]
 - [ ] SB-02 Public report photo storage message is unclear when private storage isn't configured; production needs S3-compatible storage (P6-03). [F2]
-- [ ] SB-03 Vendor link "Your next step" doesn't refresh after Accept. [F3]
+- [x] SB-03 Vendor link "Your next step" doesn't refresh after Accept. [F3] (Fixed Oct 13: the page refreshes after any response.)
 - [ ] SB-04 Accountability package Overview links to hidden Review and Dispatch. [F4]
 - [ ] SB-05 Overview "Needs your action" and "to review" counts disagree. [F5]
 - [ ] SB-06 Vendor link never shows the store phone; access notes are missing from the frozen store copy made when work is sent. [F6]

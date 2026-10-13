@@ -1,4 +1,4 @@
-import { MapPin, Phone, UserRound } from "lucide-react";
+import { Mail, MapPin, Phone, UserRound, Wrench } from "lucide-react";
 import { loadOperatorSession } from "@/app/app/_data/operator-loader";
 import { getServerOpsRepository } from "@/lib/server/ops-repository-provider";
 import type { OpsRepository } from "@/lib/ops/repository";
@@ -18,7 +18,7 @@ export function directionsHref(address: string) {
  * Who to call and how to get there: store phone, store manager, directions and how to get in.
  * The caller has already checked that the viewer can open this store.
  */
-export async function StoreContact({ repository, store, accessNotes = true }: { repository: OpsRepository; store: Store; accessNotes?: boolean }) {
+export async function StoreContact({ repository, store, accessNotes = true, vendor }: { repository: OpsRepository; store: Store; accessNotes?: boolean; vendor?: { name: string; phone?: string; email?: string } }) {
   const managers = (await repository.listNotificationRecipients(store.organizationId, "store_manager", { storeId: store.id, regionId: store.regionId }))
     .sort((a, b) => a.displayName.localeCompare(b.displayName) || a.membershipId.localeCompare(b.membershipId))
     .slice(0, 2);
@@ -38,6 +38,18 @@ export async function StoreContact({ repository, store, accessNotes = true }: { 
             <span><strong>{manager.displayName}</strong><small>Store manager · {manager.phone ?? "Email"}</small></span>
           </a>
         ))}
+        {vendor?.phone ? (
+          <a className={styles.action} href={telHref(vendor.phone)}>
+            <Wrench aria-hidden="true" size={18} />
+            <span><strong>Call {vendor.name}</strong><small>Vendor · {vendor.phone}</small></span>
+          </a>
+        ) : null}
+        {vendor?.email ? (
+          <a className={styles.action} href={`mailto:${vendor.email}`}>
+            <Mail aria-hidden="true" size={18} />
+            <span><strong>Email {vendor.name}</strong><small>{vendor.email}</small></span>
+          </a>
+        ) : null}
         <a className={styles.action} href={directionsHref(address)} target="_blank" rel="noreferrer">
           <MapPin aria-hidden="true" size={18} />
           <span><strong>Directions</strong><small>{store.address1}, {store.city}</small></span>
@@ -48,10 +60,13 @@ export async function StoreContact({ repository, store, accessNotes = true }: { 
   );
 }
 
-/** The store contact for a work order the viewer can open. */
+/** The store contact, plus the outside vendor on the job, for a work order the viewer can open. */
 export async function WorkStoreContact({ workOrderId }: { workOrderId: string }) {
   const session = await loadOperatorSession(), repository = await getServerOpsRepository();
   const work = await repository.getWorkOrderDetail(session, workOrderId);
-  const store = work ? await repository.getStore(session.organizationId, work.storeId) : null;
-  return store ? <StoreContact repository={repository} store={store} /> : null;
+  const [store, assignment] = work ? await Promise.all([repository.getStore(session.organizationId, work.storeId), repository.getActiveAssignment(session.organizationId, work.id)]) : [null, null];
+  // The outside vendor handling this job, so the manager can call them from the same row.
+  const vendorRecord = assignment?.kind === "outside_vendor" && assignment.vendorId ? await repository.getVendor(session.organizationId, assignment.vendorId) : null;
+  const vendor = vendorRecord ? { name: vendorRecord.name, phone: vendorRecord.dispatchPhone, email: vendorRecord.dispatchEmail } : undefined;
+  return store ? <StoreContact repository={repository} store={store} vendor={vendor} /> : null;
 }

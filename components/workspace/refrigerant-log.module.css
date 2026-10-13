@@ -1,0 +1,15 @@
+.page { max-width: 1100px; margin: 0 auto; color: #101828; font-size: 15px; }
+.toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 16px; }
+.toolbar button { min-height: 40px; padding: 7px 14px; border: 1px solid #c7d0dc; border-radius: 6px; background: #ffffff; font: inherit; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.header p { margin: 0; color: #5b6b80; }
+.header h1 { margin: 4px 0; font-size: 26px; }
+.facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 24px; margin: 18px 0; padding: 14px 16px; border: 1px solid #dbe2ec; border-radius: 6px; background: #ffffff; }
+.facts dt { color: #5b6b80; font-size: 13px; }
+.facts dd { margin: 2px 0 0; font-weight: 600; }
+.page h2 { margin: 22px 0 8px; font-size: 18px; }
+.table { width: 100%; border-collapse: collapse; background: #ffffff; font-size: 14px; }
+.table th, .table td { padding: 8px 10px; border: 1px solid #dbe2ec; text-align: left; vertical-align: top; }
+.table th { background: #f4f6f9; font-weight: 650; }
+.footer { margin-top: 20px; color: #5b6b80; font-size: 13px; }
+@media (max-width: 700px) { .facts { grid-template-columns: minmax(0, 1fr); } .table { display: block; overflow-x: auto; } }
+@media print { .toolbar { display: none; } .page { max-width: none; } .table { font-size: 11px; } }

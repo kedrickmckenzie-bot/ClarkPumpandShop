@@ -4,7 +4,7 @@ import { getAiClient } from "@/lib/server/ai-provider";
 import { EquipmentDocuments } from "@/components/workspace/equipment-documents";
 import { TechnicianHistory } from "@/components/workspace/technician-history";
 import { StoreContact } from "@/components/workspace/store-contact";
-import { RefrigerantPanel } from "@/components/workspace/refrigerant-panel";
+import { RefrigerantPanel, tagFromQuery } from "@/components/workspace/refrigerant-panel";
 import { dispatchPlanLabel, dispatchTime, dueLabel } from "@/lib/ops/dispatch-board";
 import Link from "next/link";
 import { civilDate, plainNextAction } from "@/lib/ops/dispatch-calendar";
@@ -30,9 +30,9 @@ const sourceLabels: Record<string, string> = {
 };
 const fileLimit = { files: 5, bytes: 8 * 1024 * 1024 };
 
-export default async function InternalJob({ params, searchParams }: { params: Promise<{ id: string }>; searchParams?:Promise<{saved?:string}> }) {
+export default async function InternalJob({ params, searchParams }: { params: Promise<{ id: string }>; searchParams?:Promise<Record<string,string|string[]|undefined>> }) {
   const { id } = await params;
-  const saved=(await searchParams)?.saved;
+  const query=(await searchParams)??{}, saved=typeof query.saved==="string"?query.saved:undefined;
   // Owners, store managers and finance see the same job on its regular work-order page.
   const viewer = await loadOperatorSession();
   if (!["technician", "facilities", "regional"].includes(viewer.role)) redirect(`/app/work-orders/${encodeURIComponent(id)}`);
@@ -90,7 +90,7 @@ export default async function InternalJob({ params, searchParams }: { params: Pr
   const urgent = ["urgent", "emergency"].includes(work.priority);
   const organization=await r.getOrganization(org), zone=store?.timeZone??organization!.timeZone;
   const contact=store?await StoreContact({repository:r,store}):null;
-  const refrigerant=work.asset?await RefrigerantPanel({assetId:work.asset.id,workOrderId:id,returnTo:`/app/my-work/${encodeURIComponent(id)}`,saved:saved==="refrigerant"}):null;
+  const refrigerant=work.asset?await RefrigerantPanel({assetId:work.asset.id,workOrderId:id,returnTo:`/app/my-work/${encodeURIComponent(id)}`,saved:saved==="refrigerant",tag:tagFromQuery(query)}):null;
   const recent=await TechnicianHistory({repository:r,scope:await internalDispatchScope(r,s),storeId:work.storeId,assetId:work.asset?.id,excludeId:id,limit:5,title:work.asset?"Recent work on this equipment":"Recent work at this store",zone});
   const backHref = manager ? "/app/dispatch" : "/app/my-work";
   const aiHelp = Boolean(getAiClient());

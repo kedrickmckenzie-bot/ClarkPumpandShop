@@ -11,10 +11,20 @@ import {
   formatCharge, formatRate, leakClocks, refrigerantCoverage, yearlyLossBps,
   type LeakClock, type RefrigerantEvent,
 } from "@/lib/ops/refrigerant";
+import { roleCan } from "@/components/ops/role-policy";
+import { getAiClient } from "@/lib/server/ai-provider";
 import styles from "./refrigerant.module.css";
 
 const RECORD_ROLES = ["facilities", "regional", "technician"];
 const FACT_ROLES = [...RECORD_ROLES, "store_manager"];
+
+/** What a tag photo suggested, carried back to the form in the page address. Nothing is saved until the person saves. */
+export interface TagSuggestion { refrigerant?: string; chargeLb?: string; maker?: string; model?: string; serial?: string; other?: string; unsure: boolean }
+export function tagFromQuery(query: Record<string, string | string[] | undefined>): TagSuggestion | undefined {
+  const one = (key: string) => { const value = query[key]; return (Array.isArray(value) ? value[0] : value)?.slice(0, 80) || undefined; };
+  if (one("tag") !== "1") return undefined;
+  return { refrigerant: one("tagRefrigerant"), chargeLb: one("tagChargeLb"), maker: one("tagMaker"), model: one("tagModel"), serial: one("tagSerial"), other: one("tagOther"), unsure: one("tagUnsure") === "1" };
+}
 
 function eventSummary(event: RefrigerantEvent) {
   if (event.kind === "verification") return `${event.verificationStage === "follow_up" ? "Follow-up" : "First"} leak check ${event.verificationResult === "passed" ? "passed" : "failed"}`;
@@ -34,7 +44,7 @@ export function clockSentence(clock: LeakClock, today: string, zone?: string) {
  * Refrigerant type, charge, whether the EPA leak rules apply, any open repair clock and the full log for one unit.
  * Shown on the equipment page and the work order. Forms appear only for people allowed to use them.
  */
-export async function RefrigerantPanel({ assetId, workOrderId, returnTo, saved }: { assetId: string; workOrderId?: string; returnTo: string; saved?: boolean }) {
+export async function RefrigerantPanel({ assetId, workOrderId, returnTo, saved, tag }: { assetId: string; workOrderId?: string; returnTo: string; saved?: boolean; tag?: TagSuggestion }) {
   const session = await loadOperatorSession(), repository = await getServerOpsRepository();
   const scope = session.role === "technician" ? await internalDispatchScope(repository, session) : session;
   const detail = await repository.getAssetDetail(scope, assetId);
@@ -48,7 +58,8 @@ export async function RefrigerantPanel({ assetId, workOrderId, returnTo, saved }
   const zone = store?.timeZone ?? organization?.timeZone ?? "America/New_York";
   const today = civilDate(new Date().toISOString(), zone);
   const isCoolingEquipment = ["refrigeration", "hvac"].includes(detail.categoryKey);
-  if (!facts && !isCoolingEquipment) return null;
+  // Other equipment (a foodservice cooler, say) only shows a small "add" link until refrigerant is recorded.
+  const quiet = !facts && !isCoolingEquipment && !tag;
   const coverage = refrigerantCoverage(facts ?? undefined, today);
   const clocks = leakClocks(events, today);
   const openClock = clocks.find((clock) => clock.status !== "closed");
@@ -64,6 +75,40 @@ export async function RefrigerantPanel({ assetId, workOrderId, returnTo, saved }
     <input type="hidden" name="returnTo" value={returnTo} />
     {workOrderId ? <input type="hidden" name="workOrderId" value={workOrderId} /> : null}
   </>;
+  const canReadTag = Boolean(getAiClient());
+  const factsDrawer = canEditFacts ? (
+          <details className={styles.drawer} open={Boolean(tag) || (!facts && !events.length && session.role === "technician")}>
+            <summary>{quiet ? "Has refrigerant? Add it" : facts ? "Change refrigerant details" : "Add refrigerant details"}</summary>
+            {canReadTag ? <RecordForm action={`${action}/tag`} offerSavedWork={false} className={styles.form} attachmentLimit={{ files: 1, bytes: 8 * 1024 * 1024 }}>
+              <input type="hidden" name="returnTo" value={returnTo} />
+              <label>Fill in from a photo of the tag<input type="file" name="photo" accept="image/jpeg,image/png,image/webp" capture="environment" required /></label>
+              <button type="submit" className={styles.secondary}>Read the photo</button>
+            </RecordForm> : null}
+            <RecordForm action={action} offerSavedWork={false} className={styles.form}>
+              {hidden("facts")}
+              <input type="hidden" name="expectedVersion" value={facts?.version ?? 0} />
+              {tag ? <p className={tag.unsure ? styles.warn : styles.saved} role="status">Filled in from the photo{tag.unsure ? ", but parts were hard to read" : ""}. Check each box, then save.{tag.other ? ` The tag says ${tag.other}, which isn't in our list.` : ""}{tag.maker || tag.model || tag.serial ? ` Tag also says: ${[tag.maker, tag.model && `model ${tag.model}`, tag.serial && `serial ${tag.serial}`].filter(Boolean).join(" · ")}.` : ""}</p>
+                : <p className={styles.reason}>Both are on the metal tag on the unit. For walk-ins and beer caves, ask the installer or vendor for the full charge.</p>}
+              <div className={styles.row}>
+                <label>Refrigerant<select name="refrigerant" required defaultValue={tag?.refrigerant ?? facts?.refrigerant ?? ""}>
+                  <option value="" disabled>Choose</option>
+                  {REFRIGERANTS.map((row) => <option key={row.code} value={row.code}>{row.code} · {row.usedIn}</option>)}
+                </select></label>
+                <label>Full charge (lb) <span className={styles.optional}>if known</span><input name="fullChargeLb" inputMode="decimal" pattern="[0-9]*[.]?[0-9]*" defaultValue={tag?.chargeLb ?? (facts?.fullChargeOz !== undefined ? String(Math.round((facts.fullChargeOz / 16) * 10) / 10) : "")} /></label>
+              </div>
+              <div className={styles.row}>
+                <label>Used for<select name="systemUse" defaultValue={facts?.systemUse ?? (detail.categoryKey === "hvac" ? "comfort_cooling" : "commercial_refrigeration")}>
+                  {Object.entries(SYSTEM_USE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select></label>
+                <label>Charge came from<select name="chargeSource" defaultValue={tag?.chargeLb ? "nameplate" : facts?.chargeSource ?? "nameplate"}>
+                  {Object.entries(CHARGE_SOURCE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select></label>
+              </div>
+              <button type="submit">Save refrigerant details</button>
+            </RecordForm>
+          </details>
+  ) : null;
+  if (quiet) return factsDrawer ? <section className={`${styles.panel} ${styles.quiet}`} id="refrigerant" aria-label="Refrigerant">{factsDrawer}</section> : null;
   const chip = coverage.covered === true ? <span className={`${styles.chip} ${styles.chipCovered}`}>EPA leak rules apply</span>
     : coverage.covered === false ? <span className={styles.chip}>Leak rules don&apos;t apply</span>
       : <span className={`${styles.chip} ${styles.chipMissing}`}>Needs info</span>;
@@ -90,6 +135,9 @@ export async function RefrigerantPanel({ assetId, workOrderId, returnTo, saved }
           <strong>{CLOCK_LABELS[openClock.status]}</strong>{clockSentence(openClock, today, zone)}
         </p>
       ) : null}
+      {openClock && ["repair_due", "repair_overdue"].includes(openClock.status) && roleCan(session, "create_work_order") && !workOrderId ? (
+        <p><Link className={styles.button} href={`/app/work-orders/new?${new URLSearchParams({ store: detail.storeId, asset: assetId, problem: `Repair the refrigerant leak on ${detail.name} (EPA repair due ${openClock.repairDueOn})` })}`}>Create repair work order</Link></p>
+      ) : null}
       {coverage.covered && lossBps !== undefined && lossBps >= CHRONIC_LEAK_BPS ? (
         <p className={`${styles.clock} ${styles.clockLate}`}><strong>Chronic leaker</strong>Lost {formatRate(lossBps)} of its charge in {year}. Report it to the EPA by March 1, {year + 1}.</p>
       ) : null}
@@ -115,6 +163,7 @@ export async function RefrigerantPanel({ assetId, workOrderId, returnTo, saved }
         </div>
       ) : facts ? <p className={styles.empty}>No refrigerant work recorded yet.</p> : null}
 
+      {recent.length ? <p className={styles.reason}><Link href={`/app/equipment/${encodeURIComponent(assetId)}/refrigerant-log`}>Print the refrigerant log</Link></p> : null}
       <div className={styles.actions}>
         {canRecord ? (
           <details className={styles.drawer} open={Boolean(workOrderId) && coverage.covered === true && !events.some((event) => event.workOrderId === workOrderId)}>
@@ -162,32 +211,7 @@ export async function RefrigerantPanel({ assetId, workOrderId, returnTo, saved }
             </RecordForm>
           </details>
         ) : null}
-        {canEditFacts ? (
-          <details className={styles.drawer} open={!facts && !recent.length && session.role === "technician"}>
-            <summary>{facts ? "Change refrigerant details" : "Add refrigerant details"}</summary>
-            <RecordForm action={action} offerSavedWork={false} className={styles.form}>
-              {hidden("facts")}
-              <input type="hidden" name="expectedVersion" value={facts?.version ?? 0} />
-              <p className={styles.reason}>Both are on the metal tag on the unit. For walk-ins and beer caves, ask the installer or vendor for the full charge.</p>
-              <div className={styles.row}>
-                <label>Refrigerant<select name="refrigerant" required defaultValue={facts?.refrigerant ?? ""}>
-                  <option value="" disabled>Choose</option>
-                  {REFRIGERANTS.map((row) => <option key={row.code} value={row.code}>{row.code} · {row.usedIn}</option>)}
-                </select></label>
-                <label>Full charge (lb) <span className={styles.optional}>if known</span><input name="fullChargeLb" inputMode="decimal" pattern="[0-9]*[.]?[0-9]*" defaultValue={facts?.fullChargeOz !== undefined ? String(Math.round((facts.fullChargeOz / 16) * 10) / 10) : ""} /></label>
-              </div>
-              <div className={styles.row}>
-                <label>Used for<select name="systemUse" defaultValue={facts?.systemUse ?? (detail.categoryKey === "hvac" ? "comfort_cooling" : "commercial_refrigeration")}>
-                  {Object.entries(SYSTEM_USE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                </select></label>
-                <label>Charge came from<select name="chargeSource" defaultValue={facts?.chargeSource ?? "nameplate"}>
-                  {Object.entries(CHARGE_SOURCE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                </select></label>
-              </div>
-              <button type="submit">Save refrigerant details</button>
-            </RecordForm>
-          </details>
-        ) : null}
+        {factsDrawer}
       </div>
     </section>
   );

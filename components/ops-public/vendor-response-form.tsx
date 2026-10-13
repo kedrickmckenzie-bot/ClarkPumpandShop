@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { CalendarClock, Check, FileCheck2, HelpCircle, X } from "lucide-react";
 import type { PublicActionReceipt, PublicVendorResponseKind } from "./contracts";
 import { ServerReceipt } from "./public-ui";
@@ -22,6 +23,7 @@ export function VendorResponseForm({ token, opened, organizationName, disabled =
   const [response, setResponse] = useState<PublicVendorResponseKind | null>(null);
   const [responderName, setResponderName] = useState("");
   const [proposedArrival, setProposedArrival] = useState("");
+  const router = useRouter();
   const [detail, setDetail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -89,6 +91,8 @@ export function VendorResponseForm({ token, opened, organizationName, disabled =
       if (!result.ok) throw new Error(body.error ?? `${organizationName} could not receive the response. Try again.`);
       // The main response is saved. Show its receipt even if an extra job below fails.
       setReceipt(body);
+      // Refresh the rest of the page so "Your next step" matches the answer just sent.
+      router.refresh();
       if (response === "accepted") {
         const chosen = extras.filter((job) => extraIds.includes(job.id) && job.status === "offered");
         const failed: string[] = [];
@@ -155,6 +159,11 @@ export function VendorResponseForm({ token, opened, organizationName, disabled =
         {response === "proposed_date" ? (
           <label className={styles.label}>Proposed arrival (store local time) <span className={styles.required} aria-hidden="true">*</span>
             <input className={styles.input} onChange={(event) => setProposedArrival(event.target.value)} required type="datetime-local" value={proposedArrival} />
+          </label>
+        ) : null}
+        {response === "accepted" ? (
+          <label className={styles.label}>When do you expect to arrive? <span className={styles.helper}>(optional, store local time)</span>
+            <input className={styles.input} onChange={(event) => setProposedArrival(event.target.value)} type="datetime-local" value={proposedArrival} />
           </label>
         ) : null}
         {response === "accepted" && extras.some((job) => job.status === "offered" || job.status === "accepted") ? (

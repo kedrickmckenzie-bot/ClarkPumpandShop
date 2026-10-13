@@ -562,7 +562,8 @@ async function publicWorkOrdersForVisit(
     const link = links.find((candidate) => candidate.workOrderId === workOrder.id);
     const hold = link?.workOrderHoldId ? await repository.getWorkOrderVisitHold(organizationId, workOrder.id) : null;
     const [facts, asset] = workOrder.assetId ? await Promise.all([repository.getAssetRefrigerant(organizationId, workOrder.assetId), repository.getAsset(organizationId, workOrder.assetId)]) : [null, null];
-    const refrigerant = facts && asset ? { equipment: asset.name, refrigerant: facts.refrigerant, covered: refrigerantCoverage(facts).covered === true } : undefined;
+    // Only units the EPA leak rules cover are asked about at checkout; small units are logged from the equipment page if wanted.
+    const refrigerant = facts && asset && refrigerantCoverage(facts).covered === true ? { equipment: asset.name, refrigerant: facts.refrigerant, covered: true } : undefined;
     return { id: workOrder.id, number: workOrder.number, problem: workOrder.problem, selectionSource: link?.selectionSource, heldWorkPosture: hold?.posture, ...(refrigerant ? { refrigerant } : {}) };
   })));
 }
@@ -1159,7 +1160,8 @@ const gateway: PublicOperationsGateway = {
       throw new PublicWorkflowError(command.response === "declined" ? "Tell the operator why the work is being declined." : "Enter the question you want the operator to answer.", 422, "detail_required");
     }
     let proposedAt: string | undefined;
-    if (command.response === "proposed_date") {
+    // A proposed date needs a time; an acceptance may add an expected arrival.
+    if (command.response === "proposed_date" || (command.response === "accepted" && (command.proposedArrival ?? "").trim())) {
       // The vendor enters the store's local time (the field says so); a value with its own offset is taken as given.
       const raw = (command.proposedArrival ?? "").trim();
       try {
@@ -1181,7 +1183,7 @@ const gateway: PublicOperationsGateway = {
         actor: { actorType: "vendor_link", actorName: responderName, organizationId: source.organizationId },
       });
       const messages: Record<VendorResponseKind, string> = {
-        accepted: `${source.vendor.name} accepted this service authorization. The response is recorded on the work order.`,
+        accepted: `${source.vendor.name} accepted this service authorization${proposedAt ? " with an expected arrival time" : ""}. The response is recorded on the work order.`,
         declined: "The decline is recorded on the work order for the operator to review.",
         proposed_date: `${source.organizationName} received the proposed arrival time.`,
         question: `Your question was added to work order ${source.workOrderNumber} and sent to Facilities.`,
