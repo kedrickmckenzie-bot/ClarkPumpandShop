@@ -1055,6 +1055,35 @@ export const opsAiConversations = sqliteTable("ops_ai_conversations", {
   foreignKey({columns:[t.organizationId,t.workOrderId],foreignColumns:[opsWorkOrders.organizationId,opsWorkOrders.id]}),
   check("chk_ops_ai_conversations",sql`${t.kind} IN ('checkout','diagnostic')`),
 ]);
+/** Refrigerant facts per piece of equipment. Each change adds a version; the highest version is current. Insert-only. */
+export const opsAssetRefrigerants = sqliteTable("ops_asset_refrigerants", {
+  organizationId: text("organization_id").notNull(), assetId: text("asset_id").notNull(), version: integer("version").notNull(),
+  refrigerant: text("refrigerant").notNull(), fullChargeOz: integer("full_charge_oz"), systemUse: text("system_use").notNull(), chargeSource: text("charge_source"),
+  recordedByName: text("recorded_by_name").notNull(), recordedByActorId: text("recorded_by_actor_id"), createdAt: text("created_at").notNull(),
+},t=>[
+  primaryKey({columns:[t.organizationId,t.assetId,t.version]}),
+  foreignKey({columns:[t.organizationId],foreignColumns:[opsOrganizations.id]}),
+  foreignKey({columns:[t.organizationId,t.assetId],foreignColumns:[opsAssets.organizationId,opsAssets.id]}),
+  check("chk_ops_asset_refrigerants_use",sql`${t.systemUse} IN ('commercial_refrigeration','comfort_cooling','light_commercial_ac')`),
+  check("chk_ops_asset_refrigerants_charge",sql`${t.fullChargeOz} IS NULL OR ${t.fullChargeOz} >= 0`),
+]);
+/** Refrigerant added, leaks found and leak checks. Facts are copied in when recorded so later edits never rewrite them. Insert-only. */
+export const opsRefrigerantEvents = sqliteTable("ops_refrigerant_events", {
+  id: text("id").primaryKey(), organizationId: text("organization_id").notNull(), assetId: text("asset_id").notNull(), storeId: text("store_id").notNull(),
+  workOrderId: text("work_order_id"), visitId: text("visit_id"), kind: text("kind").notNull(), occurredAt: text("occurred_at").notNull(),
+  addedOz: integer("added_oz").notNull().default(0), leakStatus: text("leak_status"), verificationStage: text("verification_stage"), verificationResult: text("verification_result"),
+  refrigerant: text("refrigerant").notNull(), fullChargeOz: integer("full_charge_oz"), rule: text("rule"), leakRateBps: integer("leak_rate_bps"), thresholdBps: integer("threshold_bps"),
+  technicianName: text("technician_name").notNull(), technicianCert: text("technician_cert"), source: text("source").notNull(),
+  recordedByName: text("recorded_by_name").notNull(), recordedByActorId: text("recorded_by_actor_id"), notes: text("notes"), createdAt: text("created_at").notNull(),
+},t=>[
+  index("idx_ops_refrigerant_events_asset").on(t.organizationId,t.assetId,t.occurredAt),
+  index("idx_ops_refrigerant_events_store").on(t.organizationId,t.storeId,t.occurredAt),
+  foreignKey({columns:[t.organizationId],foreignColumns:[opsOrganizations.id]}),
+  foreignKey({columns:[t.organizationId,t.assetId],foreignColumns:[opsAssets.organizationId,opsAssets.id]}),
+  check("chk_ops_refrigerant_events_kind",sql`${t.kind} IN ('service','verification')`),
+  check("chk_ops_refrigerant_events_added",sql`${t.addedOz} >= 0`),
+  check("chk_ops_refrigerant_events_source",sql`${t.source} IN ('vendor','internal','office')`),
+]);
 /** AI-written repair notes from a technician's chat, for future diagnostics. Insert-only; read by the AI, opened only by top admins. */
 export const opsEquipmentNotes = sqliteTable("ops_equipment_notes", {
   id: text("id").primaryKey(), organizationId: text("organization_id").notNull(), workOrderId: text("work_order_id").notNull(),

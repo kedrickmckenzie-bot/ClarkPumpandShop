@@ -596,6 +596,13 @@
       "when": 1791491090727,
       "tag": "0084_huge_klaw",
       "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "6",
+      "when": 1791911019430,
+      "tag": "0085_little_doctor_doom",
+      "breakpoints": true
     }
   ]
 }

@@ -4,6 +4,7 @@ import { getAiClient } from "@/lib/server/ai-provider";
 import { EquipmentDocuments } from "@/components/workspace/equipment-documents";
 import { TechnicianHistory } from "@/components/workspace/technician-history";
 import { StoreContact } from "@/components/workspace/store-contact";
+import { RefrigerantPanel } from "@/components/workspace/refrigerant-panel";
 import { dispatchPlanLabel, dispatchTime, dueLabel } from "@/lib/ops/dispatch-board";
 import Link from "next/link";
 import { civilDate, plainNextAction } from "@/lib/ops/dispatch-calendar";
@@ -89,6 +90,7 @@ export default async function InternalJob({ params, searchParams }: { params: Pr
   const urgent = ["urgent", "emergency"].includes(work.priority);
   const organization=await r.getOrganization(org), zone=store?.timeZone??organization!.timeZone;
   const contact=store?await StoreContact({repository:r,store}):null;
+  const refrigerant=work.asset?await RefrigerantPanel({assetId:work.asset.id,workOrderId:id,returnTo:`/app/my-work/${encodeURIComponent(id)}`,saved:saved==="refrigerant"}):null;
   const recent=await TechnicianHistory({repository:r,scope:await internalDispatchScope(r,s),storeId:work.storeId,assetId:work.asset?.id,excludeId:id,limit:5,title:work.asset?"Recent work on this equipment":"Recent work at this store",zone});
   const backHref = manager ? "/app/dispatch" : "/app/my-work";
   const aiHelp = Boolean(getAiClient());
@@ -219,6 +221,7 @@ export default async function InternalJob({ params, searchParams }: { params: Pr
     </section> : null}
 
     <p><Link href={`/app/work-orders/${encodeURIComponent(id)}`}>Full work order record →</Link></p>
+    {refrigerant}
     {work.asset ? <EquipmentDocuments assetId={work.asset.id} compact /> : null}
     {recent}
   </div>;

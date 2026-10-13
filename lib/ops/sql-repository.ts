@@ -236,6 +236,20 @@ function storeAllowed(scope: OrganizationScope, store: Store) {
   return true;
 }
 
+function assetRefrigerantFrom(row: Row): import("./refrigerant").AssetRefrigerant {
+  return { organizationId: text(row, "organization_id"), assetId: text(row, "asset_id"), version: Number(row.version), refrigerant: text(row, "refrigerant"), fullChargeOz: maybeNumber(row, "full_charge_oz"),
+    systemUse: text(row, "system_use") as import("./refrigerant").RefrigerantSystemUse, chargeSource: maybeText(row, "charge_source") as import("./refrigerant").RefrigerantChargeSource | undefined,
+    recordedByName: text(row, "recorded_by_name"), recordedByActorId: maybeText(row, "recorded_by_actor_id"), createdAt: text(row, "created_at") };
+}
+function refrigerantEventFrom(row: Row): import("./refrigerant").RefrigerantEvent {
+  return { id: text(row, "id"), organizationId: text(row, "organization_id"), assetId: text(row, "asset_id"), storeId: text(row, "store_id"), workOrderId: maybeText(row, "work_order_id"), visitId: maybeText(row, "visit_id"),
+    kind: text(row, "kind") as "service" | "verification", occurredAt: text(row, "occurred_at"), addedOz: Number(row.added_oz ?? 0),
+    leakStatus: maybeText(row, "leak_status") as import("./refrigerant").RefrigerantLeakStatus | undefined, verificationStage: maybeText(row, "verification_stage") as "initial" | "follow_up" | undefined,
+    verificationResult: maybeText(row, "verification_result") as "passed" | "failed" | undefined, refrigerant: text(row, "refrigerant"), fullChargeOz: maybeNumber(row, "full_charge_oz"),
+    rule: maybeText(row, "rule") as import("./refrigerant").RefrigerantRule | undefined, leakRateBps: maybeNumber(row, "leak_rate_bps"), thresholdBps: maybeNumber(row, "threshold_bps"),
+    technicianName: text(row, "technician_name"), technicianCert: maybeText(row, "technician_cert"), source: text(row, "source") as "vendor" | "internal" | "office",
+    recordedByName: text(row, "recorded_by_name"), recordedByActorId: maybeText(row, "recorded_by_actor_id"), notes: maybeText(row, "notes"), createdAt: text(row, "created_at") };
+}
 function assetFrom(row: Row): Asset { const replacement = maybeNumber(row, "replacement_estimate_minor"); return { id: text(row, "id"), organizationId: text(row, "organization_id"), storeId: text(row, "store_id"), categoryKey: text(row, "category_key"), taxonomyNodeId: maybeText(row, "taxonomy_node_id"), equipmentTemplateId: maybeText(row, "equipment_template_id"), groupPath: jsonArray(row, "group_path_json"), assetTag: text(row, "asset_tag"), name: text(row, "name"), manufacturer: maybeText(row, "manufacturer"), model: maybeText(row, "model"), serialNumber: maybeText(row, "serial_number"), supplier: maybeText(row, "supplier"), installedAt: maybeText(row, "installed_at"), expectedLifeYears: maybeNumber(row, "expected_life_years"), warrantyEndsAt: maybeText(row, "warranty_ends_at"), replacementProfileId: maybeText(row, "replacement_profile_id"), replacementAttributes: jsonObject(row, "replacement_attributes_json"), replacementAdjustmentBps: maybeNumber(row, "replacement_adjustment_bps"), replacementPlanningExcludedAt: maybeText(row, "replacement_planning_excluded_at"), replacementPlanningExclusionReason: maybeText(row, "replacement_planning_exclusion_reason"), replacementEstimate: replacement == null ? undefined : { amountMinor: replacement, currency: text(row, "replacement_currency") || "USD" }, status: text(row, "status") as Asset["status"], retiredAt: maybeText(row, "retired_at"), replacedByAssetId: maybeText(row, "replaced_by_asset_id"), createdAt: text(row, "created_at") }; }
 
 function storeFrom(row: Row): Store {
@@ -579,6 +593,31 @@ class SqlOpsRepository implements OpsRepository {
   async listDueReportSchedules(now: string, limit: number) { return (await this.all("SELECT * FROM ops_report_schedules WHERE status = ? AND next_run_at IS NOT NULL AND next_run_at <= ? ORDER BY next_run_at, id LIMIT ?", ["active", now, Math.max(1, Math.min(200, limit))])).map(r => this.reportSchedule(r)); }
   async getReportRun(org: string, id: string) { const row = await this.first("SELECT * FROM ops_report_runs WHERE organization_id = ? AND id = ?", [org, id]); return row ? this.reportRun(row) : null; }
   async listReportRuns(org: string, limit: number) { return (await this.all("SELECT * FROM ops_report_runs WHERE organization_id = ? ORDER BY run_at DESC, id DESC LIMIT ?", [org, Math.max(1, Math.min(200, limit))])).map(r => this.reportRun(r)); }
+  async getAssetRefrigerant(org: string, assetId: string) {
+    const row = await this.first("SELECT * FROM ops_asset_refrigerants WHERE organization_id = ? AND asset_id = ? ORDER BY version DESC LIMIT 1", [org, assetId]);
+    return row ? assetRefrigerantFrom(row) : null;
+  }
+  async listRefrigerantEquipment(scope: OrganizationScope) {
+    const params: unknown[] = [];
+    const scoped = scopeWhere(scope, "s", params);
+    const rows = await this.all(`SELECT a.id AS asset_id, a.name AS asset_name, a.asset_tag, a.category_key, s.id AS store_id, s.store_number, s.name AS store_name, r.version, r.refrigerant, r.full_charge_oz, r.system_use, r.charge_source, r.recorded_by_name, r.recorded_by_actor_id, r.created_at, r.organization_id
+      FROM ops_assets a JOIN ops_stores s ON s.organization_id = a.organization_id AND s.id = a.store_id
+      LEFT JOIN ops_asset_refrigerants r ON r.organization_id = a.organization_id AND r.asset_id = a.id AND r.version = (SELECT MAX(x.version) FROM ops_asset_refrigerants x WHERE x.organization_id = a.organization_id AND x.asset_id = a.id)
+      WHERE ${scoped} AND a.status <> 'retired' AND (a.category_key IN ('refrigeration', 'hvac') OR r.asset_id IS NOT NULL)
+      ORDER BY s.store_number, a.name, a.id`, params);
+    rows.sort((a, b) => text(a, "store_number").localeCompare(text(b, "store_number"), "en-US", { numeric: true }) || text(a, "asset_name").localeCompare(text(b, "asset_name")) || text(a, "asset_id").localeCompare(text(b, "asset_id")));
+    return rows.map(row => ({ assetId: text(row, "asset_id"), assetName: text(row, "asset_name"), assetTag: text(row, "asset_tag"), categoryKey: text(row, "category_key"), storeId: text(row, "store_id"), storeNumber: text(row, "store_number"), storeName: text(row, "store_name"),
+      refrigerant: row.refrigerant == null ? undefined : assetRefrigerantFrom(row) }));
+  }
+  async listRefrigerantEvents(org: string, assetIds: readonly string[]) {
+    const events: import("./refrigerant").RefrigerantEvent[] = [];
+    for (let offset = 0; offset < assetIds.length; offset += 200) {
+      const slice = assetIds.slice(offset, offset + 200);
+      const rows = await this.all(`SELECT * FROM ops_refrigerant_events WHERE organization_id = ? AND asset_id IN (${slice.map(() => "?").join(",")})`, [org, ...slice]);
+      events.push(...rows.map(refrigerantEventFrom));
+    }
+    return events.sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+  }
   async listReportRecipients(org: string) {
     return (await this.all("SELECT m.id AS membership_id, u.display_name, u.email, m.role FROM ops_memberships m JOIN ops_users u ON u.id = m.user_id WHERE m.organization_id = ? AND m.status = ? AND u.status = ? AND u.email IS NOT NULL AND u.email <> '' ORDER BY u.display_name, m.id LIMIT 500", [org, "active", "active"]))
       .map(r => ({ membershipId: text(r, "membership_id"), name: text(r, "display_name"), email: text(r, "email"), role: text(r, "role") }));

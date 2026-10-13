@@ -199,6 +199,8 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
   if (table === "ops_report_schedules") fixture.reportSchedules ??= [];
   if (table === "ops_report_runs") fixture.reportRuns ??= [];
   if (table === "ops_equipment_notes") fixture.equipmentNotes ??= [];
+  if (table === "ops_asset_refrigerants") fixture.assetRefrigerants ??= [];
+  if (table === "ops_refrigerant_events") fixture.refrigerantEvents ??= [];
   if (table === "ops_equipment_document_pages") fixture.equipmentDocumentPages ??= [];
   const mapping: Record<string, keyof OpsFixture> = {
     ops_store_tasks: "storeTasks", ops_store_task_messages: "storeTaskMessages", ops_store_task_people: "storeTaskPeople", ops_divisions: "divisions", ops_regions: "regions", ops_taxonomy_nodes: "taxonomyNodes",
@@ -209,7 +211,7 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
     ops_capital_plans: "capitalPlans", ops_store_vendor_preferences: "storeVendorPreferences", ops_vendor_coverage: "vendorCoverage", ops_vendor_qualifications: "vendorQualifications", ops_vendor_compliance_documents: "vendorComplianceDocuments",
     ops_vendor_contracts: "vendorContracts", ops_contract_versions: "contractVersions", ops_contract_scopes: "contractScopes",
     ops_rate_card_lines: "rateCardLines", ops_service_level_policies: "serviceLevelPolicies", ops_scheduling_policies: "schedulingPolicies", ops_vendor_capacity: "vendorCapacity",
-    ops_technician_statuses: "technicianStatuses", ops_route_legs: "routeLegs", ops_equipment_documents: "equipmentDocuments", ops_ai_conversations: "aiConversations", ops_overview_seen_marks: "overviewSeenMarks", ops_report_schedules: "reportSchedules", ops_report_runs: "reportRuns", ops_equipment_notes: "equipmentNotes", ops_equipment_document_pages: "equipmentDocumentPages", ops_technician_profiles: "technicianProfiles", ops_organizations: "organizations", ops_internal_schedules: "internalSchedules", ops_requests: "requests", ops_request_impact_assessments: "requestImpactAssessments", ops_work_orders: "workOrders",
+    ops_technician_statuses: "technicianStatuses", ops_route_legs: "routeLegs", ops_equipment_documents: "equipmentDocuments", ops_ai_conversations: "aiConversations", ops_overview_seen_marks: "overviewSeenMarks", ops_report_schedules: "reportSchedules", ops_report_runs: "reportRuns", ops_equipment_notes: "equipmentNotes", ops_asset_refrigerants: "assetRefrigerants", ops_refrigerant_events: "refrigerantEvents", ops_equipment_document_pages: "equipmentDocumentPages", ops_technician_profiles: "technicianProfiles", ops_organizations: "organizations", ops_internal_schedules: "internalSchedules", ops_requests: "requests", ops_request_impact_assessments: "requestImpactAssessments", ops_work_orders: "workOrders",
     ops_approval_policies: "approvalPolicies", ops_approval_requests: "approvalRequests", ops_approval_decisions: "approvalDecisions",
     ops_work_order_visit_holds: "workOrderVisitHolds", ops_work_order_assignments: "assignments", ops_work_order_issuances: "issuances",
     ops_vendor_responses: "vendorResponses", ops_work_order_estimate_requests: "estimateRequests",
@@ -729,6 +731,23 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async listDueReportSchedules(now: string, limit: number) { return clone((this.fixture.reportSchedules ?? []).filter(r => r.status === "active" && r.nextRunAt && r.nextRunAt <= now).sort((a, b) => a.nextRunAt!.localeCompare(b.nextRunAt!) || a.id.localeCompare(b.id)).slice(0, limit)); }
   async getReportRun(org: string, id: string) { return clone((this.fixture.reportRuns ?? []).find(r => r.organizationId === org && r.id === id) ?? null); }
   async listReportRuns(org: string, limit: number) { return clone((this.fixture.reportRuns ?? []).filter(r => r.organizationId === org).sort((a, b) => b.runAt.localeCompare(a.runAt) || b.id.localeCompare(a.id)).slice(0, limit)); }
+  async getAssetRefrigerant(org: string, assetId: string) {
+    const rows = (this.fixture.assetRefrigerants ?? []).filter(r => r.organizationId === org && r.assetId === assetId);
+    return clone(rows.sort((a, b) => b.version - a.version)[0] ?? null);
+  }
+  async listRefrigerantEquipment(scope: OrganizationScope) {
+    const stores = new Map(this.fixture.stores.filter(s => s.organizationId === scope.organizationId && storeAllowed(this.fixture, scope, s.id)).map(s => [s.id, s]));
+    const current = new Map<string, import("./refrigerant").AssetRefrigerant>();
+    for (const row of this.fixture.assetRefrigerants ?? []) if (row.organizationId === scope.organizationId && (current.get(row.assetId)?.version ?? -1) < row.version) current.set(row.assetId, row);
+    return clone(this.fixture.assets
+      .filter(a => a.organizationId === scope.organizationId && a.status !== "retired" && stores.has(a.storeId) && (["refrigeration", "hvac"].includes(a.categoryKey) || current.has(a.id)))
+      .map(a => { const store = stores.get(a.storeId)!; return { assetId: a.id, assetName: a.name, assetTag: a.assetTag, categoryKey: a.categoryKey, storeId: store.id, storeNumber: store.storeNumber, storeName: store.name, refrigerant: current.get(a.id) }; })
+      .sort((a, b) => a.storeNumber.localeCompare(b.storeNumber, "en-US", { numeric: true }) || a.assetName.localeCompare(b.assetName) || a.assetId.localeCompare(b.assetId)));
+  }
+  async listRefrigerantEvents(org: string, assetIds: readonly string[]) {
+    const wanted = new Set(assetIds);
+    return clone((this.fixture.refrigerantEvents ?? []).filter(e => e.organizationId === org && wanted.has(e.assetId)).sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)));
+  }
   async listReportRecipients(org: string) {
     const users = new Map(this.fixture.users.filter(u => u.status === "active").map(u => [u.id, u]));
     return this.fixture.memberships.filter(m => m.organizationId === org && m.status === "active" && users.get(m.userId)?.email)

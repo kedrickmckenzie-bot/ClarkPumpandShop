@@ -1,3 +1,4 @@
+import { ComplianceTabs } from "./refrigerant-compliance";
 import {formatOperationsDate} from "@/lib/ops/local-time";
 import { StorePicker } from "@/components/ops/store-picker";
 import Link from "next/link";
@@ -15,6 +16,7 @@ export default async function ComplianceWorkspace({searchParams,fixedStore}:{sea
  const href=(v:InspectionView,start=0)=>`${fixedStore?`/app/stores/${encodeURIComponent(fixedStore)}/compliance`:"/app/compliance"}?${new URLSearchParams({view:v,offset:String(start),...(q.store?{store:q.store}:{})})}`;
  return <div className={styles.page}>
  <header className={styles.header}><div>{fixedStore?<h2>Inspections and renewals</h2>:<h1>Compliance</h1>}<p>Inspections, renewals and the records behind them.</p><small>{fixedStore?"This store":session.scopeLabel} · As of {formatOperationsDate(`${today}T12:00:00Z`,"UTC")}</small></div>{edit?<Link className={styles.action} href={createHref}>New schedule</Link>:null}</header>
+ {fixedStore?null:<ComplianceTabs active="inspections"/>}
  {q.notice?<p role="status" className={styles.notice}>{q.notice}</p>:null}{q.error?<p role="alert" className={styles.notice}>{q.error}</p>:null}
  <div className={styles.metrics}>{(["due30","overdue","performed","missing_docs","action_needed"] as InspectionView[]).map(v=><Link key={v} href={href(v)} className={styles.metric}>{labels[v]}<strong>{page.summary[v]}</strong></Link>)}</div>
  <nav className={styles.filters} aria-label="Compliance horizons">{(["due60","due90","scheduled","upcoming","expiring"] as InspectionView[]).map(v=><Link key={v} href={href(v)}>{labels[v]} · {page.summary[v]}</Link>)}</nav>

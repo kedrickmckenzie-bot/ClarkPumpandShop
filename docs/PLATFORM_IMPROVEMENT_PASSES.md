@@ -4,6 +4,45 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### AIM refrigerant compliance (AIM-01 to AIM-04) — October 13, 2026
+
+**What was done.**
+- **Equipment.** New "Refrigerant" section on the equipment page: type, full charge, use, whether the EPA leak rules apply and why, any open leak clock, a chronic-leaker warning, and the log. Facts are saved as versions in `ops_asset_refrigerants` (migration 0085, D1 and PostgreSQL).
+- **Records.** `ops_refrigerant_events` is insert-only. Each record copies in the refrigerant, charge, rule, limit and leak rate at the time, so later edits never change history. The same submission never counts twice.
+- **Where it's asked.**
+  - Vendor checkout asks about refrigerant per job when the unit has refrigerant facts. It's required when the unit is covered ("enter 0 if none"), and saved in the same transaction as the checkout.
+  - The in-house technician job page shows the same section, opened by default on covered units.
+  - The work order's Equipment tab lets the office record from vendor paperwork. The overview shows an open leak clock, or a one-line ask after a covered unit was serviced with nothing recorded.
+- **Compliance → Refrigerant.** Tiles for leak repairs open (with overdue count), covered equipment, chronic leakers, needs info and all cooling equipment. Each tile filters the table, and each row opens the equipment's refrigerant log. Tabs link Inspections and Refrigerant.
+- **Demo.** Fictional data on the 15-store showcase, insert-only with stable IDs, through the existing startup demo backfill (dated from the day it runs; a saved record always wins). The seed version is unchanged. Data: refrigerant facts on beer caves, freezers, ice machines and rooftop units, plus three stories:
+  - Store 104 beer cave: an open repair clock.
+  - Store 101 freezer: repaired and closed.
+  - Store 107 beer cave: a chronic leaker with an overdue follow-up check.
+
+  Some units are left without a charge, and Store 114's freezer has no facts at all, so "Needs info" has rows.
+
+**How it was tested.** `tests/ops-refrigerant.test.ts`:
+- Coverage rules, the leak math and the clock states.
+- Fixture vs SQLite parity for facts, records and the equipment list, including the version conflict and the same-submission replay.
+- Vendor checkout saves the answer with the leak math, and a failed checkout saves nothing.
+
+- The demo backfill includes the refrigerant rows.
+
+**Checks.** Seed, typecheck, lint, e2e (68), build and Render build pass.
+
+The unit tests needed fixes, then were re-run:
+- Historical-schema test fixtures and the 65-store scale fixture now leave out the new demo rows.
+- The migration count is now 86.
+- The slow D1 dispatch test was at 119.5s of its 120s limit before this change. It now bulk-loads its seed data instead of binding rows one by one.
+
+The full suite then had one run-order failure and one load timeout. Both files pass when re-run (3 files, 44 tests).
+
+**Browser (Render build on PostgreSQL).**
+- Compliance → Refrigerant shows 2 leak repairs open (1 overdue), 42 covered, 1 chronic leaker, 3 needing info and 70 cooling units. Each tile filters the list, and each row opens the equipment.
+- The phone layout is 390 px wide with no sideways scroll.
+- Saving "1.5 lb, leak found and repaired" on Store 104's beer cave showed "Follow-up leak check due … by Oct 23" with a 175.5% leak rate.
+- The technician job page shows the same section.
+
 ### SD-01 plain words and one to-do number; SD-02 store contacts (part 1) — October 13, 2026
 
 **What was done.**
@@ -590,6 +629,16 @@ Proposed by the audit in [PLATFORM_AUDIT_2026-10-13.md](PLATFORM_AUDIT_2026-10-1
     - Report units leaking 125% or more of full charge per year to EPA by March 1.
     - Retrofit or retirement plan within 30 days if not repaired.
   - **Product idea:** vendor checkout asks "refrigerant added? type and pounds"; the platform calculates, sets the repair deadline and keeps the record. Wording must say "keeps records", never "makes you compliant".
+
+Compliance additions approved by the user on October 13, 2026, in this order:
+
+- [x] AIM-01 Refrigerant facts on equipment: refrigerant type, full charge (lb, stored as ounces) and use. Each change is a new version; nothing is overwritten. No plain checkbox: whether the leak rules apply is worked out from type, pounds and use.
+- [x] AIM-02 Append-only refrigerant log, with the leak math (EPA annualizing method) and the rule and limit copied onto each record. 30-day repair clock, follow-up leak check (about 10 days), chronic-leaker check (125% in a calendar year, report by March 1). Wording keeps records and does the math; it never says "makes you compliant".
+- [x] AIM-03 Asked where the work happens: vendor checkout (required on covered units, saved in the checkout transaction), the in-house technician job, and the work order and equipment pages for office entry from vendor paperwork.
+- [x] AIM-04 Compliance → Refrigerant page: open leak repairs, covered equipment, chronic leakers and units missing info, each opening the equipment's refrigerant log. Work order overview shows an open leak clock, or asks once a covered unit has been serviced with nothing recorded.
+- [ ] AIM-05 Nameplate photo read by AI to fill refrigerant type and charge (person confirms). Printable refrigerant log per unit. Optional: create a repair work order straight from an open leak clock.
+- [ ] UST-01 Underground fuel tank compliance: monthly release detection results, 30-day walkthroughs, yearly equipment tests, 3-year spill/overfill/corrosion tests, A/B/C operator records. A failed result opens a work order with a deadline. Records results from the tank monitor; never replaces it.
+- [ ] CP-01 C-store compliance starter pack on the existing schedules: extinguishers, hood suppression, hood cleaning, backflow, grease trap, emergency lighting, fire alarm/sprinkler, pump accuracy.
 
 Bugs found during the audit (small; can ride with any batch):
 

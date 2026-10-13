@@ -76,6 +76,7 @@ interface WorkOrderCaseProps {
   costPrompts?: ReactNode;
   warrantyContext?: ReactNode;
   storeContact?: ReactNode;
+  refrigerant?: ReactNode;
   prices?: ReactNode;
   canAttachInvoice?: boolean;
   canAssignTask?: boolean;
@@ -574,6 +575,7 @@ export function WorkOrderCase({
   costPrompts,
   warrantyContext,
   storeContact,
+  refrigerant,
   prices,
   canAttachInvoice = false,
   canAssignTask = false,
@@ -724,6 +726,7 @@ export function WorkOrderCase({
       {activeView === "activity" ? <details className={styles.historyDisclosure}><summary>Workflow details</summary>{!accountabilityOnly ? <WorkOrderStageRail model={canonicalCase} /> : null}<CaseStateDimensions model={canonicalCase} /></details> : null}
 
       {activeView === "overview" ? <WorkOrderQuickUpdate model={control} vendorReply={control.permitted && control.canRecordManualVendorResponse && control.manualVendorResponseTarget ? <ManualVendorResponseForm model={control} embedded /> : undefined} canAddNote={verification.permitted} canComplete={(!visits?.table?.rows.length || control.allowManagerCompletion) && !control.pendingApproval && control.status !== "awaiting_approval"} /> : null}
+      {activeView === "overview" ? refrigerant : null}
       {emailHistory}
       {costPrompts}
 
@@ -863,6 +866,7 @@ export function WorkOrderCase({
           {recording.canClassify ? <Link className={styles.inlineAction} href={`/app/work-orders/${control.workOrderId}?view=equipment#work-records`}>{selectedAsset ? "Change linked equipment" : "Link equipment to this work order"}<ArrowRight aria-hidden="true" size={15} /></Link> : null}
         </div>
         <div className={styles.panelRegion}><WorkOrderReplacementIntelligencePanel model={replacement} /></div>
+        {refrigerant}
       </WorkspaceSection> : null}
     </div>
   );

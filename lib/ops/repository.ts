@@ -302,6 +302,12 @@ export interface OpsRepository extends TaskRepository {
   listFollowUpOrganizations(): Promise<string[]>;
   listNotificationRules(organizationId: OpsId): Promise<NotificationRule[]>;
   upsertNotificationRule(input: { organizationId: OpsId; id: OpsId; eventKey: NotificationEventKey; emailEnabled: boolean; recipientRole: NotificationRecipientRole; updatedByMembershipId?: OpsId; occurredAt: IsoDateTime }): Promise<void>;
+  /** Current refrigerant facts for one piece of equipment (highest version), or null when none are recorded. */
+  getAssetRefrigerant(organizationId: OpsId, assetId: OpsId): Promise<import("./refrigerant").AssetRefrigerant | null>;
+  /** Refrigeration and HVAC equipment in scope, plus anything with refrigerant facts, with the current facts. */
+  listRefrigerantEquipment(scope: OrganizationScope): Promise<import("./refrigerant").RefrigerantEquipmentRow[]>;
+  /** Refrigerant records for the given equipment, oldest first. */
+  listRefrigerantEvents(organizationId: OpsId, assetIds: readonly OpsId[]): Promise<import("./refrigerant").RefrigerantEvent[]>;
   listNotificationRecipients(
     organizationId: OpsId,
     role: NotificationRecipientRole,

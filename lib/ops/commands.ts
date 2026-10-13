@@ -9,6 +9,8 @@ import { coveredPmAssets, pmCoverageRule } from "./pm-coverage";
 import type { OpsRepository, OpsStatement } from "./repository";
 import { atomicRequestMutation, atomicWorkOrderMutation, atomicWorkOrderSetMutation, persistedRequestVersion, persistedWorkOrderVersion } from "./concurrency";
 import { OpsDomainError } from "./errors";
+import { buildRefrigerantEventStatements } from "./refrigerant-commands";
+import { civilDate } from "./dispatch-calendar";
 import { assertWorkOrderReadyForClosure } from "./work-order-verification-commands";
 import { prepareApprovalRequestForWorkOrder } from "./approval-governance";
 import { membershipHasCapability } from "./capability-policy";
@@ -2346,7 +2348,7 @@ export async function addHeldWorkToActiveVisit(svc: OpsCommandServices, input: A
 }
 
 export interface VisitFollowUpInput { accountableParty: string; nextAction: string; dueAt: IsoDateTime; escalationTo: string }
-export interface PerWorkOrderVisitOutcomeInput { blocker?: import("./types").WorkResult["blocker"]; workOrderId: OpsId; expectedVersion?: number; expectedAssignmentId?: OpsId; outcome: SiteVisitWorkOrderOutcome; outcomeNotes?: string; vendorFollowUpTiming?: VendorFollowUpTiming; followUp?: VisitFollowUpInput }
+export interface PerWorkOrderVisitOutcomeInput { refrigerantRecord?: { addedOz: number; leakStatus: import("./refrigerant").RefrigerantLeakStatus; technicianCert?: string }; blocker?: import("./types").WorkResult["blocker"]; workOrderId: OpsId; expectedVersion?: number; expectedAssignmentId?: OpsId; outcome: SiteVisitWorkOrderOutcome; outcomeNotes?: string; vendorFollowUpTiming?: VendorFollowUpTiming; followUp?: VisitFollowUpInput }
 export interface CheckOutVisitInput { resultFiles?: Record<string, import("./types").StoredFile[]>; organizationId: OpsId; visitId: OpsId; channel: VisitChannel; outcome?: VisitOutcome; outcomeNotes?: string; location: LocationObservation; followUp?: VisitFollowUpInput; perWorkOrderOutcomes?: readonly PerWorkOrderVisitOutcomeInput[]; idempotency?: CommandIdempotency; actor: ActorContext }
 export async function checkOutVisit(svc: OpsCommandServices, input: CheckOutVisitInput) {
   const { repository, clock, ids } = services(svc); assertActorOrganization(input.actor, input.organizationId);
@@ -2468,6 +2470,17 @@ export async function checkOutVisit(svc: OpsCommandServices, input: CheckOutVisi
   };
   for (const normalized of normalizedOutcomes) {
     const workOrder = linkedWorkOrders.find((candidate) => candidate.id === normalized.link.workOrderId)!;
+    // Refrigerant answers on units with refrigerant facts are saved with the checkout, in the same transaction.
+    const refrigerantAnswer = requestedOutcomes.find((requested) => requested.workOrderId === workOrder.id)?.refrigerantRecord;
+    if (refrigerantAnswer && workOrder.assetId) {
+      const visitStore = await repository.getStore(input.organizationId, visit.storeId);
+      statements.push(...(await buildRefrigerantEventStatements(repository, {
+        organizationId: input.organizationId, assetId: workOrder.assetId, eventId: `refrigerant-${visit.id}-${workOrder.id}`, kind: "service",
+        workOrderId: workOrder.id, visitId: visit.id, occurredOn: civilDate(now, visitStore?.timeZone ?? "America/New_York"),
+        addedOz: refrigerantAnswer.addedOz, leakStatus: refrigerantAnswer.leakStatus, technicianName: visit.technicianName, technicianCert: refrigerantAnswer.technicianCert,
+        source: visit.providerKind === "internal" ? "internal" : "vendor", actor: input.actor, now, auditId: ids.next("audit"),
+      })).statements);
+    }
     if (visit.providerKind === "internal") {
       const result = await buildInternalResultStatements(repository, {work:workOrder,actor:input.actor,now,ids,outcome:normalized.outcome,blocker:normalized.blocker,notes:normalized.outcomeNotes,source:"visit_checkout",performerMembershipId:visit.internalMembershipId,performerName:visit.technicianName,link:normalized.link,files:input.resultFiles?.[workOrder.id]});
       statements.push(...result.statements, {sql:"UPDATE ops_site_visit_work_orders SET outcome = ?, outcome_notes = ?, outcome_recorded_by_actor_type = ?, outcome_recorded_by_actor_id = ?, outcome_recorded_by_actor_name = ?, outcome_recorded_at = ?, follow_up_id = ? WHERE organization_id = ? AND id = ?",params:[normalized.outcome,normalized.outcomeNotes??null,input.actor.actorType,input.actor.actorId??null,input.actor.actorName,now,result.result.followUpId??null,input.organizationId,normalized.link.id]});

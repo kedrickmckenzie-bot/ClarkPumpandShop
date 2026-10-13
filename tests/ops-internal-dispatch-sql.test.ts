@@ -8,6 +8,7 @@ import {createOpsD1Repository} from "@/lib/ops/d1-repository";
 import {buildOpsSeedStatements} from "@/lib/ops/seed";
 import {buildShowcaseFixture} from "@/lib/ops/showcase-fixture";
 import {dispatchNow,internalDispatchRegression} from "./helpers/internal-dispatch-regression";
+import {bulkSeedD1} from "./helpers/d1-bulk-seed";
 
 it("runs internal dispatch on the actual D1 SQLite adapter",async()=>{
   const runtime=new Miniflare({modules:true,script:"export default {fetch(){return new Response('ok')}}",d1Databases:["DB"]});
@@ -17,8 +18,8 @@ it("runs internal dispatch on the actual D1 SQLite adapter",async()=>{
       for(const sql of readFileSync(`drizzle/${file}`,"utf8").split("--> statement-breakpoint").map(s=>s.trim()).filter(Boolean)) await db.prepare(sql).run();
     }
     const fixture=buildShowcaseFixture(dispatchNow); fixture.outboxMessages=[];
-    const statements=buildOpsSeedStatements(fixture);
-    for(let i=0;i<statements.length;i+=100) await db.batch(statements.slice(i,i+100).map(s=>db.prepare(s.sql).bind(...s.params.map(v=>typeof v==="boolean"?Number(v):v??null))));
+    // Bulk exec: binding ~10,000 seed rows one by one in Miniflare takes most of the time budget.
+    await bulkSeedD1(db,fixture);
     await dispatchBackfillRegression(createOpsD1Repository(db as unknown as D1Database));
     await internalDispatchRegression(createOpsD1Repository(db as unknown as D1Database));
     // Access checks pass inside each save and leave no marker rows behind.

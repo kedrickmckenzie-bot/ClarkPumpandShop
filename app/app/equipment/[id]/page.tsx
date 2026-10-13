@@ -17,6 +17,7 @@ import { loadDetailModel, loadOperatorSession } from "../../_data/operator-loade
 import { loadAssetReplacementIntelligenceModel } from "../../_data/replacement-loader";
 import { buildEquipmentReview } from "../../_data/equipment-review";
 import { EquipmentReview } from "@/components/workspace/equipment-review";
+import { RefrigerantPanel } from "@/components/workspace/refrigerant-panel";
 
 export const metadata: Metadata = { title: "Equipment detail" };
 
@@ -65,7 +66,7 @@ export default async function EquipmentDetailPage({ params, searchParams }: { pa
       compactFacts
       model={model}
       initialSection="overview"
-      beforeSections={<><p className={docStyles.jump}><a href="#documents">{documentCount ? `Manuals & diagrams (${documentCount})` : "Manuals & diagrams: none yet"} ↓</a></p>{review ? <EquipmentReview model={review} /> : null}{asset && getAiClient() ? <AiDiagnoseChat assetId={id} title="Ask AI about this equipment"/> : null}<EquipmentDocuments assetId={id} saved={typeof query.saved === "string" ? query.saved : undefined} /><details><summary>Other files on this record</summary><RecordFiles kind="asset" id={id} /></details><LinkedStoreTasks kind="asset" id={id} />{replacement ? <details><summary>Whole-equipment repair and replacement planning</summary><AssetReplacementIntelligencePanel model={replacement} /></details> : null}</>}
+      beforeSections={<><p className={docStyles.jump}><a href="#documents">{documentCount ? `Manuals & diagrams (${documentCount})` : "Manuals & diagrams: none yet"} ↓</a></p>{review ? <EquipmentReview model={review} /> : null}<RefrigerantPanel assetId={id} returnTo={`/app/equipment/${encodeURIComponent(id)}`} saved={query.saved === "refrigerant"} />{asset && getAiClient() ? <AiDiagnoseChat assetId={id} title="Ask AI about this equipment"/> : null}<EquipmentDocuments assetId={id} saved={typeof query.saved === "string" ? query.saved : undefined} /><details><summary>Other files on this record</summary><RecordFiles kind="asset" id={id} /></details><LinkedStoreTasks kind="asset" id={id} />{replacement ? <details><summary>Whole-equipment repair and replacement planning</summary><AssetReplacementIntelligencePanel model={replacement} /></details> : null}</>}
       after={<>{canSetupEquipment || canSetupPm ? <SetupActions
           title="Build out this equipment record"
           description="Add component depth or schedule preventive work. Both features stay optional and connect back to this equipment history."

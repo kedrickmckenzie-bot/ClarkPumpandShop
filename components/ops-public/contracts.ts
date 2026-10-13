@@ -258,6 +258,8 @@ export interface VisitWorkOrderView {
   problem: string;
   selectionSource?: "assigned_work" | "service_run" | "held_work" | "after_the_fact";
   heldWorkPosture?: "complete_using_professional_judgment" | "look_and_report";
+  /** Set when the job's equipment has refrigerant on record, so checkout asks about refrigerant. */
+  refrigerant?: { equipment: string; refrigerant: string; covered: boolean };
 }
 
 export interface ActiveVisitView {
@@ -353,6 +355,8 @@ export interface PublicVisitFollowUp {
 
 export interface PerWorkOrderVisitOutcome {
   partsEta?: string;
+  /** Pounds as typed ("2.5"), whether a leak was found, and the technician's EPA certification number. */
+  refrigerant?: { addedLb: string; leakStatus: "none_found" | "found_repaired" | "found_not_repaired" | "not_checked"; technicianCert?: string };
   workOrderId: string;
   outcome: WorkOrderVisitOutcome;
   outcomeNotes?: string;

@@ -37,6 +37,10 @@ describe("Approved Assign dataset and insert-only release",()=>{
     const statements=buildDispatchDemoBackfill("2026-11-01");
     expect(statements.length).toBeGreaterThan(100);
     expect(statements.every(s=>s.sql.startsWith("INSERT INTO ")&&s.sql.endsWith("ON CONFLICT DO NOTHING"))).toBe(true);
+    // Fictional refrigerant facts and records ride the same insert-only backfill, dated from the day it runs.
+    expect(statements.filter(s=>s.sql.startsWith("INSERT INTO ops_asset_refrigerants ")).length).toBeGreaterThan(50);
+    const leak=statements.find(s=>s.sql.startsWith("INSERT INTO ops_refrigerant_events ")&&s.params.includes("refrigerant-demo-104-cave-2"));
+    expect(leak?.params).toContain("2026-10-20");
     expect((await repository.getDispatchFilters({organizationId:dispatchOrg,storeIds:[]})).people).toEqual([]);
   });
 });

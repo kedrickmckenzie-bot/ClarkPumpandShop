@@ -1,3 +1,4 @@
+import { poundsToOz, refrigerantCoverage } from "@/lib/ops/refrigerant";
 import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import { localDateTimeToIso } from "@/lib/ops/local-date-time";
 import { operationsTimeZone } from "@/lib/ops/local-time";
@@ -560,7 +561,9 @@ async function publicWorkOrdersForVisit(
   return (await Promise.all(workOrders.filter((workOrder): workOrder is NonNullable<typeof workOrder> => Boolean(workOrder)).map(async (workOrder) => {
     const link = links.find((candidate) => candidate.workOrderId === workOrder.id);
     const hold = link?.workOrderHoldId ? await repository.getWorkOrderVisitHold(organizationId, workOrder.id) : null;
-    return { id: workOrder.id, number: workOrder.number, problem: workOrder.problem, selectionSource: link?.selectionSource, heldWorkPosture: hold?.posture };
+    const [facts, asset] = workOrder.assetId ? await Promise.all([repository.getAssetRefrigerant(organizationId, workOrder.assetId), repository.getAsset(organizationId, workOrder.assetId)]) : [null, null];
+    const refrigerant = facts && asset ? { equipment: asset.name, refrigerant: facts.refrigerant, covered: refrigerantCoverage(facts).covered === true } : undefined;
+    return { id: workOrder.id, number: workOrder.number, problem: workOrder.problem, selectionSource: link?.selectionSource, heldWorkPosture: hold?.posture, ...(refrigerant ? { refrigerant } : {}) };
   })));
 }
 
@@ -1722,7 +1725,7 @@ const gateway: PublicOperationsGateway = {
     if (command.perWorkOrderOutcomes?.length && command.outcome) {
       throw new PublicWorkflowError("Do not mix per-work-order outcomes with the unmatched visit outcome.", 422, "mixed_outcome_contract");
     }
-    const explicitOutcomes = command.perWorkOrderOutcomes?.map((entry): PerWorkOrderVisitOutcome => {
+    const explicitOutcomes = command.perWorkOrderOutcomes?.map((entry): PerWorkOrderVisitOutcome & { refrigerantRecord?: { addedOz: number; leakStatus: NonNullable<PerWorkOrderVisitOutcome["refrigerant"]>["leakStatus"]; technicianCert?: string } } => {
       if (!allowedWorkOutcomes.has(entry.outcome)) throw new PublicWorkflowError("Choose a valid outcome for every work order.", 422, "invalid_outcome");
       const partsEta = entry.outcome === "parts_required" ? cleanOptional(entry.partsEta, 120) : undefined;
       const notes = [cleanOptional(entry.outcomeNotes, 2_000), partsEta ? `Parts ETA: ${partsEta}` : undefined].filter(Boolean).join("\n");
@@ -1748,12 +1751,21 @@ const gateway: PublicOperationsGateway = {
       if (!requiresFollowUp && followUp) {
         throw new PublicWorkflowError("A completed outcome cannot create an unresolved-work follow-up.", 422, "follow_up_not_allowed");
       }
+      let refrigerantRecord: { addedOz: number; leakStatus: NonNullable<PerWorkOrderVisitOutcome["refrigerant"]>["leakStatus"]; technicianCert?: string } | undefined;
+      if (entry.refrigerant) {
+        if (!["none_found", "found_repaired", "found_not_repaired", "not_checked"].includes(entry.refrigerant.leakStatus)) throw new PublicWorkflowError("Say whether a refrigerant leak was found.", 422, "invalid_refrigerant");
+        let addedOz: number | undefined;
+        try { addedOz = poundsToOz(String(entry.refrigerant.addedLb ?? ""), "Refrigerant added"); } catch { throw new PublicWorkflowError("Enter the refrigerant added in pounds, such as 0 or 2.5.", 422, "invalid_refrigerant"); }
+        if (addedOz === undefined) throw new PublicWorkflowError("Enter the refrigerant added in pounds, such as 0 or 2.5.", 422, "invalid_refrigerant");
+        refrigerantRecord = { addedOz, leakStatus: entry.refrigerant.leakStatus, technicianCert: cleanOptional(entry.refrigerant.technicianCert, 40) };
+      }
       return {
         workOrderId: cleanRequired(entry.workOrderId, "Work order", 120),
         outcome: entry.outcome,
         outcomeNotes: notes || undefined,
         vendorFollowUpTiming: entry.vendorFollowUpTiming,
         followUp,
+        ...(refrigerantRecord ? { refrigerantRecord } : {}),
       };
     });
     let perWorkOrderOutcomes: PerWorkOrderVisitOutcome[] = [];
