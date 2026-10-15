@@ -230,3 +230,34 @@
 @media (max-width: 720px) { .repeat { grid-template-columns: 1fr; } }
 .repeatTags { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
 .repeatTags span { padding: 2px 8px; border-radius: 999px; background: #e0ecff; color: #1e3a8a; font-size: 12px; font-weight: 700; }
+
+/* Shared with the team scorecard */
+.compare { color: var(--muted); font-size: 12.5px; line-height: 1.3; }
+.table tbody tr.totalRow th, .table tbody tr.totalRow td { background: var(--subtle); }
+.table tbody tr.totalRow th { position: sticky; }
+.table tbody tr.totalRow { border-bottom: 2px solid var(--line); }
+.rowTags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.rowTags span { padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--copy); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+
+/* Worth a look */
+.flags { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.flagsHead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; padding: 16px 22px 12px; }
+.flagsHead h2 { margin: 0; font-size: 18px; }
+.flagsHead span { color: var(--muted); font-size: 14px; font-weight: 500; }
+.flagList { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+.flagList li { display: grid; grid-template-columns: auto 1fr auto; align-items: start; gap: 4px 12px; padding: 14px 22px; border-bottom: 1px solid var(--line-soft); border-left: 3px solid var(--warning); }
+.flagList li:last-child { border-bottom: 0; border-bottom-left-radius: 10px; }
+.flagIcon { margin-top: 3px; color: var(--warning); }
+.flagTitle { margin: 0; font-weight: 650; }
+.flagTitle a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.flagText { margin: 2px 0 0; color: var(--copy); font-size: 14.5px; line-height: 1.45; }
+.flagLink { display: inline-flex; align-items: center; gap: 4px; align-self: center; min-height: 40px; color: var(--action); font-size: 14px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.flagLink:hover { text-decoration: underline; text-underline-offset: 3px; }
+.flagsCalm { margin: 0; padding: 14px 22px 18px; border-top: 1px solid var(--line); color: var(--copy); }
+@media (max-width: 760px) {
+  .flagsHead { padding: 14px 16px 10px; }
+  .flagList li { grid-template-columns: auto 1fr; padding: 12px 16px; }
+  .flagLink { grid-column: 2; align-self: start; min-height: 36px; }
+  .flagsCalm { padding: 12px 16px 16px; }
+}
+@media print { .flagLink { display: none; } }

@@ -93,6 +93,7 @@ export const contextualNavigation: ContextualNavigationGroup[] = [
     items: [
       { id: "needs-attention", label: "Review", href: "/app/action-center" },
       { id: "dispatch", label: "Dispatch", href: "/app/dispatch" },
+      { id: "team-scorecard", label: "Team scorecard", href: "/app/dispatch/team" },
       { id: "work-orders", label: "Work orders", href: "/app/work-orders" },
       { id: "requests", label: "Requests", href: "/app/requests" },
       { id: "estimates", label: "Quotes", href: "/app/estimates" },
@@ -128,6 +129,7 @@ export const contextualNavigation: ContextualNavigationGroup[] = [
 export function pathMatches(pathname: string, href: string) {
   if(href === "/app/reports" && pathname.startsWith("/app/reports/value")) return false;
   if(href === "/app/vendors" && pathname.startsWith("/app/vendors/scorecards")) return false;
+  if(href === "/app/dispatch" && pathname.startsWith("/app/dispatch/team")) return false;
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 

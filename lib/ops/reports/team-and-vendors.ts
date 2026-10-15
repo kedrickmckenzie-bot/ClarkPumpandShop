@@ -18,7 +18,7 @@ export function buildVendorPerformance(ctx: ReportContext, options: ReportOption
   const callbacks = vendors.filter(v => v.callbacks.value !== undefined && !v.callbacks.tooFew && v.callbacks.value > 0).sort((a, b) => b.callbacks.value! - a.callbacks.value!)[0];
   const declined = vendors.filter(v => v.declined.hits).sort((a, b) => b.declined.hits - a.declined.hits)[0];
   const sections: Section[] = [{
-    kind: "table", id: "records", title: "Each vendor", note: "* fewer than 5 jobs counted, so read it with care. On time: checked in within an hour of the agreed appointment.",
+    kind: "table", id: "records", title: "Each vendor", note: "* fewer than 5 jobs counted, so read it with care. Done by agreed date: finished by the do-by date sent, or a later date the vendor proposed and we accepted.",
     columns: [{ key: "name", label: "Vendor", width: "wide" }, { key: "jobs", label: "Jobs", align: "end" }, { key: "spend", label: "Spend", align: "end" }, { key: "change", label: `Spend vs ${period.prior?.label ?? "last year"}` },
       { key: "response", label: "Typical reply", align: "end" }, { key: "onTime", label: "Done by agreed date", align: "end" }, { key: "firstFix", label: "Fixed first visit", align: "end" }, { key: "callbacks", label: "Repaired again within 30 days", align: "end" }, { key: "declined", label: "Declined", align: "end" }, { key: "invoice", label: "Invoice issues", align: "end" }],
     rows: vendors.map(v => ({ id: v.vendorId, href: `/app/vendors/${v.vendorId}`, cells: { name: v.name, jobs: count(v.jobs), spend: money(v.spend),

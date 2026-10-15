@@ -34,7 +34,7 @@ async function renderTechnicianPage({ params, searchParams }: { params: Promise<
       : <p>{title === "This week" ? "No jobs are scheduled this week." : title === "Waiting" ? "No jobs are waiting." : "No jobs here right now."}</p>}
     {page.nextCursor ? <p className={styles.partial}>Showing {page.items.length} of {page.totalCount ?? page.items.length} · <Link href={`?${cursorKey}=${encodeURIComponent(page.nextCursor)}`}>Show more</Link></p> : null}
   </section>;
-  return <div className={styles.workspace}><header className={styles.heading}><div><Link href="/app/dispatch">← Dispatch</Link><h1>{person.displayName}</h1>{person.phone ? <p><a href={`tel:${person.phone}`}>{person.phone}</a></p> : null}</div></header>
+  return <div className={styles.workspace}><header className={styles.heading}><div><Link href="/app/dispatch">← Dispatch</Link><h1>{person.displayName}</h1><p>{person.phone ? <><a href={`tel:${person.phone}`}>{person.phone}</a> · </> : null}<Link href={`/app/dispatch/team?tech=${encodeURIComponent(id)}`}>Results on the team scorecard</Link></p></div></header>
     {list("This week", planned, "weekCursor")}{list("Open jobs", open, "openCursor")}{list("Waiting", waiting, "waitingCursor")}{list("Recently finished", finished, "finishedCursor")}
     <section className={styles.list}><h2>Stores covered</h2><ul>{stores.items.map(store => <li key={store.id}><Link href={`/app/stores/${encodeURIComponent(store.id)}`}>Store {store.storeNumber} · {store.name}</Link></li>)}</ul>
       {stores.nextCursor ? <p className={styles.partial}>Showing {stores.items.length} of {stores.totalCount ?? stores.items.length} stores · <Link href={`?storeCursor=${encodeURIComponent(stores.nextCursor)}`}>Show more</Link></p> : null}</section>

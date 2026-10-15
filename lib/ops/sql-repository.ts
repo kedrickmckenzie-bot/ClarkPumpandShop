@@ -29,6 +29,7 @@ import { queryDashboardContext } from "./dashboard-context-sql";
 import { queryEquipmentIssues } from "./equipment-issues-sql";
 import { sinceSql } from "./since-last-looked";
 import { queryVendorJobFacts } from "./vendor-scorecard";
+import { queryTechJobFacts } from "./team-scorecard";
 import { queryDashboardLifecycle } from "./lifecycle-summary-sql";
 import { queryBriefSources } from "./owner-brief-sql";
 import { PENDING_REQUEST_STATUSES, WORK_STAGE_STATUSES } from "./dashboard-cohorts";
@@ -572,6 +573,9 @@ class SqlOpsRepository implements OpsRepository {
   }
   async listVendorJobFacts(scope: OrganizationScope, window: import("./vendor-scorecard").ScorecardWindow) {
     return queryVendorJobFacts(this.driver, scope, window);
+  }
+  async listTechJobFacts(scope: OrganizationScope, window: import("./vendor-scorecard").ScorecardWindow & { techId?: string }) {
+    return queryTechJobFacts(this.driver, scope, window);
   }
   async countWorkOrders(scope: OrganizationScope, query: WorkOrderListQuery) {
     const rows = await this.workOrderRows(scope, { ...query, cursor: undefined, offset: undefined, countOnly: true });

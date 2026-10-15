@@ -24,6 +24,8 @@ Scheduling is optional. A valid work order still needs only a store and problem 
 
 This is internal dispatch. It does not manage an outside vendor's employees, introduce payroll or shift rosters, continuously track people, or score employee productivity.
 
+**Owner decision, October 15, 2026 — Team scorecard.** The owner asked for visibility into in-house results "just like we do for external", accepting that technicians who get harder jobs can look worse. This narrows the earlier "no ranking / no productivity score" clauses rather than removing them. The Team scorecard (Work → Team scorecard, `/app/dispatch/team`) shows **job results only**: jobs, typical time to finish, visited on the planned day, fixed first visit, and repaired again within 30 days, every number opening its source jobs. Still excluded: hours, utilization, busyness, idle time, pay, leaderboards, and Best/Weakest labels for people. Technicians are compared only with teammates doing the same type of work; a "Worth a look" flag needs a clear gap and enough jobs on both sides, and returns that waited on parts, access or a vendor are shown but never flagged. Visible to facilities (including the field maintenance manager), district managers within their stores, and the owner; never to technicians or store managers. Suggestions and dispatch still never rank technicians.
+
 ## 2. Reading order
 
 1. This document: decisions, scope, phase order, and existing checklist crosswalk.

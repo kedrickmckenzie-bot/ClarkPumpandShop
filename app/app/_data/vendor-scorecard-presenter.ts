@@ -103,7 +103,7 @@ function drillResult(fact: VendorJobFact, measure: ScorecardMeasureKey, now: str
 const shortDate = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 const monthYear = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
 /** Column labels: dates for short periods, months with years for long ones, so a past period is never ambiguous. */
-const periodLabel = (window: ScorecardWindow, days: ScorecardPeriod) => days >= 180 ? `${monthYear(window.from)} – ${monthYear(window.to)}` : `${shortDate(window.from)} – ${shortDate(window.to)}`;
+export const periodLabel = (window: ScorecardWindow, days: ScorecardPeriod) => days >= 180 ? `${monthYear(window.from)} – ${monthYear(window.to)}` : `${shortDate(window.from)} – ${shortDate(window.to)}`;
 
 /** The vendor's main types of work, busiest first: two named, the rest counted. Unclassified work is left out. */
 function tradeSummary(facts: VendorJobFact[]) {

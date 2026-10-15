@@ -52,7 +52,7 @@ export type OperatorDetailRoutePolicyId =
   | "invoice";
 
 export type OperatorPrimaryNavigationId = "home" | "work" | "stores" | "vendors" | "insights" | "reports";
-export type OperatorWorkNavigationId = "dispatch" | "tasks" | "needs-attention" | "requests" | "work-orders" | "estimates" | "visits" | "invoice-review";
+export type OperatorWorkNavigationId = "dispatch" | "team-scorecard" | "tasks" | "needs-attention" | "requests" | "work-orders" | "estimates" | "visits" | "invoice-review";
 export type OperatorInsightsNavigationId = "trends" | "spend" | "equipment" | "pm" | "lifecycle";
 
 interface DemoOperatorRolePolicy {
@@ -101,7 +101,7 @@ export const demoOperatorRolePolicy: Record<OperatorRole, DemoOperatorRolePolicy
     programRoutes: ["trends", "spend", "equipment", "pm", "lifecycle"],
     detailRoutes: ["request", "work-order", "visit", "store", "vendor", "equipment", "warranty", "invoice"],
     primaryNavigation: ["home", "work", "stores", "vendors", "insights", "reports"],
-    workNavigation: ["dispatch", "needs-attention", "requests", "work-orders", "estimates", "visits", "invoice-review"],
+    workNavigation: ["dispatch", "team-scorecard", "needs-attention", "requests", "work-orders", "estimates", "visits", "invoice-review"],
     insightsNavigation: ["trends", "spend", "equipment", "pm", "lifecycle"],
   },
   regional: {
@@ -110,7 +110,7 @@ export const demoOperatorRolePolicy: Record<OperatorRole, DemoOperatorRolePolicy
     programRoutes: ["trends", "spend", "equipment", "pm", "lifecycle"],
     detailRoutes: ["request", "work-order", "visit", "store", "vendor", "equipment", "warranty", "invoice"],
     primaryNavigation: ["home", "work", "stores", "vendors", "insights", "reports"],
-    workNavigation: ["dispatch", "needs-attention", "requests", "work-orders", "estimates", "visits", "invoice-review"],
+    workNavigation: ["dispatch", "team-scorecard", "needs-attention", "requests", "work-orders", "estimates", "visits", "invoice-review"],
     insightsNavigation: ["trends", "spend", "equipment", "pm", "lifecycle"],
   },
   store_manager: {

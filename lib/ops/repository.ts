@@ -236,6 +236,8 @@ export interface OpsRepository extends TaskRepository {
   /** Saved AI conversations for a job, newest first. */
   /** One fact row per job sent to a vendor in the window; the vendor scorecard is built from these. */
   listVendorJobFacts(scope: OrganizationScope, window: import("./vendor-scorecard").ScorecardWindow): Promise<import("./vendor-scorecard").VendorJobFact[]>;
+  /** In-house team scorecard facts: one row per job per technician, started in the window. */
+  listTechJobFacts(scope: OrganizationScope, window: import("./vendor-scorecard").ScorecardWindow & { techId?: string }): Promise<import("./team-scorecard").TechJobFact[]>;
   /** Exact number of jobs matching the list query (same rules as listWorkOrders). */
   countWorkOrders(scope: OrganizationScope, query: WorkOrderListQuery): Promise<number>;
   /** Report schedules that are not removed, newest first. */

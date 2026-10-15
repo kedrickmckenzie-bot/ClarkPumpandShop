@@ -38,6 +38,8 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
     const historical=structuredClone(fixture);
     historical.technicianProfiles=[];historical.internalSchedules=[];historical.workResults=[];for(const job of historical.workOrders)delete job.shortName;historical.equipmentDocuments=[];historical.aiConversations=[];historical.equipmentNotes=[];historical.assetRefrigerants=[];historical.refrigerantEvents=[];historical.ustOperators=[];historical.spendTotals=[];historical.workCallbacks=[];historical.complianceSchedules=historical.complianceSchedules?.filter(c=>!c.program);historical.inspections=historical.inspections?.filter(i=>!i.id.startsWith("ust-demo-"));
     for(const rows of [historical.workOrders,historical.assignments,historical.workflowTasks,historical.followUps,historical.workOrderVisitHolds??[],historical.auditEvents]){for(let i=rows.length-1;i>=0;i--)if(rows[i].id.startsWith("dispatch-study-")||rows[i].id.startsWith("ai-demo-"))rows.splice(i,1);}
+    // Everyday in-house history also arrives later, through the insert-only backfill.
+    const later=(id?:string)=>Boolean(id?.startsWith("inhouse-demo-"));for(const rows of [historical.workOrders,historical.assignments,historical.followUps,historical.visits,historical.siteVisitWorkOrders] as Array<Array<{id:string;workOrderId?:string}>>){for(let i=rows.length-1;i>=0;i--)if(later(rows[i].id)||later(rows[i].workOrderId))rows.splice(i,1);}
     if(adapter==="D1"){
       runtime=new Miniflare({modules:true,script:"export default {fetch(){return new Response('ok')}}",d1Databases:["DB"]});const db=await runtime.getD1Database("DB");
       const migrations=readdirSync("drizzle").filter(f=>/^\d.*\.sql$/.test(f)).sort();

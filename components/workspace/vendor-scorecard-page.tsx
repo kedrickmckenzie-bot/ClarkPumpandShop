@@ -1,12 +1,28 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronRight, X } from "lucide-react";
-import type { DrillPlacement, ScorecardCell, ScorecardDrill, ScorecardPageModel, ScorecardRow, VendorCard } from "@/app/app/_data/vendor-scorecard-presenter";
+import type { ScorecardPageModel, VendorCard } from "@/app/app/_data/vendor-scorecard-presenter";
 import { MEASURE_GROUPS, MEASURE_INFO } from "@/lib/ops/vendor-scorecard";
 import { PrintButton, RegionSelect } from "./scorecard-controls";
 import styles from "./vendor-scorecard-page.module.css";
 
-function Trend({ cell }: { cell: ScorecardCell }) {
+/** What a scorecard table needs to know about its measures; shared by the vendor and team scorecards. */
+export interface MeasureMeta { info: Record<string, { label: string; when?: string; definition: string }>; groups: ReadonlyArray<{ label: string; keys: readonly string[] }> }
+export interface CellLike {
+  measure: string; value: string; detail: string; href: string; empty: boolean; trendLabel?: string; compare?: string;
+  summary: { counted: number; hits: number; value?: number; priorValue?: number; trend?: "better" | "worse"; tooFew: boolean; rank?: "best" | "worst" };
+}
+export interface RowLike { key: string; label: string; sublabel?: string; href?: string; total?: boolean; cells: CellLike[] }
+export interface DrillLike {
+  placement: string; context: string; measureLabel: string; definition: string; headline: string; closeHref: string;
+  rows: Array<{ workOrderId: string; number: string; problem: string; store: string; sent: string; result: string; tone: "good" | "bad" | "neutral"; tags?: string[];
+    repeat?: { did?: string; nextId: string; nextNumber: string; nextProblem: string; daysLater: number; tags: string[] } }>;
+  page?: { label: string; previousHref?: string; nextHref?: string };
+}
+export type ContextModel = Pick<ScorecardPageModel, "scopeLabel" | "periodLabel" | "priorLabel" | "periods" | "regions" | "region" | "regionBase">;
+const VENDOR_META: MeasureMeta = { info: MEASURE_INFO, groups: MEASURE_GROUPS };
+
+function Trend({ cell }: { cell: CellLike }) {
   const { trend, value, priorValue } = cell.summary;
   if (!trend || value === undefined || priorValue === undefined || !cell.trendLabel) return null;
   const Icon = value > priorValue ? ArrowUp : ArrowDown;
@@ -15,49 +31,49 @@ function Trend({ cell }: { cell: ScorecardCell }) {
   </span>;
 }
 
-function CellContent({ cell, rowLabel }: { cell: ScorecardCell; rowLabel: string }) {
-  const info = MEASURE_INFO[cell.measure];
+export function CellContent({ cell, rowLabel, meta = VENDOR_META }: { cell: CellLike; rowLabel: string; meta?: MeasureMeta }) {
+  const info = meta.info[cell.measure]!;
   const rank = cell.summary.rank;
   const alert = cell.measure === "invoice" && cell.summary.hits > 0;
   return <Link href={cell.href} scroll={false} className={styles.cellLink} aria-label={`${rowLabel}, ${info.label}: ${cell.value === "—" ? cell.detail : `${cell.value}, ${cell.detail}`}. Show the jobs.`}>
     <span className={`${styles.value} ${alert ? styles.alert : ""}`}>{cell.value}<Trend cell={cell} /></span>
     <span className={styles.detail}>{cell.detail}</span>
+    {cell.compare ? <span className={styles.compare}>{cell.compare}</span> : null}
     {rank ? <span className={rank === "best" ? styles.best : styles.weakest}>{rank === "best" ? "Best" : "Weakest"}</span> : null}
   </Link>;
 }
 
-function cellClass(cell: ScorecardCell) {
+export function cellClass(cell: CellLike) {
   return [cell.empty || cell.summary.tooFew ? styles.quiet : "", cell.summary.counted === 0 && cell.measure !== "jobs" ? styles.noData : ""].filter(Boolean).join(" ") || undefined;
 }
 
-const BAND_START = new Set(MEASURE_GROUPS.map(group => group.keys[0]));
-
-function ScoreTable({ caption, firstColumn, rows }: { caption: string; firstColumn: string; rows: ScorecardRow[] }) {
+export function ScoreTable({ caption, firstColumn, rows, meta = VENDOR_META }: { caption: string; firstColumn: string; rows: RowLike[]; meta?: MeasureMeta }) {
+  const bandStart = new Set(meta.groups.map(group => group.keys[0]));
   return <div className={styles.tableWrap}>
     <table className={styles.table}>
       <caption className={styles.srOnly}>{caption}</caption>
       <thead>
         <tr className={styles.bands}>
           <th scope="col" rowSpan={2} className={styles.firstHead}>{firstColumn}</th>
-          {MEASURE_GROUPS.map(group => <th scope="colgroup" colSpan={group.keys.length} key={group.label}>{group.keys.length > 1 ? group.label : null}</th>)}
+          {meta.groups.map(group => <th scope="colgroup" colSpan={group.keys.length} key={group.label}>{group.keys.length > 1 ? group.label : null}</th>)}
         </tr>
-        <tr className={styles.measures}>{MEASURE_GROUPS.flatMap(group => group.keys.map((key, index) => <th scope="col" key={key} title={MEASURE_INFO[key].definition} className={index === 0 ? styles.bandStart : undefined}>
-          <span className={styles.measureName}>{MEASURE_INFO[key].label}</span>
-          {MEASURE_INFO[key].when ? <span className={styles.measureHint}>{MEASURE_INFO[key].when}</span> : null}
+        <tr className={styles.measures}>{meta.groups.flatMap(group => group.keys.map((key, index) => <th scope="col" key={key} title={meta.info[key]!.definition} className={index === 0 ? styles.bandStart : undefined}>
+          <span className={styles.measureName}>{meta.info[key]!.label}</span>
+          {meta.info[key]!.when ? <span className={styles.measureHint}>{meta.info[key]!.when}</span> : null}
         </th>))}</tr>
       </thead>
-      <tbody>{rows.map(row => <tr key={row.key}>
+      <tbody>{rows.map(row => <tr key={row.key} className={row.total ? styles.totalRow : undefined}>
         <th scope="row">
           {row.href ? <Link href={row.href} className={styles.rowLink}>{row.label}<ChevronRight size={15} aria-hidden="true" /></Link> : <span className={styles.rowName}>{row.label}</span>}
           {row.sublabel ? <span className={styles.rowTrade}>{row.sublabel}</span> : null}
         </th>
-        {row.cells.map(cell => <td key={cell.measure} data-label={MEASURE_INFO[cell.measure].label} className={[cellClass(cell), BAND_START.has(cell.measure) ? styles.bandStart : ""].filter(Boolean).join(" ") || undefined}><CellContent cell={cell} rowLabel={row.label} /></td>)}
+        {row.cells.map(cell => <td key={cell.measure} data-label={meta.info[cell.measure]!.label} className={[cellClass(cell), bandStart.has(cell.measure) ? styles.bandStart : ""].filter(Boolean).join(" ") || undefined}><CellContent cell={cell} rowLabel={row.label} meta={meta} /></td>)}
       </tr>)}</tbody>
     </table>
   </div>;
 }
 
-function Drill({ drill }: { drill: ScorecardDrill }) {
+export function Drill({ drill, dateLabel = "Sent" }: { drill: DrillLike; dateLabel?: string }) {
   return <section id="scorecard-jobs" className={styles.drill} aria-labelledby="scorecard-jobs-title">
     <header className={styles.drillHead}>
       <div>
@@ -70,13 +86,14 @@ function Drill({ drill }: { drill: ScorecardDrill }) {
     </header>
     {drill.rows.length ? <div className={styles.drillTable}><table>
       <caption className={styles.srOnly}>Jobs behind {drill.measureLabel} for {drill.context}</caption>
-      <thead><tr><th scope="col">Job</th><th scope="col">Store</th><th scope="col">Problem</th><th scope="col">Sent</th><th scope="col">Result</th></tr></thead>
+      <thead><tr><th scope="col">Job</th><th scope="col">Store</th><th scope="col">Problem</th><th scope="col">{dateLabel}</th><th scope="col">Result</th></tr></thead>
       <tbody>{drill.rows.flatMap(row => [<tr key={row.workOrderId}>
         <td data-label="Job"><Link href={`/app/work-orders/${encodeURIComponent(row.workOrderId)}`}>{row.number}</Link></td>
         <td data-label="Store">{row.store}</td>
         <td data-label="Problem" className={styles.problem}>{row.problem}</td>
-        <td data-label="Sent">{row.sent}</td>
-        <td data-label="Result"><span className={row.tone === "good" ? styles.pillGood : row.tone === "bad" ? styles.pillBad : styles.pill}>{row.result}</span></td>
+        <td data-label={dateLabel}>{row.sent}</td>
+        <td data-label="Result"><span className={row.tone === "good" ? styles.pillGood : row.tone === "bad" ? styles.pillBad : styles.pill}>{row.result}</span>
+          {row.tags?.length ? <span className={styles.rowTags}>{row.tags.map(tag => <span key={tag}>{tag}</span>)}</span> : null}</td>
       </tr>, row.repeat ? <tr key={`${row.workOrderId}-repeat`} className={styles.repeatRow}><td colSpan={5}>
         <dl className={styles.repeat}>
           <div><dt>What they did</dt><dd>{row.repeat.did ?? "No note recorded at checkout"}</dd></div>
@@ -93,7 +110,7 @@ function Drill({ drill }: { drill: ScorecardDrill }) {
   </section>;
 }
 
-function Section({ id, title, meta, note, children, drill, placement }: { id: string; title: string; meta?: string; note?: string; children: ReactNode; drill?: ScorecardDrill; placement: DrillPlacement }) {
+export function Section({ id, title, meta, note, children, drill, placement, dateLabel }: { id: string; title: string; meta?: string; note?: string; children: ReactNode; drill?: DrillLike; placement: string; dateLabel?: string }) {
   return <section id={id} className={styles.group} aria-labelledby={`${id}-title`}>
     <header className={styles.groupHead}>
       <h2 id={`${id}-title`}>{title}</h2>
@@ -101,11 +118,11 @@ function Section({ id, title, meta, note, children, drill, placement }: { id: st
       {note ? <span className={styles.note}>{note}</span> : null}
     </header>
     {children}
-    {drill?.placement === placement ? <Drill drill={drill} /> : null}
+    {drill?.placement === placement ? <Drill drill={drill} dateLabel={dateLabel} /> : null}
   </section>;
 }
 
-function Context({ model }: { model: ScorecardPageModel }) {
+export function Context({ model }: { model: ContextModel }) {
   return <div className={styles.toolbar}>
     <nav className={styles.segmented} aria-label="Period">
       {model.periods.map(option => <Link key={option.value} href={option.href} aria-current={option.selected ? "page" : undefined} className={option.selected ? styles.segmentOn : styles.segment}>{option.label}</Link>)}

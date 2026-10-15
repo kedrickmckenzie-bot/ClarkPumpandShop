@@ -1,3 +1,4 @@
+import { addInHouseWorkDemo } from "./demo-in-house-work";
 import { addRefrigerantDemo } from "./refrigerant-demo-fixture";
 import { addUstDemo } from "./ust";
 import { addSpendTotalsDemo } from "./spend-totals";
@@ -256,5 +257,7 @@ export function addDispatchDemo(f: OpsFixture, options: { centralTeam?: boolean 
     f.auditEvents.push({id:`${id}-audit`,organizationId:org,aggregateType:"work_order",aggregateId:id,eventType:"internal_dispatch.seeded",actorType:"system",actorName:"Fictional dispatch demo",occurredAt:createdAt,payloadJson:JSON.stringify({meaning:"fictional_example",internalTarget:membershipId?"person":"pool"})});
     if(held)(f.workOrderVisitHolds??=[]).push({id:`${id}-hold`,organizationId:org,workOrderId:id,posture:"complete_using_professional_judgment",status:"active",deadlineAt:dueAt,version:0,createdByMembershipId:facility,createdByName:facilityName,createdAt,updatedAt:createdAt});
   });
-  return addCallbacksDemo(addSpendTotalsDemo(addUstDemo(addRefrigerantDemo(addAiDiagnosticDemo(f)))));
+  const demo = addCallbacksDemo(addSpendTotalsDemo(addUstDemo(addRefrigerantDemo(addAiDiagnosticDemo(f)))));
+  // Everyday in-house history belongs to the full showcase only; the compact base demo stays small.
+  return options.centralTeam ? addInHouseWorkDemo(demo) : demo;
 }

@@ -95,7 +95,7 @@ describe("Dispatch redesign boundaries and user choices",()=>{
   it("keeps six manager sections and puts the same scoped children under Work",()=>{
     for(const role of ["facilities","regional","executive","store_manager","finance"] as const)expect(navigationForRole(role,"complete").length).toBeLessThanOrEqual(6);
     const work=navigationForRole("facilities","complete").find(item=>item.id==="work")!;
-    expect(navigationChildren("facilities",work,"complete").map(item=>item.label)).toEqual(["Review","Dispatch","Work orders","Requests","Quotes","Service visits","Tasks","Compliance"]);
+    expect(navigationChildren("facilities",work,"complete").map(item=>item.label)).toEqual(["Review","Dispatch","Team scorecard","Work orders","Requests","Quotes","Service visits","Tasks","Compliance"]);
     expect(navigationForRole("technician","complete").map(item=>item.label)).toEqual(["My work","Stores","Equipment","Work history","Search"]);
   });
   it("keeps vendor visit states distinct from the internal team",()=>{
