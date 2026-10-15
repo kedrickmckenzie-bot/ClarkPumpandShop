@@ -118,7 +118,7 @@ export const NORTHLINE_PREVIEW_PERSONAS = {
  * touching any existing record.
  */
 export const NORTHLINE_FIELD_MANAGER = {
-  user: { id: "user-northline-field-manager", email: "chris.delgado@clark-demo.example", displayName: "Chris Delgado", status: "active" as const, createdAt: "2026-01-02T15:00:00.000Z" },
+  user: { id: "user-northline-field-manager", email: "chris.delgado@clark-demo.example", displayName: "Chris Delgado", phone: "606-555-0150", status: "active" as const, createdAt: "2026-01-02T15:00:00.000Z" },
   membership: { id: "membership-northline-field-manager", organizationId: NORTHLINE_ORGANIZATION_ID, userId: "user-northline-field-manager", role: "field_manager" as const, status: "active" as const, createdAt: "2026-01-02T15:00:00.000Z" },
   scopeGrant: { id: "scope-membership-northline-field-manager", organizationId: NORTHLINE_ORGANIZATION_ID, membershipId: "membership-northline-field-manager", scopeKind: "organization" as const, scopeId: NORTHLINE_ORGANIZATION_ID, permission: "ops:*", createdAt: "2026-01-02T15:00:00.000Z" },
 };

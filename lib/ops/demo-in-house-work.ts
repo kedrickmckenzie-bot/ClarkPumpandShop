@@ -133,7 +133,8 @@ export function addInHouseWorkDemo(f: OpsFixture): OpsFixture {
     }
     if (end > asOf - HOUR) return undefined;
     const number = `CPS-${new Date(created).getUTCFullYear()}-${String(7000 + n).padStart(4, "0")}`;
-    f.workOrders.push({ id, organizationId: org, number, storeId: store.id, problem: problem.text, categoryKey: trade, assetId, priority, status: "closed", version: 0,
+    // About one job in eleven is something the tech spotted on site and reported themselves.
+    f.workOrders.push({ id, organizationId: org, number, storeId: store.id, problem: problem.text, categoryKey: trade, assetId, priority, status: "closed", version: 0, foundByMembershipId: !forced && n % 11 === 0 ? tech.id : undefined,
       accountableParty: "No action required", nextAction: "No action required", createdAt: iso(created), dueAt: iso(plannedMs + 10 * HOUR), closedAt: iso(end + between(0.2, 2) * HOUR), requireConfirmation: false });
     f.assignments.push({ id: assignmentId, organizationId: org, workOrderId: id, kind: "internal", internalTarget: "person", internalMembershipId: tech.id, status: "completed", assignedAt: iso(assignedAt) });
     if (planned) {

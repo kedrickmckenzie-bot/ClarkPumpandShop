@@ -685,6 +685,8 @@ export const opsAssetComponents = pgTable("ops_asset_components", {
 
 export const opsWorkOrders = pgTable("ops_work_orders", {
   shortName: text("short_name"),
+  /** The technician who found this problem while on site and reported it. */
+  foundByMembershipId: text("found_by_membership_id"),
   technicianNotes: text("technician_notes"),
   estimatedMinutes: integer("estimated_minutes"),
   confirmationDelay: text("confirmation_delay"),

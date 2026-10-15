@@ -18,7 +18,7 @@ import {
   Plus,
   Settings2,
   Store,
-  Truck, History, Search,
+  Truck, History, Search, CalendarDays,
   Wrench,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -60,7 +60,7 @@ function toggleSidebar() {
 const expandedSidebarOnServer = () => false;
 
 const iconByNavigationId: Record<NavigationItem["id"], LucideIcon> = {
-  compliance: ClipboardList, history:History,search:Search,
+  compliance: ClipboardList, history:History,search:Search,week:CalendarDays,
   overview: LayoutDashboard,
   work: ClipboardList,
   stores: Store,

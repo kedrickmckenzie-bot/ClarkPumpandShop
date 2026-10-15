@@ -177,6 +177,7 @@ export interface AssetSearchRow {
 
 export interface WorkOrderListRow {
   shortName?: string;
+  foundByMembershipId?: OpsId;
   technicianNotes?: string;
   estimatedMinutes?: number;
   confirmationDelay?: "next_morning" | "four_hours";

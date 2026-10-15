@@ -12,10 +12,13 @@ type Filters = { people: { id: string; name: string }[]; regions: { id: string; 
 export function InternalPlanningWorkspace(props: {
   session: OperatorSession; organizationZone?:string; storeZones?:Record<string,string>; technician: boolean; view: string; search: string; week: string; today: string; readiness: string;
   person?: string; region?: string; storeId?: string; saved?: { number: string; when: string };
+  /** A found problem the technician just sent to their manager. */
+  sent?: string;
+  manager?: { name: string; phone?: string };
   page: WorkOrderListPage; heldPage?: WorkOrderListPage; planned?: WorkOrderListPage; replan?: WorkOrderListPage;
   review?: WorkOrderListPage; unscheduled?: WorkOrderListPage; links: Record<string, string | undefined>; filters: Filters;
 }) {
-  const { session, organizationZone, storeZones, technician, view, search, week, today, readiness, person, region, storeId, saved, page, heldPage, planned, replan, review, unscheduled, links, filters } = props;
+  const { session, organizationZone, storeZones, technician, view, search, week, today, readiness, person, region, storeId, saved, sent, manager, page, heldPage, planned, replan, review, unscheduled, links, filters } = props;
   const base = technician ? "/app/my-work" : "/app/dispatch";
   const query = new URLSearchParams({ view, q: search, week, readiness, ...(person ? { person } : {}), ...(region ? { region } : {}), ...(storeId ? { store: storeId } : {}) });
   const href = (key: string, value: string) => {
@@ -41,8 +44,13 @@ export function InternalPlanningWorkspace(props: {
         <h1>{technician ? "My work" : "Dispatch"}</h1>
         {!technician ? <p>Plan and assign work for your maintenance team.</p> : null}
       </div>
-      {!technician ? <Link className={`${styles.btn} ${styles.btnSecondary}`} href="/app/work-orders?status=open">All open work orders</Link> : null}
+      {!technician ? <Link className={`${styles.btn} ${styles.btnSecondary}`} href="/app/work-orders?status=open">All open work orders</Link>
+        : <div className={styles.jobActions}>
+          <Link className={`${styles.btn} ${styles.btnSecondary}`} href="/app/my-work/found">Found another problem</Link>
+          {manager?.phone ? <a className={`${styles.btn} ${styles.btnSecondary}`} href={`tel:${manager.phone}`}>Call {manager.name.split(" ")[0]}</a> : null}
+        </div>}
     </header>
+    {sent ? <p className={styles.notice} role="status">Sent to your manager: {sent}.</p> : null}
 
     {saved ? <p className={styles.notice} role="status">Saved. {saved.number}{saved.when ? ` is now set for ${saved.when}.` : " was updated."}</p> : null}
 

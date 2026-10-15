@@ -26,6 +26,7 @@ function Row({ row, stage, asOf, canRoute }: { row: DecideRow; stage: DecideStag
       <p className={styles.problem}>
         {row.problem ?? row.title}
         {urgent ? <span className={styles.urgent}>Urgent</span> : null}
+        {row.foundBy ? <span className={styles.found}>Reported by {row.foundBy}</span> : null}
       </p>
       {stage !== "new" || decision ? <p className={styles.need}>{[row.title, ...(row.alsoNeeds ?? [])].map(plainNextAction).join(" · ")}</p> : null}
       <p className={styles.meta}>

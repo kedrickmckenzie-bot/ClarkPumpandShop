@@ -23,7 +23,7 @@ function sourceFiles(directory: string): string[] {
 }
 
 describe("technician role", () => {
-  it("opens only its jobs, stores, visits and equipment, and can create or approve nothing", () => {
+  it("opens only its jobs, stores, visits and equipment, and creates nothing but a problem it found on site", () => {
     for (const route of ["work-orders", "visits", "stores"] as const) expect(roleCanAccessListRoute("technician", route)).toBe(true);
     for (const route of ["action-center", "requests", "estimates", "vendors", "warranties", "invoices", "reports", "admin"] as const) expect(roleCanAccessListRoute("technician", route)).toBe(false);
     expect(roleCanAccessProgramRoute("technician", "equipment")).toBe(true);
@@ -32,13 +32,13 @@ describe("technician role", () => {
     for (const href of ["/app/work-orders/new", "/app/vendors", "/app/spend", "/app/trends", "/app/action-center", "/app/compliance/new", "/app/equipment/new"]) expect(roleCanOpenOperatorHref("technician", href), href).toBe(false);
     expect(["create_request", "create_work_order", "issue_work_order", "record_work_cost", "administer"].some((capability) => roleCan("technician", capability as never))).toBe(false);
     expect(roleCanSeeWorkNavigation("technician", "tasks")).toBe(false);
-    expect(resolveRoleCapabilities("internal_technician", []).capabilities).toEqual(["schedule_internal_work", "record_internal_result", "claim_internal_work", "return_internal_work"]);
+    expect(resolveRoleCapabilities("internal_technician", []).capabilities).toEqual(["schedule_internal_work", "record_internal_result", "claim_internal_work", "return_internal_work", "report_found_problem"]);
     expect(roleCan("technician", "manage_internal_target")).toBe(false);
   });
 
   it("has a short menu that opens on their own open jobs", () => {
     const nav = navigationForRole("technician");
-    expect(nav.map((item) => item.label)).toEqual(["My work", "Stores", "Equipment", "Work history", "Search"]);
+    expect(nav.map((item) => item.label)).toEqual(["My work", "My week", "Stores", "Equipment", "Search"]);
     expect(nav[0].href).toBe("/app/my-work");
     expect(sessionRoleLabel(technician)).toBe("Technician");
   });

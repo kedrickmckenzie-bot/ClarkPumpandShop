@@ -631,6 +631,8 @@ export interface RequestImpactAssessment {
 export interface WorkOrder {
   /** Optional few-word label for planning boards, e.g. "Floor drain". */
   shortName?: string;
+  /** The technician who found this problem on site and reported it themselves. */
+  foundByMembershipId?: OpsId;
   technicianNotes?: string;
   estimatedMinutes?: number;
   confirmationDelay?: "next_morning" | "four_hours";

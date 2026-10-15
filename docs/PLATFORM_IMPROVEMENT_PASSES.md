@@ -4,6 +4,20 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Technician tools: found problems, warranty guard, My week — October 15, 2026
+
+**Decisions (with the user).** Techs can create work only for a problem they find on site, with no approval wait: **I'll fix it now** (the job is theirs) or **Send to my manager** (a manager routes it; vendors stay a manager's job). Managers see both afterwards in Review as "Reported by …". Warrantied equipment can't be fixed on the spot — a tech repair can void coverage — so it goes to the manager. Jobs a tech found count only toward "Repaired again within 30 days" on the Team scorecard, so parts surprises don't count against them and they can't pad other numbers; no extra labels on the scorecard. Work history leaves the tech menu (Stores, Equipment and Search already cover store/equipment history and finding a job); **My week** takes its place. Alerts, scanning and offline stay production items.
+
+**What was built.**
+- `ops_work_orders.found_by_membership_id` (migrations 0090 D1/PostgreSQL; fixture, seed, SQL mapping; `foundByMembershipId` on work orders and list rows).
+- `lib/ops/found-problem.ts` `reportFoundProblem`: active technician, store they cover, equipment at that store, warranty check (`underWarranty` via the warranty directory) blocks fix-now; idempotent; creates the canonical work order through `createWorkOrder` (self-assignment allowed only for the finder, with the matching store-access assertion in the same transaction). Send-to-manager gets a next-day decision deadline. New capability `report_found_problem` (technician only; `create_work_order` stays off).
+- `POST /api/ops/work-orders/found`; `/app/my-work/found` (store search → optional equipment → what's wrong → two buttons; warranty message hides fix-now). Buttons on My work, the tech job page, store and equipment pages; warranty notice on the tech equipment page; **Call {manager}** (field manager, else facilities) on My work and the job.
+- Review rows show "Reported by {name}".
+- Team scorecard facts gain `found`; found jobs count only in "Repaired again" (tagged "Found by them" in that list; every other list still adds up to Jobs). Demo marks about one in eleven past in-house jobs as found by the tech.
+- `/app/my-week`: Mon–Fri columns (weekend only if planned), today highlighted, This/Last/Next week, "Not planned yet" and "Waiting"; phone stacks days. Tech menu: My work · My week · Stores · Equipment · Search; bare `/app/work-history` redirects to My work (store/equipment history links still work).
+
+**Validation.** `tests/ops-found-problem.test.ts` (fix-now, send, idempotent retry, warranty block, own stores only, technicians only); team-scorecard rule and parity tests; nav and role tests updated. Browser on a fresh PostgreSQL demo: header buttons, store step, Store 104 beer cave warranty (fix-now hidden), fix-now → job "It's yours", send → "Sent to your manager", Review "Reported by Maria Santos", My week desktop and 390 px (no overflow), Team scorecard < 1 s.
+
 ### "Planned for" and "Deadline" — October 15, 2026
 
 User asked what "When" meant beside "Due" on a technician's job. "When" was the manager's plan; "Due" the moving next-step deadline (`WorkOrder.dueAt`). Renamed on technician and dispatch screens (my-work job, job list, dispatch board, planning panel, change-plan page) to **Planned for** and **Deadline**; Review's "When" column and task "When" also became **Deadline**. `dueLabel` now reads "Deadline today, noon" / "Late · deadline was …", with a bare form under a "Deadline" label. Manager pages that already say "Due" with plain-time wording are unchanged.

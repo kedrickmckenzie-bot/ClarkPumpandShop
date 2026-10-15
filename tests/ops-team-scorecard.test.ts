@@ -60,7 +60,7 @@ describe("team scorecard facts", () => {
 });
 
 const base: TechJobFact = { workOrderId: "w", number: "WO-1", problem: "Leak", storeId: "s", storeNumber: "101", storeName: "Store", techId: "t1", techName: "Ana", trade: "plumbing",
-  pm: false, startedAt: "2026-09-01T13:00:00.000Z", plans: [] };
+  pm: false, found: false, startedAt: "2026-09-01T13:00:00.000Z", plans: [] };
 const job = (i: number, extra: Partial<TechJobFact> = {}): TechJobFact => ({ ...base, workOrderId: `w${i}`, number: `WO-${i}`, ...extra });
 const NOW = "2026-10-06T16:00:00.000Z";
 const plan = (revision: number, day: string, recordedAt: string) => ({ revision, precision: "day", day, zone: "America/New_York", recordedAt });
@@ -104,6 +104,12 @@ describe("team scorecard rules", () => {
     expect(flags[0]).toMatchObject({ measure: "firstFix", trade: "plumbing", text: "5 of 10 jobs needed a second trip. Rest of the team: 1 of 15." });
   });
 
+  it("counts a problem a tech found themselves only toward repaired again", () => {
+    const found = job(1, { found: true, firstOutcome: "completed", firstCompletedAt: "2026-09-01T15:00:00.000Z", completedAt: "2026-09-01T15:00:00.000Z", assetId: "a", plans: [plan(1, "2026-09-01", "2026-09-01T13:00:00Z")], firstWorkedAt: "2026-09-01T15:00:00.000Z" });
+    for (const key of ["jobs", "finish", "plannedDay", "firstFix"] as const) expect(teamJobResult(found, key, NOW).counted, key).toBe(false);
+    expect(teamJobResult(found, "callbacks", NOW)).toEqual({ counted: true, hit: false });
+  });
+
   it("keeps the column bands in the same order as every row", () => {
     expect(TEAM_MEASURE_GROUPS.flatMap(group => group.keys)).toEqual([...TEAM_MEASURES]);
   });
@@ -136,7 +142,8 @@ describe("team scorecard page", () => {
       expect(drill.rows, `${label} ${cell.measure}`).toHaveLength(cell.summary.counted);
       // Every list adds back up to the jobs total: counted rows plus the "not counted" breakdown.
       const left = /^Not counted: (\d+) of (\d+) jobs — /.exec(drill.notCounted ?? "");
-      expect(cell.summary.counted + Number(left?.[1] ?? 0), `${label} ${cell.measure} adds up`).toBe(jobs);
+      const found = drill.rows.filter(row => row.tags.includes("Found by them")).length;
+      expect(cell.summary.counted - found + Number(left?.[1] ?? 0), `${label} ${cell.measure} adds up`).toBe(jobs);
       if (left) expect(Number(left[2]), `${label} ${cell.measure} total`).toBe(jobs);
       if (["plannedDay", "firstFix", "callbacks"].includes(cell.measure)) {
         const hitTone = cell.measure === "callbacks" ? "bad" : "good";

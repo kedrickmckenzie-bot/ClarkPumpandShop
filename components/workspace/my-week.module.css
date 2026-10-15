@@ -1,0 +1,35 @@
+.page { display: grid; gap: 18px; color: #172033; font-size: 15px; }
+.header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid #d8dee8; }
+.header h1 { margin: 0; font-size: 28px; letter-spacing: -.015em; }
+.weekNav { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.weekNav a { display: inline-flex; align-items: center; min-height: 40px; color: #2457d6; font-weight: 600; text-decoration: none; }
+.weekNav a:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+.days { display: grid; gap: 10px; }
+.day, .today { min-width: 0; background: #fff; border: 1px solid #d8dee8; border-radius: 8px; padding: 10px; }
+.today { border-color: #2457d6; box-shadow: inset 0 3px 0 #2457d6; }
+.day h2, .today h2 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin: 0 0 8px; font-size: 15px; }
+.day h2 span, .today h2 span { color: #64748b; font-weight: 500; }
+.today h2 em { margin-left: auto; padding: 0 8px; border-radius: 999px; background: #2457d6; color: #fff; font-size: 12px; font-style: normal; font-weight: 700; }
+
+.days ul, .side ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.card { display: grid; gap: 3px; padding: 10px; border: 1px solid #e3e8ef; border-radius: 6px; background: #f8fafc; color: inherit; text-decoration: none; }
+.card:hover { border-color: #2457d6; background: #eef3fd; }
+.card:focus-visible { outline: 2px solid #2457d6; outline-offset: 1px; }
+.store { color: #475569; font-size: 13px; font-weight: 650; }
+.problem { font-weight: 650; line-height: 1.3; overflow-wrap: anywhere; }
+.meta { color: #64748b; font-size: 13px; }
+.late { color: #b4313f; font-size: 13px; font-weight: 650; }
+.empty { margin: 0; color: #64748b; font-size: 14px; }
+
+.side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.side section { background: #fff; border: 1px solid #d8dee8; border-radius: 8px; padding: 14px; }
+.side h2 { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px; font-size: 17px; }
+.side h2 span { color: #64748b; font-size: 14px; font-weight: 600; }
+
+/* Phone: one day after another, today highlighted; the side lists follow. */
+@media (max-width: 760px) {
+  .days { grid-template-columns: 1fr !important; }
+  .side { grid-template-columns: 1fr; }
+  .header h1 { font-size: 24px; }
+}

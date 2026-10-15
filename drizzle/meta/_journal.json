@@ -631,6 +631,13 @@
       "when": 1792081157713,
       "tag": "0089_powerful_shotgun",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "6",
+      "when": 1792101052400,
+      "tag": "0090_public_vance_astro",
+      "breakpoints": true
     }
   ]
 }

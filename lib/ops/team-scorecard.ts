@@ -31,6 +31,8 @@ export interface TechJobFact {
   assetId?: string;
   /** Planned maintenance rather than a reported problem. */
   pm: boolean;
+  /** They found this problem on site and reported it themselves. Counts only toward "Repaired again", so it can't pad other numbers. */
+  found: boolean;
   /** When the job was first assigned to this technician (or, without an assignment, first worked). */
   startedAt: string;
   firstOutcome?: string;
@@ -131,7 +133,7 @@ export function techJobFactsFromFixture(fixture: OpsFixture, scope: Organization
     facts.push({
       workOrderId: w.id, number: w.number, problem: w.problem, storeId: store.id, storeNumber: store.storeNumber, storeName: store.name,
       regionId: store.regionId && regions.has(store.regionId) ? store.regionId : undefined, regionName: store.regionId ? regions.get(store.regionId)?.name : undefined,
-      techId, techName: techs.get(techId)!, trade: w.categoryKey ?? "unclassified", assetId: w.assetId, pm: w.priority === "planned" || pmWork.has(w.id), startedAt,
+      techId, techName: techs.get(techId)!, trade: w.categoryKey ?? "unclassified", assetId: w.assetId, pm: w.priority === "planned" || pmWork.has(w.id), found: w.foundByMembershipId === techId, startedAt,
       firstOutcome: results[0]?.outcome, firstBlocker: results[0]?.blocker, firstWorkedAt: results[0]?.at, firstCompletedAt: done[0], completedAt,
       plans: (plansBy.get(key) ?? []).sort((a, b) => a.revision - b.revision),
       callbackWorkOrderId: callback?.id, callbackAt: callback?.createdAt,
@@ -179,6 +181,7 @@ export async function queryTechJobFacts(driver: OpsSqlDriver, scope: Organizatio
       ) touched GROUP BY work_order_id, tech_id
     ), jobs AS (
       SELECT w.organization_id, p.work_order_id, p.tech_id, p.started_at, w.number, w.problem, w.category_key, w.asset_id,
+        CASE WHEN w.found_by_membership_id = p.tech_id THEN 1 ELSE 0 END AS found,
         CASE WHEN w.priority = 'planned' OR EXISTS (SELECT 1 FROM ops_pm_occurrences pm WHERE pm.organization_id = w.organization_id AND pm.work_order_id = w.id) THEN 1 ELSE 0 END AS pm,
         st.id AS store_id, st.store_number, st.name AS store_name, rg.id AS region_id, rg.name AS region_name, t.display_name AS tech_name
       FROM pairs p
@@ -227,7 +230,7 @@ export async function queryTechJobFacts(driver: OpsSqlDriver, scope: Organizatio
   return result.rows.map(r => ({
     workOrderId: String(r.work_order_id), number: String(r.number), problem: String(r.problem), storeId: String(r.store_id),
     storeNumber: String(r.store_number), storeName: String(r.store_name), regionId: text(r.region_id), regionName: text(r.region_name),
-    techId: String(r.tech_id), techName: String(r.tech_name), trade: text(r.category_key) ?? "unclassified", assetId: text(r.asset_id), pm: Number(r.pm) === 1,
+    techId: String(r.tech_id), techName: String(r.tech_name), trade: text(r.category_key) ?? "unclassified", assetId: text(r.asset_id), pm: Number(r.pm) === 1, found: Number(r.found) === 1,
     startedAt: text(r.started_at)!, firstOutcome: text(r.first_outcome), firstBlocker: text(r.first_blocker), firstWorkedAt: text(r.first_worked_at),
     firstCompletedAt: text(r.first_completed_at), completedAt: text(r.completed_at), plans: plans(r.plans),
     callbackWorkOrderId: text(r.callback_work_order_id), callbackAt: text(r.callback_at),
@@ -277,6 +280,8 @@ export function plannedDayResult(fact: Pick<TechJobFact, "plans" | "firstWorkedA
 }
 
 export function teamJobResult(fact: TechJobFact, measure: TeamMeasureKey, now: string): { counted: boolean; hit?: boolean; value?: number } {
+  // A problem they found and reported themselves counts only toward "Repaired again".
+  if (fact.found && measure !== "callbacks") return { counted: false };
   switch (measure) {
     case "jobs": return { counted: true, hit: Boolean(fact.firstCompletedAt) };
     case "finish": return fact.firstCompletedAt ? { counted: true, value: Math.max(0, Date.parse(fact.firstCompletedAt) - Date.parse(fact.startedAt)) / 3_600_000 } : { counted: false };

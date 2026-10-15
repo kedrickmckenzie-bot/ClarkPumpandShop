@@ -17,6 +17,7 @@ export type PrimaryNavigationId =
   | "vendors"
   | "planning"
   | "history"
+  | "week"
   | "search";
 
 export type NavigationGroupId = "work" | "equipment" | "planning" | "stores" | "vendors";
@@ -203,10 +204,10 @@ function visibleContextGroup(role: OperatorRole, groupId: NavigationGroupId, edi
 
 export function navigationForRole(role: OperatorRole, edition: DemoEdition = DEFAULT_DEMO_EDITION) {
   if(role==="technician" && edition==="complete")return [
-    {id:"work",label:"My work",href:"/app/my-work",matchPrefixes:["/app/my-work","/app/work-orders"]},
+    {id:"work",label:"My work",href:"/app/my-work",matchPrefixes:["/app/my-work","/app/work-orders","/app/work-history"]},
+    {id:"week",label:"My week",href:"/app/my-week",matchPrefixes:["/app/my-week"]},
     {id:"stores",label:"Stores",href:"/app/stores",matchPrefixes:["/app/stores"]},
     {id:"equipment",label:"Equipment",href:"/app/equipment",matchPrefixes:["/app/equipment"]},
-    {id:"history",label:"Work history",href:"/app/work-history",matchPrefixes:["/app/work-history"]},
     {id:"search",label:"Search",href:"/app/search",matchPrefixes:["/app/search"]},
   ] as NavigationItem[];
   return operatorNavigation

@@ -1,0 +1,1 @@
+ALTER TABLE "ops_work_orders" ADD COLUMN "found_by_membership_id" text;

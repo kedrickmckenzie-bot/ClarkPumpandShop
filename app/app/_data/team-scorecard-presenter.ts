@@ -198,7 +198,8 @@ export async function buildTeamScorecardPage(repository: OpsRepository, session:
     const window = windows[back]!;
     const source = back > 1 && history ? history : teamFacts;
     const windowFacts = at(source, window);
-    const pool = windowFacts.filter(f => (drillTech === "team" || f.techId === drillTech)
+    // Problems a tech found themselves appear only under "Repaired again"; everywhere else they're left out entirely.
+    const pool = windowFacts.filter(f => (!f.found || drillMeasure === "callbacks") && (drillTech === "team" || f.techId === drillTech)
       && (sliceKind !== "trade" || f.trade === sliceValue)
       && (techId !== undefined || !trade || f.trade === trade));
     const measure = drillMeasure;
@@ -220,9 +221,10 @@ export async function buildTeamScorecardPage(repository: OpsRepository, session:
       headline: cell.empty ? "No jobs count toward this yet." : summary.tooFew ? `${cell.detail}. Showing the jobs so far.` : `${cell.value} · ${cell.detail}`,
       notCounted: (() => {
         const reasons = new Map<string, number>();
-        for (const fact of pool) { const reason = notCountedReason(fact, measure, now); if (reason) reasons.set(reason, (reasons.get(reason) ?? 0) + 1); }
+        const jobs = pool.filter(fact => !fact.found);
+        for (const fact of jobs) { const reason = notCountedReason(fact, measure, now); if (reason) reasons.set(reason, (reasons.get(reason) ?? 0) + 1); }
         const left = [...reasons.values()].reduce((a, b) => a + b, 0);
-        return left ? `Not counted: ${left} of ${pool.length} jobs — ${[...reasons.entries()].sort((a, b) => b[1] - a[1]).map(([reason, n]) => `${n} ${reason}`).join(", ")}.` : undefined;
+        return left ? `Not counted: ${left} of ${jobs.length} jobs — ${[...reasons.entries()].sort((a, b) => b[1] - a[1]).map(([reason, n]) => `${n} ${reason}`).join(", ")}.` : undefined;
       })(),
       closeHref: href({}, `#${placement === "techs" ? "scorecard-techs" : `scorecard-${placement}`}`),
       page: pages > 1 ? { label: `${(currentPage - 1) * size + 1}–${Math.min(currentPage * size, ranked.length)} of ${ranked.length} jobs`, previousHref: currentPage > 1 ? pageHref(currentPage - 1) : undefined, nextHref: currentPage < pages ? pageHref(currentPage + 1) : undefined } : undefined,
@@ -232,6 +234,7 @@ export async function buildTeamScorecardPage(repository: OpsRepository, session:
           ...(drillTech === "team" ? [fact.techName] : []),
           ...(measure === "firstFix" && tone === "bad" && outsideTheirControl(fact) ? ["Outside their control"] : []),
           ...(fact.pm && measure === "callbacks" ? ["After maintenance"] : []),
+          ...(fact.found ? ["Found by them"] : []),
           ...(others.length && drillTech !== "team" ? [`Shared with ${others.join(", ")}`] : []),
         ];
         return { workOrderId: fact.workOrderId, number: fact.number, problem: fact.problem, store: `Store ${fact.storeNumber}`, sent: formatOperationsDate(fact.startedAt), result, tone, tags };

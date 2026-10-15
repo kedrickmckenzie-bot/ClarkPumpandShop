@@ -1,3 +1,4 @@
+import { technicianManager } from "@/lib/server/technician-manager";
 import { AiDiagnoseChat } from "@/components/workspace/ai-diagnose-chat";
 import { JobPreparationFields } from "@/components/workspace/job-preparation-fields";
 import { getAiClient } from "@/lib/server/ai-provider";
@@ -95,6 +96,7 @@ export default async function InternalJob({ params, searchParams }: { params: Pr
   const backHref = manager ? "/app/dispatch" : "/app/my-work";
   const aiHelp = Boolean(getAiClient());
 
+  const fieldManager = manager ? undefined : await technicianManager(r, s.organizationId);
   return <div className={styles.workspace}>
     <header className={styles.jobHeader}>
       <Link href={backHref}>← {manager ? "Dispatch" : "My work"}</Link>
@@ -104,10 +106,14 @@ export default async function InternalJob({ params, searchParams }: { params: Pr
       </h1>
       <p>Store {work.storeNumber} · {work.storeName}</p>
       <p className={styles.muted}>Work order {work.number}</p>
+      {manager ? null : <div className={styles.jobActions}>
+        <Link className={`${styles.btn} ${styles.btnSecondary}`} href={`/app/my-work/found?${new URLSearchParams({ store: work.storeId, from: `/app/my-work/${id}` })}`}>Found another problem</Link>
+        {fieldManager?.phone ? <a className={`${styles.btn} ${styles.btnSecondary}`} href={`tel:${fieldManager.phone}`}>Call {fieldManager.name.split(" ")[0]}</a> : null}
+      </div>}
     </header>
     {contact}
 
-    {saved?<p className={styles.notice} role="status">Saved. Job updated.</p>:null}
+    {saved?<p className={styles.notice} role="status">{saved === "found" ? "Job created. It's yours — record the result when you're done." : "Saved. Job updated."}</p>:null}
     <section className={styles.jobBody}>
       <dl className={styles.facts}>
         <div><dt>Status</dt><dd>{status}</dd></div>

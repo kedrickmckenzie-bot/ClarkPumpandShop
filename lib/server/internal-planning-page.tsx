@@ -1,3 +1,4 @@
+import { technicianManager } from "./technician-manager";
 import "server-only";
 import Link from "next/link";
 import { OpsDomainError } from "@/lib/ops/errors";
@@ -99,8 +100,10 @@ export async function renderInternalDispatch(query: Query, technician: boolean) 
   const visibleStores=[...new Set([page,heldPage,planned,replan,review,unscheduled].flatMap(list=>list?.items.map(row=>row.storeId)??[]))];
   const storeZones=Object.fromEntries(await Promise.all(visibleStores.map(async id=>[id,(await context.repository.getStore(scope.organizationId,id))?.timeZone??zone])));
   const saved = first("saved") ? { number: first("saved")!.slice(0, 40), when: (first("savedWhen") ?? "").slice(0, 80) } : undefined;
+  const sent = first("sent")?.slice(0, 40);
+  const manager = technician ? await technicianManager(context.repository, scope.organizationId) : undefined;
   return <InternalPlanningWorkspace organizationZone={zone} storeZones={storeZones} session={context.session} technician={technician} view={view} search={search} week={week} today={today}
-    readiness={readiness} person={person} region={region} storeId={filter.storeId} saved={saved}
+    readiness={readiness} person={person} region={region} storeId={filter.storeId} saved={saved} sent={sent} manager={manager}
     page={page} heldPage={heldPage} planned={planned} replan={replan} review={review} unscheduled={unscheduled} filters={filters}
     links={{
       review: link("reviewCursor", review?.nextCursor),

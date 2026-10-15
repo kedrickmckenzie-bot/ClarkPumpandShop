@@ -1,4 +1,7 @@
 import "server-only";
+import { underWarranty } from "@/lib/ops/found-problem";
+import { civilDate } from "@/lib/ops/dispatch-calendar";
+import { formatOperationsDate } from "@/lib/ops/local-time";
 import Link from "next/link";
 import { getOpsRequestContext } from "./ops-request-context";
 import { internalDispatchScope } from "./internal-dispatch-context";
@@ -20,7 +23,7 @@ export async function TechnicianStore({id,cursor}:{id:string;cursor?:string}) {
   const store=(await repository.getStore(scope.organizationId,id))!;
   const scoped={...scope,storeIds:[id]};
   const [equipment,jobs]=await Promise.all([repository.searchAssets(scoped,"",{limit:25}),repository.listWorkOrders(scoped,{storeId:id,statuses:openStatuses,limit:25,cursor})]);
-  return <div className={styles.workspace}><header className={styles.jobHeader}><Link href="/app/stores">← Stores</Link><h1>Store {store.storeNumber}</h1><p>{store.name}</p></header>
+  return <div className={styles.workspace}><header className={styles.jobHeader}><Link href="/app/stores">← Stores</Link><h1>Store {store.storeNumber}</h1><p>{store.name}</p><div className={styles.jobActions}><Link className={`${styles.btn} ${styles.btnSecondary}`} href={`/app/my-work/found?${new URLSearchParams({ store: store.id, from: `/app/stores/${id}` })}`}>Found another problem</Link></div></header>
     <StoreContact repository={repository} store={store}/>
     <section className={styles.jobBody}><h2 className={styles.subHeading}>Open jobs</h2>{jobs.items.length?<ul className={styles.historyList}>{jobs.items.map(job=><li key={job.id}><Link href={`/app/work-orders/${encodeURIComponent(job.id)}`}>{job.problem}</Link><p>{job.internalAssigneeName??job.vendorName??"Manager arranging work"} · {dispatchStatus(job).label}</p></li>)}</ul>:<p>No open jobs at this store.</p>}{jobs.nextCursor?<p>Showing {jobs.items.length} of {jobs.totalCount} · <Link href={`?jobsCursor=${encodeURIComponent(jobs.nextCursor)}`}>Show more jobs</Link></p>:null}</section>
     <section className={styles.jobBody}><h2 className={styles.subHeading}>Equipment</h2>{equipment.items.length?<ul>{equipment.items.map(asset=><li key={asset.id}><Link href={`/app/equipment/${encodeURIComponent(asset.id)}`}>{asset.name} · {asset.assetTag}</Link></li>)}</ul>:<p>No equipment recorded at this store yet.</p>}{equipment.nextCursor?<Link href={`/app/equipment?store=${encodeURIComponent(id)}`}>See more equipment</Link>:null}</section>
@@ -33,7 +36,10 @@ export async function TechnicianEquipment({id}:{id:string}) {
   const store=(await repository.getStore(scope.organizationId,asset.storeId))!;
   // Only show the per-unit files box when something is attached; the library below covers manuals.
   const unitFiles=await repository.listFilesForEntity(scope.organizationId,"asset",id);
-  return <div className={styles.workspace}><header className={styles.jobHeader}><Link href="/app/equipment">← Equipment</Link><h1>{asset.name}</h1><p>{asset.assetTag} · <Link href={`/app/stores/${encodeURIComponent(store.id)}`}>Store {store.storeNumber}</Link></p></header>
+  const organization=await repository.getOrganization(scope.organizationId);
+  const warranty=await underWarranty({repository},scope.organizationId,store.id,id,civilDate(new Date().toISOString(),organization?.timeZone??"America/New_York"));
+  return <div className={styles.workspace}><header className={styles.jobHeader}><Link href="/app/equipment">← Equipment</Link><h1>{asset.name}</h1><p>{asset.assetTag} · <Link href={`/app/stores/${encodeURIComponent(store.id)}`}>Store {store.storeNumber}</Link></p><div className={styles.jobActions}><Link className={`${styles.btn} ${styles.btnSecondary}`} href={`/app/my-work/found?${new URLSearchParams({ store: store.id, asset: id, from: `/app/equipment/${id}` })}`}>Found a problem with this</Link></div></header>
+    {warranty?<p className={styles.urgent} role="alert"><strong>Under warranty</strong> with {warranty.provider} until {formatOperationsDate(warranty.end)}. Don&apos;t repair it yourself. Send problems to your manager.</p>:null}
     <section className={styles.jobBody}><dl className={styles.facts}>{[["Manufacturer",asset.manufacturer],["Model",asset.model],["Serial number",asset.serialNumber]].filter(([,value])=>value).map(([label,value])=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>{asset.components.length?<details><summary>Equipment parts</summary><ul>{asset.components.map(component=><li key={component.id}>{component.name}{component.partNumber?` · ${component.partNumber}`:""}</li>)}</ul></details>:null}{unitFiles.length?<RecordFiles kind="asset" id={id}/>:null}</section>
     <EquipmentDocuments assetId={id} />
     <TechnicianHistory repository={repository} scope={scope} assetId={id} limit={10} title="Work on this equipment" zone={store.timeZone}/><Link href={`/app/work-history?asset=${encodeURIComponent(id)}`}>All work history on this equipment</Link>
@@ -44,7 +50,7 @@ export async function TechnicianWorkRecord({id}:{id:string}) {
   if(!job)return unavailable("Job","/app/my-work");
   const results=await repository.listWorkResults(scope.organizationId,id);
   const store=await repository.getStore(scope.organizationId,job.storeId),files=await repository.listFilesForEntity(scope.organizationId,"work_order",id);
-  return <div className={styles.workspace}><header className={styles.jobHeader}><Link href="/app/work-history">← Work history</Link><h1>{job.problem}</h1><p><Link href={`/app/stores/${encodeURIComponent(job.storeId)}`}>Store {job.storeNumber} · {job.storeName}</Link></p><p>{job.number} · {dispatchStatus(job).label}</p></header>
+  return <div className={styles.workspace}><header className={styles.jobHeader}><Link href="/app/my-work">← My work</Link><h1>{job.problem}</h1><p><Link href={`/app/stores/${encodeURIComponent(job.storeId)}`}>Store {job.storeNumber} · {job.storeName}</Link></p><p>{job.number} · {dispatchStatus(job).label}</p></header>
     <section className={styles.jobBody}>{job.asset?<p>Equipment: <Link href={`/app/equipment/${encodeURIComponent(job.asset.id)}`}>{job.asset.name}</Link></p>:null}{job.authorizedScope?<p>{job.authorizedScope}</p>:null}<p>{job.internalAssigneeName??job.vendorName??job.accountableParty}</p><p>{plainNextAction(job.nextAction)}</p>
       {job.assignmentKind==="internal"&&!job.inspectionId&&(job.internalMembershipId===session.membershipId || job.internalTarget==="pool"&&!job.hasOpenFollowUp)&&!["closed","cancelled","resolved","completed_pending_review"].includes(job.status)?<Link className={`${styles.btn} ${styles.btnPrimary}`} href={`/app/my-work/${encodeURIComponent(id)}`}>Open job tools</Link>:null}
       {results.filter(result=>!result.siteVisitWorkOrderId).map(result=><p key={result.id}>{result.performerName} · {dispatchTime(result.outcomeRecordedAt,store?.timeZone??"America/New_York",store?.timeZone??"America/New_York")}{result.outcomeNotes?` — ${result.outcomeNotes}`:""}</p>)}

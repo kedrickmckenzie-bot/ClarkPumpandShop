@@ -650,6 +650,8 @@ export interface CreateWorkOrderInput {
   callbackOfWorkOrderId?: OpsId;
   expectedRequestVersion?: number;
   shortName?: string;
+  /** Set when a technician reports a problem they found on site. */
+  foundByMembershipId?: OpsId;
   technicianNotes?: string;
   estimatedMinutes?: number;
   confirmationDelay?: "next_morning" | "four_hours";
@@ -678,6 +680,11 @@ export interface CreateWorkOrderInput {
   };
   idempotency?: CommandIdempotency;
   actor: ActorContext;
+}
+
+/** A technician taking a problem they found themselves; anyone else assigning work must be a manager. */
+function selfFoundWork(input: CreateWorkOrderInput) {
+  return Boolean(input.foundByMembershipId) && input.foundByMembershipId === input.actor.actorId && input.initialAssignment?.internalMembershipId === input.actor.actorId && input.initialAssignment?.internalTarget === "person";
 }
 
 export async function createWorkOrder(svc: OpsCommandServices, input: CreateWorkOrderInput) {
@@ -795,7 +802,8 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
     ? await resolveDispatchTarget(repository, { organizationId: input.organizationId, storeId: input.storeId }, { target: input.initialAssignment.internalTarget, membershipId: input.initialAssignment.internalMembershipId, managerId: input.initialAssignment.managerId }) : undefined;
   if (dispatchSelection) {
     if (!input.actor.actorId || input.actor.actorType !== "user") throw new OpsDomainError("FORBIDDEN", "Sign in to assign internal work.");
-    await dispatchIdentity(repository, input.organizationId, input.actor.actorId, input.storeId, internalManagerRoles);
+    // A technician may take a problem they found themselves; anyone else assigning work must be a manager.
+    await dispatchIdentity(repository, input.organizationId, input.actor.actorId, input.storeId, selfFoundWork(input) ? ["internal_technician"] : internalManagerRoles);
   }
   if (input.initialAssignment?.kind === "internal" && !dispatchSelection) {
     if (!input.initialAssignment.internalMembershipId || input.initialAssignment.vendorId) {
@@ -865,7 +873,7 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
   const sourceConfirmationPlan = sourcePmOccurrence ? await repository.getPmPlan(input.organizationId, sourcePmOccurrence.planId) : undefined;
   const requireConfirmation = input.requireConfirmation ?? sourceConfirmationPlan?.requireConfirmation ?? (await repository.getActiveWorkflowPolicy(input.organizationId))?.requireConfirmationDefault ?? true;
   if (input.confirmationMembershipId) await confirmationAssignee(repository, { organizationId: input.organizationId, storeId: input.storeId, confirmationMembershipId: input.confirmationMembershipId });
-  const statements: OpsStatement[] = [insert("ops_work_orders", { short_name: input.shortName?.trim() || undefined, technician_notes: input.technicianNotes?.trim() || undefined, estimated_minutes: input.estimatedMinutes, confirmation_delay: input.confirmationDelay, require_confirmation: requireConfirmation ? 1 : 0, confirmation_membership_id: input.confirmationMembershipId, id, organization_id: input.organizationId, number, store_id: input.storeId, request_id: input.requestId, problem, authorized_scope: input.authorizedScope, category_key: input.categoryKey, taxonomy_node_id: input.taxonomyNodeId, asset_id: input.assetId, component_id: input.componentId, priority, status, version: 0, internal_accountable_party: internalAccountableParty, internal_accountable_type: internalAccountableType, internal_accountable_id: internalAccountableId, accountable_party: accountableParty, next_action: nextAction, due_at: dueAt, escalation_to: escalationTo, internal_review_threshold_minor: input.internalReviewThresholdMinor, internal_review_currency: input.internalReviewThresholdMinor === undefined ? undefined : input.currency ?? "USD", nte_amount_minor: input.nteAmountMinor, nte_currency: input.nteAmountMinor === undefined ? undefined : input.currency ?? "USD", repair_estimate_amount_minor: input.repairEstimateAmountMinor, repair_estimate_currency: input.repairEstimateAmountMinor === undefined ? undefined : input.repairEstimateCurrency ?? "USD", estimated_service_extension_months: input.estimatedServiceExtensionMonths, created_at: now })];
+  const statements: OpsStatement[] = [insert("ops_work_orders", { short_name: input.shortName?.trim() || undefined, found_by_membership_id: input.foundByMembershipId, technician_notes: input.technicianNotes?.trim() || undefined, estimated_minutes: input.estimatedMinutes, confirmation_delay: input.confirmationDelay, require_confirmation: requireConfirmation ? 1 : 0, confirmation_membership_id: input.confirmationMembershipId, id, organization_id: input.organizationId, number, store_id: input.storeId, request_id: input.requestId, problem, authorized_scope: input.authorizedScope, category_key: input.categoryKey, taxonomy_node_id: input.taxonomyNodeId, asset_id: input.assetId, component_id: input.componentId, priority, status, version: 0, internal_accountable_party: internalAccountableParty, internal_accountable_type: internalAccountableType, internal_accountable_id: internalAccountableId, accountable_party: accountableParty, next_action: nextAction, due_at: dueAt, escalation_to: escalationTo, internal_review_threshold_minor: input.internalReviewThresholdMinor, internal_review_currency: input.internalReviewThresholdMinor === undefined ? undefined : input.currency ?? "USD", nte_amount_minor: input.nteAmountMinor, nte_currency: input.nteAmountMinor === undefined ? undefined : input.currency ?? "USD", repair_estimate_amount_minor: input.repairEstimateAmountMinor, repair_estimate_currency: input.repairEstimateAmountMinor === undefined ? undefined : input.repairEstimateCurrency ?? "USD", estimated_service_extension_months: input.estimatedServiceExtensionMonths, created_at: now })];
   if (input.idempotency) statements.unshift(idempotencyStatement(input.organizationId, id, now, input.idempotency));
   if (sourcePmOccurrence) {
     const sourceProgram = sourcePmOccurrence.programId
@@ -960,7 +968,7 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
     };
   }
   const createdWorkOrder: WorkOrder = {
-    shortName: input.shortName?.trim() || undefined, technicianNotes: input.technicianNotes, estimatedMinutes: input.estimatedMinutes, confirmationDelay: input.confirmationDelay,
+    shortName: input.shortName?.trim() || undefined, foundByMembershipId: input.foundByMembershipId, technicianNotes: input.technicianNotes, estimatedMinutes: input.estimatedMinutes, confirmationDelay: input.confirmationDelay,
     requireConfirmation, confirmationMembershipId: input.confirmationMembershipId,
     id, organizationId: input.organizationId, number, storeId: input.storeId, requestId: input.requestId,
     problem, authorizedScope: input.authorizedScope, categoryKey: input.categoryKey,
@@ -977,7 +985,7 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
     createdWorkOrder.accountableParty = input.holdForVisit ? internalAccountableParty : person?.displayName ?? internalAccountableParty;
   }
   if (dispatchSelection && input.actor.actorId) {
-    statements.push(dispatchAccessAssertion(input.organizationId,input.actor.actorId,input.storeId,internalManagerRoles,now));
+    statements.push(dispatchAccessAssertion(input.organizationId,input.actor.actorId,input.storeId,selfFoundWork(input) ? ["internal_technician"] : internalManagerRoles,now));
     if (dispatchSelection.person) statements.push(dispatchAccessAssertion(input.organizationId,dispatchSelection.person.membershipId,input.storeId,["internal_technician"],now));
     if (dispatchSelection.manager) statements.push(dispatchAccessAssertion(input.organizationId,dispatchSelection.manager.membershipId,input.storeId,internalManagerRoles,now));
   }

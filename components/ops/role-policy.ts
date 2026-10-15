@@ -7,6 +7,7 @@ export type OperatorCapability =
   | "record_internal_result"
   | "assign_internal_work"
   | "claim_internal_work"
+  | "report_found_problem"
   | "return_internal_work"
   | "create_request"
   | "review_request"
@@ -143,7 +144,7 @@ export const demoOperatorRolePolicy: Record<OperatorRole, DemoOperatorRolePolicy
   // Internal technician: their jobs, the stores they cover, visits and equipment history.
   // No spending, vendor, approval or setup pages; actions come from the visit workflow.
   technician: {
-    capabilities: ["schedule_internal_work", "record_internal_result", "claim_internal_work", "return_internal_work"],
+    capabilities: ["schedule_internal_work", "record_internal_result", "claim_internal_work", "return_internal_work", "report_found_problem"],
     listRoutes: ["work-orders", "visits", "stores"],
     programRoutes: ["equipment"],
     detailRoutes: ["work-order", "visit", "store", "equipment"],
@@ -219,7 +220,7 @@ export function roleCanOpenOperatorHref(role: OperatorRole, href: string) {
   }
   if (area === "tasks") return (taskRoles as readonly string[]).includes(role);
   if (area === "dispatch") return ["facilities", "regional", "executive"].includes(role);
-  if (area === "my-work") return role === "technician";
+  if (area === "my-work" || area === "my-week") return role === "technician";
   if (area === "work-orders") {
     if (record === "new") return roleCan(role, "create_work_order");
     return record ? roleCanAccessDetailRoute(role, "work-order") : roleCanAccessListRoute(role, "work-orders");
