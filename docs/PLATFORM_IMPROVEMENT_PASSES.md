@@ -4,6 +4,12 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Monthly tank checks made one-click — October 15, 2026
+
+**What was done.** The user asked for whatever is easiest for c-stores. The tank monitor already keeps its own reports, so the ready-made "Monthly tank leak detection result" and "30-day tank walkthrough" schedules no longer require paperwork. The store marks the check passed, or failed (which opens a repair job), and a photo is optional. Everything else stays as built: yearly and 3-year contractor tests still require the tester's report. Applies to schedules made from now on.
+
+**How it was tested.** Typecheck, lint, and the fuel tank, showcase and compliance route tests (13) pass. A template data change only, so no full run.
+
 ### Fuel tank compliance (UST-01) and c-store starter pack (CP-01) — October 13, 2026
 
 **What was done.**
