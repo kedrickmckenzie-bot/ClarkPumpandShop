@@ -310,6 +310,8 @@ export interface OpsRepository extends TaskRepository {
   listRefrigerantEvents(organizationId: OpsId, assetIds: readonly OpsId[]): Promise<import("./refrigerant").RefrigerantEvent[]>;
   /** Current (not removed) fuel tank operators for stores in scope, by store number then class. */
   listUstOperators(scope: OrganizationScope): Promise<import("./ust").UstOperator[]>;
+  /** Accounting's maintenance spend totals, withdrawn ones included (they stay on record). */
+  listSpendTotals(organizationId: string): Promise<import("./spend-totals").SpendTotal[]>;
   listNotificationRecipients(
     organizationId: OpsId,
     role: NotificationRecipientRole,

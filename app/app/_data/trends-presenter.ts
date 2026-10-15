@@ -793,7 +793,7 @@ export function buildTrendsModel(
   const periodValue = Number(first(query.period) ?? "6");
   const periodMonths = [3, 6, 12, 24].includes(periodValue) ? periodValue : 12;
   const comparisonExplicit = first(query.compare) !== undefined;
-  const comparisonValue = first(query.compare) ?? "previous_period";
+  const comparisonValue = first(query.compare) ?? "previous_year";
   const requestedComparison: TrendComparisonId = comparisonValue === "none" || comparisonValue === "previous_period" ? comparisonValue : "previous_year";
   let comparison: TrendComparisonId = requestedComparison === "previous_year" && periodMonths > 12 ? "previous_period" : requestedComparison;
   if (requestedComparison === "previous_year" && comparison !== requestedComparison) removedFilters.push("the overlapping same-year comparison");
@@ -805,6 +805,8 @@ export function buildTrendsModel(
   let selectedAsset = first(query.asset);
   let selectedComponent = first(query.component);
   let selectedVendor = first(query.vendor);
+  const workValue = first(query.work);
+  const selectedWork = workValue === "vendor" || workValue === "in_house" ? workValue : undefined;
   const selectedInvoice = safeMetric === "linked_invoice" ? first(query.invoice) : undefined;
   const workTypeValue = first(query.workType);
   const selectedWorkType = safeMetric === "pm_completion"
@@ -935,6 +937,7 @@ export function buildTrendsModel(
     removedFilters.push("an incompatible component filter");
   }
   if (!hasRequestedBreakdown) breakdown = selectedStore ? "category" : "store";
+  if (selectedWork === "in_house" && breakdown === "vendor") breakdown = selectedStore ? "category" : "store";
   const componentName = selectedComponent?.toLocaleLowerCase("en-US");
 
   const maintenanceLinkMatches = (
@@ -956,6 +959,14 @@ export function buildTrendsModel(
     });
   };
 
+  // Who did the work: the record's own provider when known, otherwise the job's latest active assignment.
+  const jobProvider = new Map<string, "vendor" | "in_house">();
+  for (const assignment of [...fixture.assignments].filter((row) => row.organizationId === session.organizationId && row.kind !== "choose_later" && row.status !== "declined" && row.status !== "cancelled").sort((a, b) => a.assignedAt.localeCompare(b.assignedAt))) {
+    jobProvider.set(assignment.workOrderId, assignment.kind === "internal" ? "in_house" : "vendor");
+  }
+  const recordProvider = (row: TrendSourceRecord) => row.providerAttribution === "internal" ? "in_house"
+    : row.providerAttribution && !["ambiguous", "unattributed"].includes(row.providerAttribution) ? "vendor"
+      : row.workOrderId ? jobProvider.get(row.workOrderId) : undefined;
   const scopeRecord = (row: TrendSourceRecord, includeStore = true, includeVendor = true, includeExactAsset = true, includeCostKind = true) => {
     const store = storeById.get(row.storeId);
     if (!store || (row.currency && row.currency !== currencyCode)) return false;
@@ -967,7 +978,7 @@ export function buildTrendsModel(
     if (includeCostKind && selectedCostKind && row.costKind !== selectedCostKind) return false;
     return true;
   };
-  const records = allRecords.filter((row) => scopeRecord(row));
+  const records = allRecords.filter((row) => scopeRecord(row) && (!selectedWork || recordProvider(row) === selectedWork));
   const peerRecords = allRecords.filter((row) => scopeRecord(row, false, true, false));
   const organizationTimeZone = fixture.organizations.find((row) => row.id === session.organizationId)?.timeZone ?? "UTC";
   const organizationLocalDate = localDateKey(fixture.asOf, organizationTimeZone);
@@ -975,13 +986,13 @@ export function buildTrendsModel(
   const currentStart = `${currentMonths[0]}-01`;
   const currentEnd = organizationLocalDate;
   let comparisonFallbackNote: string | undefined;
-  if (!comparisonExplicit && periodMonths <= 12 && (selectedCategory === "refrigeration" || selectedCategory === "hvac")) {
+  if (!comparisonExplicit && periodMonths <= 12) {
     const seasonalMonths = currentMonths.map((key) => addMonths(key, -12));
     const seasonalStart = `${seasonalMonths[0]}-01`;
     const seasonalEnd = dayInMonth(seasonalMonths.at(-1)!, Number(currentEnd.slice(-2)));
     const hasComparableSeasonalHistory = records.some((row) => row.localDate >= seasonalStart && row.localDate <= seasonalEnd && seasonalMonths.includes(row.periodKey));
     comparison = hasComparableSeasonalHistory ? "previous_year" : "previous_period";
-    if (!hasComparableSeasonalHistory) comparisonFallbackNote = "Same-period-last-year history is not adequate for this scope, so the initial comparison uses the immediately preceding period.";
+    if (!hasComparableSeasonalHistory) comparisonFallbackNote = `No records from the same months last year, so this compares with the ${periodMonths} months before.`;
   }
   const baselineMonths = comparison === "previous_year"
     ? currentMonths.map((key) => addMonths(key, -12))
@@ -1030,6 +1041,8 @@ export function buildTrendsModel(
     : hasExplicitEvidenceFocus
       ? "records"
       : "overview";
+  // The Stores view is a plain store-by-store table, so it always groups by store.
+  if (activeView === "stores" && !selectedStore) breakdown = "store";
   const currentRecords = records.filter((row) => currentSet.has(row.periodKey) && row.localDate >= currentStart && row.localDate <= currentEnd);
   const baselineRecords = records.filter((row) => baselineStart && baselineEnd && baselineSet.has(row.periodKey) && row.localDate >= baselineStart && row.localDate <= baselineEnd);
   const currentValue = aggregate(safeMetric, currentRecords);
@@ -1144,6 +1157,7 @@ export function buildTrendsModel(
     asset: selectedAsset,
     component: selectedComponent,
     vendor: selectedVendor,
+    work: selectedWork,
     workType: selectedWorkType,
     costKind: selectedCostKind,
     storeSort,
@@ -2725,9 +2739,17 @@ export function buildTrendsModel(
     return { sentences };
   })() : undefined;
   // One click regroups the overview; keeps every other filter and the current view.
-  const breakdownSwitch = additive && comparison !== "none" ? ([["store", "Store"], ["category", "Service area"], ["profile", "Equipment type"], ["vendor", "Vendor"]] as const)
-    .filter(([id]) => id !== "store" || !selectedStore)
-    .map(([id, label]) => ({ id, label, selected: breakdown === id, href: `${trendHref({ breakdown: id, view: activeView === "drivers" ? "drivers" : "overview", driverPage: undefined, driverSort: undefined, driverDirection: undefined })}#change-by` })) : undefined;
+  // Always visible; an option that can't apply right now stays greyed out with the reason.
+  const regionCount = new Set(stores.map((store) => store.regionId).filter(Boolean)).size;
+  const switchBlocked = !additive ? "Not available for this measure" : comparison === "none" ? "Choose something to compare with first" : undefined;
+  const breakdownSwitch = ([
+    ["region", "Region", selectedStore ? "One store is chosen" : selectedRegion || regionCount < 2 ? "One region is chosen" : undefined],
+    ["store", "Store", selectedStore ? "One store is chosen" : undefined],
+    ["category", "Service area", selectedCategory ? "One service area is chosen" : undefined],
+    ["group", "Equipment group", selectedProfile || selectedAsset ? "One equipment type is chosen" : undefined],
+    ["profile", "Equipment type", selectedAsset ? "One piece of equipment is chosen" : undefined],
+    ["vendor", "Vendor", selectedWork === "in_house" ? "In-house work has no vendor" : selectedVendor ? "One vendor is chosen" : undefined],
+  ] as const).map(([id, label, reason]) => ({ id, label, selected: !switchBlocked && breakdown === id, disabledReason: switchBlocked ?? reason, href: `${trendHref({ breakdown: id, view: activeView === "drivers" ? "drivers" : "overview", driverPage: undefined, driverSort: undefined, driverDirection: undefined })}#change-by` }));
   return {
     bridge,
     heatmap,
@@ -2763,10 +2785,11 @@ export function buildTrendsModel(
     filters: [
       ...(selectedInvoice ? [{ id: "invoice", label: "Invoice", value: selectedInvoice, group: "analysis" as const, options: [filterOption("", "All invoices"), filterOption(selectedInvoice, selectedInvoiceNumber ?? "Selected invoice")] }] : []),
       ...(moneyMetric ? [{ id: "currency", label: "Currency", value: currencyCode, group: "analysis" as const, options: [...new Set(["USD", currencyCode, ...allRecords.flatMap((row) => row.currency ?? [])])].sort().map((code) => filterOption(code, code)) }] : []),
-      { id: "metric", label: "Track", value: safeMetric, group: "analysis", options: allowedMetricIds.map((value) => filterOption(value, metricCopy[value].label)) },
+      { id: "metric", label: "Measure", value: safeMetric, group: "analysis", options: allowedMetricIds.map((value) => filterOption(value, metricCopy[value].label)) },
       { id: "period", label: "Time range", value: String(periodMonths), group: "analysis", options: [filterOption("3", "Last 3 months"), filterOption("6", "Last 6 months"), filterOption("12", "Last 12 months"), filterOption("24", "Last 24 months")] },
-      { id: "compare", label: "Compare to", value: comparison, group: "analysis", options: [filterOption("previous_year", "Same period last year"), filterOption("previous_period", `Earlier ${periodMonths} months`), filterOption("none", "Do not compare")] },
+      { id: "compare", label: "Compare to", value: comparison, group: "analysis", options: [filterOption("previous_year", "Last year"), filterOption("previous_period", `${periodMonths} months before`), filterOption("none", "Nothing")] },
       { id: "breakdown", label: "Show the change by", value: breakdown, group: "analysis", options: [filterOption("region", "Region"), filterOption("store", "Store"), filterOption("category", "Service area"), filterOption("group", "Equipment group"), filterOption("profile", "Equipment type"), filterOption("component", "Component name"), filterOption("vendor", "Vendor")] },
+      { id: "work", label: "Who did the work", value: selectedWork ?? "", group: "analysis", options: [filterOption("", "Everyone"), filterOption("vendor", "Outside vendors"), filterOption("in_house", "In-house team")] },
       { id: "workType", label: "Work type", value: selectedWorkType ?? "", group: "analysis", options: [filterOption("", "All work"), ...(safeMetric === "pm_completion" ? [] : [filterOption("reactive", "Reactive work")]), filterOption("preventive", "Preventive maintenance")] },
       { id: "region", label: "Region", value: selectedRegion ?? "", group: "operating_scope", options: [filterOption("", "All regions"), ...fixture.regions.filter((row) => row.organizationId === session.organizationId && stores.some((store) => store.regionId === row.id)).map((row) => filterOption(row.id, row.name))] },
       { id: "store", label: "Store", value: selectedStore ?? "", group: "operating_scope", options: [filterOption("", "All stores"), ...stores.filter((store) => !selectedRegion || store.regionId === selectedRegion).map((store) => filterOption(store.id, `Store ${store.storeNumber} · ${store.name}`))] },

@@ -97,12 +97,12 @@ describe("trends short answer", () => {
 });
 
 describe("trends change-by switch", () => {
-  it("offers store, service area, equipment type and vendor, and each choice regroups the answer", () => {
+  it("always shows region through vendor, and each choice regroups the answer", () => {
     const fixture = buildNorthlinePresentationFixture();
     const model = buildTrendsModel(fixture, session(), {});
-    expect(model.breakdownSwitch!.map((option) => option.label)).toEqual(["Store", "Service area", "Equipment type", "Vendor"]);
+    expect(model.breakdownSwitch!.map((option) => option.label)).toEqual(["Region", "Store", "Service area", "Equipment group", "Equipment type", "Vendor"]);
     expect(model.breakdownSwitch!.find((option) => option.selected)?.id).toBe("store");
-    for (const option of model.breakdownSwitch!) {
+    for (const option of model.breakdownSwitch!.filter((choice) => !choice.disabledReason)) {
       const regrouped = buildTrendsModel(fixture, session(), Object.fromEntries(new URL(option.href, "http://x").searchParams));
       expect(regrouped.breakdownSwitch!.find((choice) => choice.selected)?.id).toBe(option.id);
       // Regrouping never changes the totals; the rows still add up exactly.
@@ -110,13 +110,24 @@ describe("trends change-by switch", () => {
       expect(Math.round(regrouped.bridge!.startValue + regrouped.bridge!.steps.reduce((sum, step) => sum + step.value, 0))).toBe(Math.round(regrouped.bridge!.endValue));
       // "Not one location" is only said when the grouping is by place.
       const breadth = regrouped.story!.sentences.find((sentence) => sentence.id === "breadth")?.text ?? "";
-      if (option.id !== "store") expect(breadth).not.toContain("location");
+      if (option.id !== "store" && option.id !== "region") expect(breadth).not.toContain("location");
     }
   });
 
-  it("drops the Store choice when one store is already selected", () => {
+  it("greys out Store and Region, with the reason, when one store is already selected", () => {
     const model = buildTrendsModel(buildNorthlinePresentationFixture(), session(), { store: "store-northline-104" });
-    expect(model.breakdownSwitch!.map((option) => option.id)).not.toContain("store");
+    expect(model.breakdownSwitch!.find((option) => option.id === "store")?.disabledReason).toBe("One store is chosen");
+    expect(model.breakdownSwitch!.find((option) => option.id === "region")?.disabledReason).toBe("One store is chosen");
+  });
+
+  it("filters to in-house work and greys out Vendor", () => {
+    const fixture = buildNorthlinePresentationFixture();
+    const all = buildTrendsModel(fixture, session(), {}), inHouse = buildTrendsModel(fixture, session(), { work: "in_house", breakdown: "vendor" }), vendors = buildTrendsModel(fixture, session(), { work: "vendor" });
+    expect(inHouse.breakdownSwitch!.find((option) => option.id === "vendor")?.disabledReason).toBe("In-house work has no vendor");
+    expect(inHouse.breakdownSwitch!.find((option) => option.selected)?.id).toBe("store");
+    expect(inHouse.bridge!.endValue).toBeGreaterThan(0);
+    expect(inHouse.bridge!.endValue + vendors.bridge!.endValue).toBeLessThanOrEqual(all.bridge!.endValue);
+    expect(new URLSearchParams(inHouse.canonicalQuery).get("work")).toBe("in_house");
   });
 });
 

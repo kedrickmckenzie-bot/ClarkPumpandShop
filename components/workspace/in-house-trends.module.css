@@ -1,0 +1,51 @@
+.page{display:grid;gap:20px;width:min(1500px,100%);margin:0 auto;color:#172033;font-size:15px;line-height:1.45}
+.header{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;padding-bottom:16px;border-bottom:1px solid #d9e0e8}
+.header h1{margin:0;color:#0f172a;font-size:clamp(28px,3.2vw,36px);letter-spacing:-.02em}
+.header p{margin:6px 0 0;color:#596579;font-size:16px}
+.secondary{display:inline-flex;align-items:center;min-height:40px;padding:0 14px;border:1px solid #c6ced9;border-radius:6px;background:#fff;color:#334155;font-size:14px;font-weight:700;text-decoration:none}
+.tabs{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid #d9e0e8;scrollbar-width:thin}
+.tabs a{flex:0 0 auto;padding:10px 14px;color:#475569;font-weight:650;font-size:15px;text-decoration:none;border-bottom:3px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.tabs a:hover{color:#1d4ed8;background:#f5f9ff}
+.tabs a[aria-current="page"]{color:#1d4ed8;border-bottom-color:#2563eb}
+.controls{display:flex;flex-wrap:wrap;gap:12px;align-items:end}
+.controls label{display:grid;gap:4px;font-size:13px;font-weight:700;color:#475569}
+.controls select{font:inherit;font-size:15px;min-height:40px;padding:6px 10px;border:1px solid #94a3b8;border-radius:6px;background:#fff;color:#172033}
+.controls button{min-height:40px;padding:0 16px;border:0;border-radius:6px;background:#2563eb;color:#fff;font:inherit;font-weight:700;cursor:pointer}
+.panel{background:#fff;border:1px solid #d9e0e8;border-radius:8px;padding:18px 20px;min-width:0}
+.panel h2{margin:0 0 14px;font-size:19px;color:#0f172a}
+.muted{color:#64748b}
+.note{margin:12px 0 0;color:#64748b;font-size:14px}
+.scroll{overflow-x:auto}
+.table{width:100%;border-collapse:collapse}
+.table th,.table td{text-align:left;padding:11px 10px;border-bottom:1px solid #e5e9ef;vertical-align:top}
+.table th{font-size:13px;color:#475569;font-weight:700}
+.table td small{display:block;color:#64748b;font-size:13px}
+.table a{color:#1d4ed8;font-weight:650}
+.num{text-align:right!important;font-variant-numeric:tabular-nums}
+.group{text-align:center!important;border-bottom:2px solid #c6ced9!important}
+.allRow td{background:#f8fafc;font-weight:650}
+.warn{display:block;margin-top:4px;color:#92400e!important;font-size:13px}
+.legend{display:flex;gap:18px;margin-bottom:10px;font-size:14px;color:#334155}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{display:inline-block;width:14px;height:14px;border-radius:3px}
+.vendorSwatch,.vendorBar{background:#2563eb}
+.inHouseSwatch,.inHouseBar{background:#64748b}
+.estimated{background:repeating-linear-gradient(45deg,#64748b 0 5px,#94a3b8 5px 8px)}
+.bars{list-style:none;margin:0 0 16px;padding:0;display:grid;gap:8px}
+.bars li{display:grid;grid-template-columns:minmax(150px,220px) minmax(0,1fr) 100px;align-items:center;gap:12px}
+.barLabel{font-size:14px;color:#334155}
+.barTrack{display:flex;gap:2px;height:20px}
+.barTrack span{height:100%;border-radius:0 4px 4px 0}
+.barTrack span:first-child{border-radius:0}
+.bars strong{text-align:right;font-variant-numeric:tabular-nums}
+.recordsHead{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+@media(max-width:720px){
+  .bars li{grid-template-columns:1fr 90px}
+  .barLabel{grid-column:1/-1}
+  .table thead{display:none}
+  .table tr{display:grid;padding:10px 0;border-bottom:1px solid #e5e9ef}
+  .table td{display:flex;justify-content:space-between;gap:12px;border:0;padding:4px 0;text-align:right}
+  .table td::before{content:attr(data-label);color:#64748b;font-size:13px;font-weight:650;text-align:left}
+  .table td small{display:inline;margin-left:4px}
+  .num{text-align:right!important}
+}

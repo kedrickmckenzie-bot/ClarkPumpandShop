@@ -4,7 +4,7 @@ import { SearchPicker } from "@/components/ops/search-picker";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
-import { ChevronRight, Filter, RotateCcw, SlidersHorizontal } from "lucide-react";
+import { ChevronRight, Filter, RotateCcw } from "lucide-react";
 import type { TrendAnalysisPageViewModel } from "@/components/ops/data-contract";
 import styles from "./trends-workspace.module.css";
 
@@ -17,7 +17,7 @@ interface TrendsFilterFormProps {
   scenarioQuery?: string;
 }
 
-const commonFilterIds = new Set(["metric", "period", "compare", "region", "store"]);
+const commonFilterIds = new Set(["metric", "period", "compare", "work", "region", "store"]);
 
 export function TrendsFilterForm({ action, activeView, clearHref, filters, scopeSummary, scenarioQuery }: TrendsFilterFormProps) {
   const router = useRouter();
@@ -25,12 +25,14 @@ export function TrendsFilterForm({ action, activeView, clearHref, filters, scope
   const hasMaintenanceScope = filters.some((filter) => filter.group === "maintenance_scope" && Boolean(filter.value));
   const commonFilters = filters.filter((filter) => commonFilterIds.has(filter.id));
   const specialistFilters = filters.filter((filter) => !commonFilterIds.has(filter.id));
+  const activeSpecialist = specialistFilters.filter((filter) => filter.id !== "breakdown" && filter.id !== "currency" && Boolean(filter.value)).length;
 
   return (
     <form
-      className={styles.filters}
+      className={`${styles.filters} ${styles.quickControls}`}
       action={action}
       method="get"
+      onChange={(event) => { if (event.target instanceof HTMLSelectElement && event.target.closest(`.${styles.commonFilterGrid}`)) event.currentTarget.requestSubmit(); }}
       onSubmit={(event) => {
         event.preventDefault();
         const parameters = new URLSearchParams();
@@ -42,22 +44,21 @@ export function TrendsFilterForm({ action, activeView, clearHref, filters, scope
       }}
     >
       {activeView === "planning" ? ["planTarget", "planAllowance", "planContingency"].map((key) => <input type="hidden" name={key} value={new URLSearchParams(scenarioQuery).get(key) ?? ""} key={key} />) : null}
-      <header>
-        <span><SlidersHorizontal size={17} aria-hidden="true" /><span><strong>Analysis context</strong><small>{scopeSummary}</small></span></span>
-        <Link href={clearHref}><RotateCcw size={15} aria-hidden="true" />Reset all</Link>
-      </header>
       <div className={`${styles.filterGrid} ${styles.commonFilterGrid}`}>
         {commonFilters.map((filter) => filter.options.length > 8 ? <FilterPicker key={`${filter.id}:${filter.value ?? ""}`} filter={filter} /> : (
           <label key={`${filter.id}:${filter.value ?? ""}`}><span>{filter.label}</span><select defaultValue={filter.value} name={filter.id}>{filter.options.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select>{filter.helperText ? <small>{filter.helperText}</small> : null}</label>
         ))}
       </div>
       <details className={styles.filterGroup} open={hasMaintenanceScope}>
-        <summary><span><strong>Specialist filters</strong><small>Break down the result or narrow by work, equipment, component, cost type, or vendor.</small></span><ChevronRight size={16} aria-hidden="true" /></summary>
+        <summary><span><strong>More filters{activeSpecialist ? ` · ${activeSpecialist} on` : ""}</strong><small>Equipment, cost type, vendor, work type</small></span><ChevronRight size={16} aria-hidden="true" /></summary>
         <div className={styles.filterGrid}>{specialistFilters.map((filter) => filter.options.length > 8 ? <FilterPicker key={`${filter.id}:${filter.value ?? ""}`} filter={filter} /> : (
           <label key={`${filter.id}:${filter.value ?? ""}`}><span>{filter.label}</span><select defaultValue={filter.value} name={filter.id}>{filter.options.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select>{filter.helperText ? <small>{filter.helperText}</small> : null}</label>
         ))}</div>
       </details>
-      <button type="submit" disabled={pending}><Filter size={16} aria-hidden="true" />{pending ? "Updating analysis…" : "Update view"}</button>
+      <div className={styles.filterActions}>
+        <button type="submit" disabled={pending}><Filter size={16} aria-hidden="true" />{pending ? "Updating…" : "Show"}</button>
+        <Link href={clearHref} title={scopeSummary}><RotateCcw size={15} aria-hidden="true" />Reset</Link>
+      </div>
     </form>
   );
 }

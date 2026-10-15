@@ -16,23 +16,14 @@ import {
   Info,
   TableProperties,
 } from "lucide-react";
-import type { MetricViewModel, Tone, TrendAnalysisPageViewModel } from "@/components/ops/data-contract";
+import type { Tone, TrendAnalysisPageViewModel } from "@/components/ops/data-contract";
 import { PaginationControls } from "@/components/ops/pagination-controls";
+import { TrendTabs } from "./trend-tabs";
 import { TrendsFilterForm } from "./trends-filter-form";
 import styles from "./trends-workspace.module.css";
 
 function toneClass(tone: Tone = "neutral") {
   return styles[tone];
-}
-
-function SummaryCard({ metric }: { metric: MetricViewModel }) {
-  return (
-    <Link className={`${styles.summaryCard} ${toneClass(metric.tone)}`} href={metric.link.href}>
-      <span>{metric.label}<ChevronRight size={16} aria-hidden="true" /></span>
-      <strong>{metric.value}</strong>
-      <p>{metric.supportingText}</p>
-    </Link>
-  );
 }
 
 function ComparisonChart({ model }: { model: TrendAnalysisPageViewModel }) {
@@ -105,7 +96,9 @@ function ComparisonChart({ model }: { model: TrendAnalysisPageViewModel }) {
 function BreakdownSwitch({ options }: { options: NonNullable<TrendAnalysisPageViewModel["breakdownSwitch"]> }) {
   return <nav className={styles.breakdownSwitch} id="change-by" aria-label="Show the change by">
     <span>Show the change by</span>
-    <div>{options.map((option) => <Link key={option.id} href={option.href} aria-current={option.selected ? "true" : undefined} data-selected={option.selected || undefined}>{option.label}</Link>)}</div>
+    <div>{options.map((option) => option.disabledReason
+      ? <span key={option.id} aria-disabled="true" title={option.disabledReason}>{option.label}<span className={styles.visuallyHidden}> · {option.disabledReason}</span></span>
+      : <Link key={option.id} href={option.href} aria-current={option.selected ? "true" : undefined} data-selected={option.selected || undefined}>{option.label}</Link>)}</div>
   </nav>;
 }
 
@@ -133,14 +126,6 @@ function ExecutiveResults({ model }: { model: TrendAnalysisPageViewModel }) {
       {model.insights.slice(0, 3).map((insight) => <div className={`${styles.resultCard} ${toneClass(insight.tone)}`} key={insight.id}><span>{insight.eyebrow}</span><strong>{insight.title}</strong><Link href={insight.link.href}><b>{insight.actionLabel ?? insight.link.label} →</b></Link><details><summary>Details</summary><p>{insight.detail}</p>{insight.evidenceLimit ? <small>{insight.evidenceLimit}</small> : null}</details></div>)}
     </section>
   );
-}
-
-function Investigation({ model }: { model: TrendAnalysisPageViewModel }) {
-  return <section className={styles.investigation} aria-labelledby="investigation-title">
-    <header><Info size={17} aria-hidden="true" /><div><strong id="investigation-title">Investigation path</strong><span>Location, maintenance, and vendor filters stay visible as you move from a finding to its evidence.</span></div></header>
-    <div className={styles.trails}>{model.investigation.trails.map((trail) => <div className={styles.trail} key={trail.id}><small>{trail.label}</small><nav aria-label={`${trail.label} filters`}>{trail.crumbs.map((crumb, index) => <span key={crumb.id}>{index ? <ChevronRight size={13} aria-hidden="true" /> : null}{crumb.link ? <Link href={crumb.link.href}>{crumb.label}</Link> : <strong>{crumb.label}</strong>}</span>)}</nav></div>)}</div>
-    {model.investigation.evidence ? <aside><Info size={16} aria-hidden="true" /><div><strong>{model.investigation.evidence.label}</strong><span>{model.investigation.evidence.description}</span></div><Link href={model.investigation.evidence.clearLink.href}>{model.investigation.evidence.clearLink.label}</Link></aside> : null}
-  </section>;
 }
 
 function VendorAccountability({ model }: { model: TrendAnalysisPageViewModel }) {
@@ -214,12 +199,11 @@ function UpcomingWorkPlan({ model, savedViews }: { model: TrendAnalysisPageViewM
 }
 
 function AnalysisViews({ model }: { model: TrendAnalysisPageViewModel }) {
-  return (
-    <nav className={styles.analysisViews} aria-label="Trend analysis views">
-      {/* "Change drivers" lives on the overview now (switch + full table), so it has no tab of its own. */}
-      {model.views.filter((view) => view.id !== "drivers").map((view) => { const active = view.id === model.activeView || (view.id === "overview" && model.activeView === "drivers"); return <Link className={active ? styles.activeView : undefined} href={view.link.href} key={view.id} aria-current={active ? "page" : undefined}><strong>{view.label}</strong><span>{view.description}</span></Link>; })}
-    </nav>
-  );
+  // "Change drivers" lives on the overview (switch + full table), so it has no tab of its own.
+  const hrefs = Object.fromEntries(model.views.filter((view) => view.id !== "drivers").map((view) => [view.id, view.link.href]));
+  const current = new URLSearchParams(model.canonicalQuery);
+  const keep = Object.fromEntries(["period", "region"].flatMap((key) => current.get(key) ? [[key, current.get(key)!]] : []));
+  return <TrendTabs active={model.activeView === "drivers" ? "overview" : model.activeView} hrefs={{ ...hrefs, in_house: `/app/trends?${new URLSearchParams({ ...keep, view: "in_house" })}` }} />;
 }
 
 function RelatedMeasures({ model }: { model: TrendAnalysisPageViewModel }) {
@@ -375,7 +359,6 @@ function SourceTable({ model }: { model: TrendAnalysisPageViewModel }) {
 }
 
 export function TrendsWorkspace({ model, savedViews }: { model: TrendAnalysisPageViewModel; savedViews?: ReactNode }) {
-  const coverage = model.summary.find((metric) => metric.id === "coverage");
   return (
     <div className={styles.workspace}>
       <header className={styles.pageHeader}>
@@ -383,11 +366,12 @@ export function TrendsWorkspace({ model, savedViews }: { model: TrendAnalysisPag
         {model.page.secondaryAction ? <Link className={styles.secondaryButton} href={model.page.secondaryAction.href}>{model.page.secondaryAction.label}<ArrowRight size={16} aria-hidden="true" /></Link> : null}
       </header>
 
-      <section className={styles.analysisContext} aria-label="Current analysis context">{model.analysisContext.filter((item) => model.activeView !== "planning" || item.label === "Locations").map((item) => <span key={item.label}><small>{item.label}</small><strong>{item.value}</strong></span>)}{model.activeView === "planning" ? <span><small>Planning basis</small><strong>Current open work · entered repair estimates</strong></span> : null}</section>
+      <AnalysisViews model={model} />
+      {model.activeView !== "planning" ? <TrendsFilterForm scenarioQuery={model.canonicalQuery} action={model.filterAction} activeView={model.activeView} clearHref={model.clearFiltersHref} filters={model.filters} scopeSummary={model.scopeSummary} /> : null}
+      {model.activeView === "planning" ? <section className={styles.analysisContext} aria-label="Current analysis context">{model.analysisContext.filter((item) => model.activeView !== "planning" || item.label === "Locations").map((item) => <span key={item.label}><small>{item.label}</small><strong>{item.value}</strong></span>)}{model.activeView === "planning" ? <span><small>Planning basis</small><strong>Current open work · entered repair estimates</strong></span> : null}</section> : null}
       {model.filterNotice ? <aside className={styles.filterNotice}><Info size={16} aria-hidden="true" />{model.filterNotice}</aside> : null}
       {model.invoiceReview ? <aside className={styles.filterNotice}>{model.invoiceReview.message} <Link href={model.invoiceReview.href}>{model.invoiceReview.label}</Link></aside> : null}
-      <details className={styles.notes}><summary>Filters &amp; views</summary><TrendsFilterForm scenarioQuery={model.canonicalQuery} action={model.filterAction} activeView={model.activeView} clearHref={model.clearFiltersHref} filters={model.filters} scopeSummary={model.scopeSummary} />{model.activeView !== "planning" ? savedViews : null}</details>
-      <AnalysisViews model={model} />
+      {model.activeView === "planning" ? <details className={styles.notes}><summary>Locations</summary><TrendsFilterForm scenarioQuery={model.canonicalQuery} action={model.filterAction} activeView={model.activeView} clearHref={model.clearFiltersHref} filters={model.filters} scopeSummary={model.scopeSummary} /></details> : savedViews ? <details className={styles.notes}><summary>Saved views</summary>{savedViews}</details> : null}
 
       {model.activeView === "overview" || model.activeView === "drivers" ? <>
         {model.breakdownSwitch ? <BreakdownSwitch options={model.breakdownSwitch} /> : null}
@@ -401,15 +385,16 @@ export function TrendsWorkspace({ model, savedViews }: { model: TrendAnalysisPag
         <ComparisonChart model={model} />
         {model.heatmap ? <SpendHeatmap heatmap={model.heatmap} metricLabel={model.metricLabel} /> : model.metricId === "recorded_cost" ? <DriverSnapshot model={model} /> : null}
         <RelatedMeasures model={model} />
-        <section className={styles.contextMetrics} aria-label="Data coverage">{coverage ? <SummaryCard metric={coverage} /> : null}</section>
       </> : null}
-      {model.activeView === "stores" ? <BenchmarkTable model={model} /> : null}
+      {model.activeView === "stores" ? <>
+        <DriversTable model={model} />
+        <details className={styles.peerDetails}><summary>Compare with similar stores (same kinds of equipment)</summary><BenchmarkTable model={model} /></details>
+      </> : null}
       {model.activeView === "vendors" ? <VendorAccountability model={model} /> : null}
       {model.activeView === "planning" ? <UpcomingWorkPlan model={model} savedViews={savedViews} /> : null}
       {model.activeView === "records" ? <SourceTable model={model} /> : null}
 
-      {model.activeView !== "overview" && model.activeView !== "drivers" && model.activeView !== "planning" ? <ExecutiveResults model={model} /> : null}
-      <details className={styles.notes}><summary>Filter details</summary><Investigation model={model} /></details>
+      {model.activeView === "vendors" || model.activeView === "records" ? <ExecutiveResults model={model} /> : null}
       <details className={styles.notes}>
         <summary><Info size={17} aria-hidden="true" />How these numbers work<ChevronRight size={16} aria-hidden="true" /></summary>
         <ul>{model.notes.map((note) => <li key={note}>{note}</li>)}</ul>

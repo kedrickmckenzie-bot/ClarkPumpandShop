@@ -1,5 +1,6 @@
 import { addRefrigerantDemo } from "./refrigerant-demo-fixture";
 import { addUstDemo } from "./ust";
+import { addSpendTotalsDemo } from "./spend-totals";
 import { addAiDiagnosticDemo } from "./ai-demo-fixture";
 import type { OpsFixture } from "./types";
 import { addCalendarDays } from "./internal-schedule-types";
@@ -254,5 +255,5 @@ export function addDispatchDemo(f: OpsFixture, options: { centralTeam?: boolean 
     f.auditEvents.push({id:`${id}-audit`,organizationId:org,aggregateType:"work_order",aggregateId:id,eventType:"internal_dispatch.seeded",actorType:"system",actorName:"Fictional dispatch demo",occurredAt:createdAt,payloadJson:JSON.stringify({meaning:"fictional_example",internalTarget:membershipId?"person":"pool"})});
     if(held)(f.workOrderVisitHolds??=[]).push({id:`${id}-hold`,organizationId:org,workOrderId:id,posture:"complete_using_professional_judgment",status:"active",deadlineAt:dueAt,version:0,createdByMembershipId:facility,createdByName:facilityName,createdAt,updatedAt:createdAt});
   });
-  return addUstDemo(addRefrigerantDemo(addAiDiagnosticDemo(f)));
+  return addSpendTotalsDemo(addUstDemo(addRefrigerantDemo(addAiDiagnosticDemo(f))));
 }

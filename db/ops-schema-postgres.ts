@@ -2290,6 +2290,19 @@ export const opsAiConversations = pgTable("ops_ai_conversations", {
   foreignKey({columns:[t.organizationId,t.workOrderId],foreignColumns:[opsWorkOrders.organizationId,opsWorkOrders.id]}),
   check("chk_ops_ai_conversations",sql`${t.kind} IN ('checkout','diagnostic')`),
 ]);
+/** Maintenance spend totals entered by accounting for a date range: total spend or in-house only. Withdrawn entries stay on record. */
+export const opsSpendTotals = pgTable("ops_spend_totals", {
+  id: text("id").primaryKey(), organizationId: text("organization_id").notNull(), periodStart: text("period_start").notNull(), periodEnd: text("period_end").notNull(),
+  kind: text("kind").notNull(), amountMinor: integer("amount_minor").notNull(), currency: text("currency").notNull(), note: text("note"),
+  enteredByName: text("entered_by_name").notNull(), enteredByActorId: text("entered_by_actor_id"), createdAt: text("created_at").notNull(),
+  withdrawnAt: text("withdrawn_at"), withdrawnByName: text("withdrawn_by_name"), withdrawnReason: text("withdrawn_reason"),
+},t=>[
+  index("idx_ops_spend_totals_period").on(t.organizationId,t.periodStart,t.periodEnd),
+  foreignKey({columns:[t.organizationId],foreignColumns:[opsOrganizations.id]}),
+  check("chk_ops_spend_totals_kind",sql`${t.kind} IN ('total','in_house')`),
+  check("chk_ops_spend_totals_amount",sql`${t.amountMinor} >= 0`),
+  check("chk_ops_spend_totals_range",sql`${t.periodEnd} >= ${t.periodStart}`),
+]);
 /** Fuel tank (UST) operators designated for each store: Class A, B and C. Removing one keeps the row with removed_at set. */
 export const opsUstOperators = pgTable("ops_ust_operators", {
   id: text("id").primaryKey(), organizationId: text("organization_id").notNull(), storeId: text("store_id").notNull(),

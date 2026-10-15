@@ -1,0 +1,16 @@
+.status{display:grid;gap:4px}
+.big{font-size:18px;color:#0f172a!important}
+.gaps{margin-top:10px;padding:12px 14px;border-left:3px solid #b91c1c;background:#fef2f2;color:#7f1d1d}
+.gaps ul{margin:6px 0 0;padding-left:18px}
+.overlap{padding:18px 20px;border:1px solid #f59e0b;border-left-width:4px;background:#fffbeb;border-radius:5px}
+.overlap h2{margin:0 0 6px}
+.kinds{border:0;padding:0;margin:0;display:grid;gap:2px}
+.kinds legend{font-weight:600;margin-bottom:6px}
+.flagged td{background:#fffbeb}
+.warn{margin-top:6px}
+.warn summary{color:#92400e;font-size:14px}
+.warn ul{margin:6px 0 0;padding-left:18px;font-size:14px}
+.withdraw{margin-top:6px}
+.withdraw summary{font-size:14px;color:#1d4ed8}
+.withdraw form{display:grid;gap:8px;margin-top:8px;min-width:200px}
+.withdrawn{display:grid;gap:6px;padding-left:18px;color:#475569}

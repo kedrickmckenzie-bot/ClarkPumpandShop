@@ -617,6 +617,12 @@ class SqlOpsRepository implements OpsRepository {
     return rows.map(row => ({ id: text(row, "id"), organizationId: text(row, "organization_id"), storeId: text(row, "store_id"), operatorClass: text(row, "operator_class") as import("./ust").UstOperatorClass, name: text(row, "name"),
       certificateNumber: maybeText(row, "certificate_number"), trainedOn: maybeText(row, "trained_on"), expiresOn: maybeText(row, "expires_on"), recordedByName: text(row, "recorded_by_name"), createdAt: text(row, "created_at"), removedAt: maybeText(row, "removed_at"), removedByName: maybeText(row, "removed_by_name") }));
   }
+  async listSpendTotals(org: string) {
+    const rows = await this.all("SELECT * FROM ops_spend_totals WHERE organization_id = ? ORDER BY period_start, created_at, id", [org]);
+    return rows.map(row => ({ id: text(row, "id"), organizationId: text(row, "organization_id"), periodStart: text(row, "period_start"), periodEnd: text(row, "period_end"), kind: text(row, "kind") as import("./spend-totals").SpendTotalKind,
+      amountMinor: Number(row.amount_minor), currency: text(row, "currency"), note: maybeText(row, "note"), enteredByName: text(row, "entered_by_name"), enteredByActorId: maybeText(row, "entered_by_actor_id"), createdAt: text(row, "created_at"),
+      withdrawnAt: maybeText(row, "withdrawn_at"), withdrawnByName: maybeText(row, "withdrawn_by_name"), withdrawnReason: maybeText(row, "withdrawn_reason") }));
+  }
   async listRefrigerantEvents(org: string, assetIds: readonly string[]) {
     const events: import("./refrigerant").RefrigerantEvent[] = [];
     for (let offset = 0; offset < assetIds.length; offset += 200) {

@@ -432,3 +432,16 @@
 .allDrivers > summary { cursor: pointer; padding: 12px 16px; border: 1px solid var(--border); border-radius: 8px; background: #fff; color: #1d4ed8; font-size: 15px; font-weight: 650; }
 .allDrivers[open] > summary { margin-bottom: 12px; }
 .allDrivers > summary:hover { background: #f5f9ff; }
+
+/* Quick controls: the everyday choices are always visible; the rest sit under "More filters". */
+.quickControls.filters { gap: 12px; padding: 14px 16px; }
+.quickControls .commonFilterGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 12px; }
+.quickControls .commonFilterGrid select, .quickControls .commonFilterGrid input { width: 100%; }
+.filterActions button { display: inline-flex !important; flex-direction: row !important; align-items: center; gap: 6px; min-height: 38px; padding: 0 16px; border: 0; border-radius: 6px; background: #2563eb; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+.filterActions { display: flex; align-items: center; gap: 16px; }
+.filterActions a { display: inline-flex; align-items: center; gap: 6px; color: #475569; font-size: 14px; font-weight: 700; }
+.breakdownSwitch span[aria-disabled] { padding: 8px 16px; border-left: 1px solid #c6ced9; color: #94a3b8; font-size: 15px; font-weight: 650; cursor: not-allowed; background: #f8fafc; }
+.breakdownSwitch div > :first-child { border-left: 0; }
+.peerDetails { border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+.peerDetails > summary { padding: 14px 16px; cursor: pointer; font-weight: 700; color: #1d4ed8; }
+.peerDetails[open] > summary { border-bottom: 1px solid #e5e9ef; }

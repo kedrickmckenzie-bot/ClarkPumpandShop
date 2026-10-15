@@ -115,6 +115,7 @@ export const contextualNavigation: ContextualNavigationGroup[] = [
     items: [
       { id: "trends", label: "Trends", href: "/app/trends" },
       { id: "spend", label: "Spending", href: "/app/spend" },
+      { id: "spend-totals", label: "Spend totals", href: "/app/spend/totals" },
       { id: "lifecycle", label: "Repair or replace", href: "/app/lifecycle" },
       { id: "warranties", label: "Warranties", href: "/app/warranties" },
       { id: "invoice-review", label: "Invoices", href: "/app/invoices" },
@@ -176,6 +177,7 @@ function roleCanSeeContextItem(role: OperatorRole, groupId: NavigationGroupId, i
   }
 
   if (item.id === "spend") return roleCanAccessProgramRoute(role, "spend");
+  if (item.id === "spend-totals") return ["facilities", "finance", "executive"].includes(role);
   if (item.id === "lifecycle") return roleCanAccessProgramRoute(role, "lifecycle");
   if (item.id === "warranties") return roleCanAccessListRoute(role, "warranties");
   if (item.id === "invoice-review") return roleCanAccessListRoute(role, "invoices");

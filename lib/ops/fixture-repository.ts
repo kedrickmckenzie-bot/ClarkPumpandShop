@@ -202,6 +202,7 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
   if (table === "ops_asset_refrigerants") fixture.assetRefrigerants ??= [];
   if (table === "ops_refrigerant_events") fixture.refrigerantEvents ??= [];
   if (table === "ops_ust_operators") fixture.ustOperators ??= [];
+  if (table === "ops_spend_totals") fixture.spendTotals ??= [];
   if (table === "ops_equipment_document_pages") fixture.equipmentDocumentPages ??= [];
   const mapping: Record<string, keyof OpsFixture> = {
     ops_store_tasks: "storeTasks", ops_store_task_messages: "storeTaskMessages", ops_store_task_people: "storeTaskPeople", ops_divisions: "divisions", ops_regions: "regions", ops_taxonomy_nodes: "taxonomyNodes",
@@ -212,7 +213,7 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
     ops_capital_plans: "capitalPlans", ops_store_vendor_preferences: "storeVendorPreferences", ops_vendor_coverage: "vendorCoverage", ops_vendor_qualifications: "vendorQualifications", ops_vendor_compliance_documents: "vendorComplianceDocuments",
     ops_vendor_contracts: "vendorContracts", ops_contract_versions: "contractVersions", ops_contract_scopes: "contractScopes",
     ops_rate_card_lines: "rateCardLines", ops_service_level_policies: "serviceLevelPolicies", ops_scheduling_policies: "schedulingPolicies", ops_vendor_capacity: "vendorCapacity",
-    ops_technician_statuses: "technicianStatuses", ops_route_legs: "routeLegs", ops_equipment_documents: "equipmentDocuments", ops_ai_conversations: "aiConversations", ops_overview_seen_marks: "overviewSeenMarks", ops_report_schedules: "reportSchedules", ops_report_runs: "reportRuns", ops_equipment_notes: "equipmentNotes", ops_asset_refrigerants: "assetRefrigerants", ops_refrigerant_events: "refrigerantEvents", ops_ust_operators: "ustOperators", ops_equipment_document_pages: "equipmentDocumentPages", ops_technician_profiles: "technicianProfiles", ops_organizations: "organizations", ops_internal_schedules: "internalSchedules", ops_requests: "requests", ops_request_impact_assessments: "requestImpactAssessments", ops_work_orders: "workOrders",
+    ops_technician_statuses: "technicianStatuses", ops_route_legs: "routeLegs", ops_equipment_documents: "equipmentDocuments", ops_ai_conversations: "aiConversations", ops_overview_seen_marks: "overviewSeenMarks", ops_report_schedules: "reportSchedules", ops_report_runs: "reportRuns", ops_equipment_notes: "equipmentNotes", ops_asset_refrigerants: "assetRefrigerants", ops_refrigerant_events: "refrigerantEvents", ops_ust_operators: "ustOperators", ops_spend_totals: "spendTotals", ops_equipment_document_pages: "equipmentDocumentPages", ops_technician_profiles: "technicianProfiles", ops_organizations: "organizations", ops_internal_schedules: "internalSchedules", ops_requests: "requests", ops_request_impact_assessments: "requestImpactAssessments", ops_work_orders: "workOrders",
     ops_approval_policies: "approvalPolicies", ops_approval_requests: "approvalRequests", ops_approval_decisions: "approvalDecisions",
     ops_work_order_visit_holds: "workOrderVisitHolds", ops_work_order_assignments: "assignments", ops_work_order_issuances: "issuances",
     ops_vendor_responses: "vendorResponses", ops_work_order_estimate_requests: "estimateRequests",
@@ -750,6 +751,9 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
     const stores = new Map(this.fixture.stores.filter(s => s.organizationId === scope.organizationId && storeAllowed(this.fixture, scope, s.id)).map(s => [s.id, s]));
     return clone((this.fixture.ustOperators ?? []).filter(o => o.organizationId === scope.organizationId && !o.removedAt && stores.has(o.storeId))
       .sort((a, b) => stores.get(a.storeId)!.storeNumber.localeCompare(stores.get(b.storeId)!.storeNumber, "en-US", { numeric: true }) || a.operatorClass.localeCompare(b.operatorClass) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id)));
+  }
+  async listSpendTotals(org: string) {
+    return clone((this.fixture.spendTotals ?? []).filter(t => t.organizationId === org).sort((a, b) => a.periodStart.localeCompare(b.periodStart) || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)));
   }
   async listRefrigerantEvents(org: string, assetIds: readonly string[]) {
     const wanted = new Set(assetIds);
