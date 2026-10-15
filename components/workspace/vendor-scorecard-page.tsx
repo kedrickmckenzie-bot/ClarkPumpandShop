@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronRight, X } from "lucide-react";
 import type { DrillPlacement, ScorecardCell, ScorecardDrill, ScorecardPageModel, ScorecardRow, VendorCard } from "@/app/app/_data/vendor-scorecard-presenter";
-import { MEASURES, MEASURE_INFO } from "@/lib/ops/vendor-scorecard";
+import { MEASURE_GROUPS, MEASURE_INFO } from "@/lib/ops/vendor-scorecard";
 import { PrintButton, RegionSelect } from "./scorecard-controls";
 import styles from "./vendor-scorecard-page.module.css";
 
@@ -30,17 +30,28 @@ function cellClass(cell: ScorecardCell) {
   return [cell.empty || cell.summary.tooFew ? styles.quiet : "", cell.summary.counted === 0 && cell.measure !== "jobs" ? styles.noData : ""].filter(Boolean).join(" ") || undefined;
 }
 
+const BAND_START = new Set(MEASURE_GROUPS.map(group => group.keys[0]));
+
 function ScoreTable({ caption, firstColumn, rows }: { caption: string; firstColumn: string; rows: ScorecardRow[] }) {
   return <div className={styles.tableWrap}>
     <table className={styles.table}>
       <caption className={styles.srOnly}>{caption}</caption>
-      <thead><tr><th scope="col">{firstColumn}</th>{MEASURES.map(key => <th scope="col" key={key} title={MEASURE_INFO[key].definition}>{MEASURE_INFO[key].label}{MEASURE_INFO[key].when ? <small className={styles.when}>{MEASURE_INFO[key].when}</small> : null}</th>)}</tr></thead>
+      <thead>
+        <tr className={styles.bands}>
+          <th scope="col" rowSpan={2} className={styles.firstHead}>{firstColumn}</th>
+          {MEASURE_GROUPS.map(group => <th scope="colgroup" colSpan={group.keys.length} key={group.label}>{group.keys.length > 1 ? group.label : null}</th>)}
+        </tr>
+        <tr className={styles.measures}>{MEASURE_GROUPS.flatMap(group => group.keys.map((key, index) => <th scope="col" key={key} title={MEASURE_INFO[key].definition} className={index === 0 ? styles.bandStart : undefined}>
+          <span className={styles.measureName}>{MEASURE_INFO[key].label}</span>
+          {MEASURE_INFO[key].when ? <span className={styles.measureHint}>{MEASURE_INFO[key].when}</span> : null}
+        </th>))}</tr>
+      </thead>
       <tbody>{rows.map(row => <tr key={row.key}>
         <th scope="row">
           {row.href ? <Link href={row.href} className={styles.rowLink}>{row.label}<ChevronRight size={15} aria-hidden="true" /></Link> : <span className={styles.rowName}>{row.label}</span>}
           {row.sublabel ? <span className={styles.rowTrade}>{row.sublabel}</span> : null}
         </th>
-        {row.cells.map(cell => <td key={cell.measure} data-label={MEASURE_INFO[cell.measure].label} className={cellClass(cell)}><CellContent cell={cell} rowLabel={row.label} /></td>)}
+        {row.cells.map(cell => <td key={cell.measure} data-label={MEASURE_INFO[cell.measure].label} className={[cellClass(cell), BAND_START.has(cell.measure) ? styles.bandStart : ""].filter(Boolean).join(" ") || undefined}><CellContent cell={cell} rowLabel={row.label} /></td>)}
       </tr>)}</tbody>
     </table>
   </div>;
@@ -95,26 +106,24 @@ function Section({ id, title, meta, note, children, drill, placement }: { id: st
 }
 
 function Context({ model }: { model: ScorecardPageModel }) {
-  return <>
+  return <div className={styles.toolbar}>
+    <nav className={styles.segmented} aria-label="Period">
+      {model.periods.map(option => <Link key={option.value} href={option.href} aria-current={option.selected ? "page" : undefined} className={option.selected ? styles.segmentOn : styles.segment}>{option.label}</Link>)}
+    </nav>
+    {model.regions.length ? <RegionSelect className={styles.region} regions={model.regions} value={model.region} baseHref={model.regionBase} /> : null}
     <dl className={styles.context}>
       <div><dt>Viewing</dt><dd>{model.scopeLabel}</dd></div>
-      <div><dt>Period</dt><dd>{model.periodLabel}</dd></div>
-      <div><dt>Arrows compare with</dt><dd>{model.priorLabel}</dd></div>
+      <div><dt>Dates</dt><dd>{model.periodLabel}</dd></div>
+      <div><dt>Arrows vs.</dt><dd>{model.priorLabel}</dd></div>
     </dl>
-    <div className={styles.controls}>
-      <nav className={styles.segmented} aria-label="Period">
-        {model.periods.map(option => <Link key={option.value} href={option.href} aria-current={option.selected ? "page" : undefined} className={option.selected ? styles.segmentOn : styles.segment}>{option.label}</Link>)}
-      </nav>
-      {model.regions.length ? <RegionSelect className={styles.region} regions={model.regions} value={model.region} baseHref={model.regionBase} /> : null}
-    </div>
-  </>;
+  </div>;
 }
 
 function Definitions({ model }: { model: ScorecardPageModel }) {
   return <details className={styles.definitions}>
     <summary>How each number is measured</summary>
     <dl>{model.definitions.map(item => <div key={item.label}><dt>{item.label}</dt><dd>{item.definition}</dd></div>)}</dl>
-    <p>Rates and typical times need at least {model.smallSample} jobs; below that you see &ldquo;too few to judge&rdquo;. Best and Weakest need at least {model.rankSample} jobs each and only compare vendors doing the same type of work. Arrows show a clear change from the previous period. Tap any number to see the jobs behind it.</p>
+    <p>Rates and typical times need at least {model.smallSample} jobs; below that you see how many jobs there are so far. Best and Weakest need at least {model.rankSample} jobs each and only compare vendors doing the same type of work. Arrows show a clear change from the previous period. Tap any number to see the jobs behind it.</p>
   </details>;
 }
 
@@ -177,7 +186,7 @@ function AllView({ model }: { model: ScorecardPageModel }) {
       <div>
         <p className={styles.eyebrow}>Vendors</p>
         <h1>Vendor scorecards</h1>
-        <p className={styles.lede}>How each vendor is doing on your jobs. Tap a vendor for their full scorecard, or any number for the jobs behind it.</p>
+        <p className={styles.lede}>How each vendor performs on your jobs. Tap a number to see the jobs behind it.</p>
       </div>
       <PrintButton className={styles.printButton} />
     </header>

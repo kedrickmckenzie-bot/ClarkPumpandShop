@@ -2,6 +2,8 @@ import type { OrganizationScope } from "./repository";
 import type { OpsSqlDriver } from "./sql-driver";
 import { scopeWhere } from "./sql-scope";
 import type { OpsFixture } from "./types";
+import { cachedDateTimeFormat } from "./intl-format-cache";
+import { DEFAULT_OPERATIONS_TIME_ZONE } from "./local-time";
 
 /**
  * Vendor scorecards. Each job sent to a vendor becomes one fact row, built by the
@@ -32,6 +34,12 @@ export interface VendorJobFact {
   firstCheckInAt?: string;
   firstOutcome?: string;
   completedAt?: string;
+  /** The first time this vendor marked the job completed. */
+  firstCompletedAt?: string;
+  /** The "do it by" date on the work order sent to this vendor (latest revision). */
+  doBy?: string;
+  /** A date the vendor proposed and the company accepted; it replaces the do-by date. */
+  agreedAt?: string;
   checkDecision?: "verified" | "rejected";
   callbackWorkOrderId?: string;
   callbackAt?: string;
@@ -40,14 +48,20 @@ export interface VendorJobFact {
   invoiceIssue: boolean;
 }
 
-export const MEASURES = ["jobs", "response", "onTime", "firstFix", "fixHeld", "callbacks", "cost", "declined", "invoice"] as const;
+export const MEASURES = ["jobs", "response", "onTime", "firstFix", "callbacks", "cost", "declined", "invoice"] as const;
+/** Column bands on the scorecard tables. In MEASURES order, so the heading lines up with every row. */
+export const MEASURE_GROUPS: ReadonlyArray<{ label: string; keys: readonly (typeof MEASURES)[number][] }> = [
+  { label: "Volume", keys: ["jobs"] },
+  { label: "Speed", keys: ["response", "onTime"] },
+  { label: "Quality", keys: ["firstFix", "callbacks"] },
+  { label: "Cost and admin", keys: ["cost", "declined", "invoice"] },
+];
 export type ScorecardMeasureKey = typeof MEASURES[number];
 export const PERIODS = [30, 90, 180, 365] as const;
 export type ScorecardPeriod = typeof PERIODS[number];
 
 /** Rates and medians are withheld below this many jobs, so a vendor is never judged on two calls. */
 export const SMALL_SAMPLE = 5;
-const ON_TIME_GRACE_MS = 60 * 60_000;
 const CALLBACK_DAYS = 30;
 const DAY_MS = 86_400_000;
 
@@ -102,7 +116,9 @@ export function vendorJobFactsFromFixture(fixture: OpsFixture, scope: Organizati
   };
   const responsesByWork = byWork(fixture.vendorResponses), linksByWork = byWork(links), verificationsByWork = byWork(fixture.workOrderVerifications);
   const costsByWork = byWork(fixture.costLines), appointmentsByWork = byWork(fixture.serviceAppointments ?? []), allocationsByWork = byWork(fixture.invoiceLineAllocations);
-  const assignmentsByWork = byWork(fixture.assignments);
+  const assignmentsByWork = byWork(fixture.assignments), issuancesByWork = byWork(fixture.issuances);
+  const isoOrUndefined = (value: unknown) => typeof value === "string" && Number.isFinite(Date.parse(value)) ? value : undefined;
+  const doByOf = (payload: string) => { try { return isoOrUndefined((JSON.parse(payload) as { requestedTiming?: unknown }).requestedTiming); } catch { return undefined; } };
   const visitsByWork = new Map<string, typeof visits>();
   for (const v of visits) {
     const ids = new Set([v.workOrderId, ...links.filter(l => l.visitId === v.id).map(l => l.workOrderId)].filter((x): x is string => Boolean(x)));
@@ -143,6 +159,9 @@ export function vendorJobFactsFromFixture(fixture: OpsFixture, scope: Organizati
       firstCheckInAt: min(vendorVisits.map(v => v.checkedInAt)),
       firstOutcome: withOutcome[0]?.outcome,
       completedAt,
+      firstCompletedAt: min(vendorLinks.filter(l => l.outcome === "completed").map(l => l.outcomeRecordedAt)),
+      doBy: doByOf((issuancesByWork.get(w.id) ?? []).filter(i => assignmentVendor.get(i.assignmentId) === vendorId).sort((a, b) => b.revision - a.revision || b.issuedAt.localeCompare(a.issuedAt) || b.id.localeCompare(a.id))[0]?.immutablePayloadJson ?? ""),
+      agreedAt: max((appointmentsByWork.get(w.id) ?? []).filter(ap => ap.status === "confirmed" && ap.proposedBy === "vendor" && assignmentVendor.get(ap.assignmentId) === vendorId).map(ap => ap.startsAt)),
       checkDecision: decision?.decision as VendorJobFact["checkDecision"],
       callbackWorkOrderId: callback?.id, callbackAt: callback?.createdAt,
       costMinor: costs.reduce((sum, c) => sum + c.amount.amountMinor, 0), costLineCount: costs.length,
@@ -191,6 +210,19 @@ export async function queryVendorJobFacts(driver: OpsSqlDriver, scope: Organizat
       JOIN jobs j ON j.organization_id = ap.organization_id AND j.work_order_id = ap.work_order_id AND j.vendor_id = aa.vendor_id
       WHERE ap.status = 'confirmed'
       GROUP BY ap.work_order_id, aa.vendor_id
+    ), agreed AS (
+      SELECT ap.work_order_id, aa.vendor_id, MAX(ap.starts_at) AS agreed_at
+      FROM ops_service_appointments ap
+      JOIN ops_work_order_assignments aa ON aa.organization_id = ap.organization_id AND aa.id = ap.assignment_id
+      JOIN jobs j ON j.organization_id = ap.organization_id AND j.work_order_id = ap.work_order_id AND j.vendor_id = aa.vendor_id
+      WHERE ap.status = 'confirmed' AND ap.proposed_by = 'vendor'
+      GROUP BY ap.work_order_id, aa.vendor_id
+    ), do_by AS (
+      SELECT i.work_order_id, ia.vendor_id, ${driver.dialect === "postgres" ? "(i.immutable_payload_json::jsonb ->> 'requestedTiming')" : "json_extract(i.immutable_payload_json, '$.requestedTiming')"} AS do_by,
+        ROW_NUMBER() OVER (PARTITION BY i.work_order_id, ia.vendor_id ORDER BY i.revision DESC, i.issued_at DESC, i.id DESC) AS n
+      FROM ops_work_order_issuances i
+      JOIN ops_work_order_assignments ia ON ia.organization_id = i.organization_id AND ia.id = i.assignment_id
+      JOIN jobs j ON j.organization_id = i.organization_id AND j.work_order_id = i.work_order_id AND j.vendor_id = ia.vendor_id
     ), links AS (
       SELECT x.id AS link_id, x.work_order_id, vs.vendor_id, vs.checked_in_at, x.outcome, x.outcome_recorded_at
       FROM ops_site_visit_work_orders x
@@ -207,7 +239,7 @@ export async function queryVendorJobFacts(driver: OpsSqlDriver, scope: Organizat
       SELECT work_order_id, vendor_id, outcome, ROW_NUMBER() OVER (PARTITION BY work_order_id, vendor_id ORDER BY outcome_recorded_at ASC, link_id ASC) AS n
       FROM links WHERE outcome IS NOT NULL
     ), completions AS (
-      SELECT work_order_id, vendor_id, MAX(outcome_recorded_at) AS completed_at FROM links WHERE outcome = 'completed' GROUP BY work_order_id, vendor_id
+      SELECT work_order_id, vendor_id, MAX(outcome_recorded_at) AS completed_at, MIN(outcome_recorded_at) AS first_completed_at FROM links WHERE outcome = 'completed' GROUP BY work_order_id, vendor_id
     ), decisions AS (
       SELECT l.work_order_id, l.vendor_id, ver.decision, ROW_NUMBER() OVER (PARTITION BY l.work_order_id, l.vendor_id ORDER BY ver.decided_at DESC, ver.id DESC) AS n
       FROM ops_work_order_verifications ver
@@ -233,7 +265,7 @@ export async function queryVendorJobFacts(driver: OpsSqlDriver, scope: Organizat
       WHERE e.organization_id = ? AND e.status = 'open'
     ), facts AS (
       SELECT j.*, r.first_response_at, COALESCE(r.declined, 0) AS declined, ap.appointment_at, ci.first_check_in_at, oc.outcome AS first_outcome,
-        cp.completed_at, d.decision AS check_decision, COALESCE(c.cost_minor, 0) AS cost_minor, COALESCE(c.cost_line_count, 0) AS cost_line_count,
+        cp.completed_at, cp.first_completed_at, db.do_by, ag.agreed_at, d.decision AS check_decision, COALESCE(c.cost_minor, 0) AS cost_minor, COALESCE(c.cost_line_count, 0) AS cost_line_count,
         CASE WHEN ii.work_order_id IS NULL THEN 0 ELSE 1 END AS invoice_issue
       FROM jobs j
       LEFT JOIN responses r ON r.work_order_id = j.work_order_id AND r.vendor_id = j.vendor_id
@@ -241,6 +273,8 @@ export async function queryVendorJobFacts(driver: OpsSqlDriver, scope: Organizat
       LEFT JOIN check_ins ci ON ci.work_order_id = j.work_order_id AND ci.vendor_id = j.vendor_id
       LEFT JOIN outcomes oc ON oc.work_order_id = j.work_order_id AND oc.vendor_id = j.vendor_id AND oc.n = 1
       LEFT JOIN completions cp ON cp.work_order_id = j.work_order_id AND cp.vendor_id = j.vendor_id
+      LEFT JOIN do_by db ON db.work_order_id = j.work_order_id AND db.vendor_id = j.vendor_id AND db.n = 1
+      LEFT JOIN agreed ag ON ag.work_order_id = j.work_order_id AND ag.vendor_id = j.vendor_id
       LEFT JOIN decisions d ON d.work_order_id = j.work_order_id AND d.vendor_id = j.vendor_id AND d.n = 1
       LEFT JOIN costs c ON c.work_order_id = j.work_order_id AND c.vendor_id = j.vendor_id
       LEFT JOIN invoice_issues ii ON ii.work_order_id = j.work_order_id AND ii.vendor_id = j.vendor_id
@@ -263,7 +297,8 @@ export async function queryVendorJobFacts(driver: OpsSqlDriver, scope: Organizat
     trade: text(r.category_key) ?? "unclassified", assetId: text(r.asset_id), sentAt: text(r.sent_at)!,
     firstResponseAt: text(r.first_response_at), declined: Number(r.declined) === 1,
     appointmentAt: text(r.appointment_at), firstCheckInAt: text(r.first_check_in_at), firstOutcome: text(r.first_outcome),
-    completedAt: text(r.completed_at), checkDecision: text(r.check_decision) as VendorJobFact["checkDecision"],
+    completedAt: text(r.completed_at), firstCompletedAt: text(r.first_completed_at),
+    doBy: (() => { const value = text(r.do_by); return value && Number.isFinite(Date.parse(value)) ? value : undefined; })(), agreedAt: text(r.agreed_at), checkDecision: text(r.check_decision) as VendorJobFact["checkDecision"],
     callbackWorkOrderId: text(r.callback_work_order_id), callbackAt: text(r.callback_at),
     costMinor: Number(r.cost_minor ?? 0), costLineCount: Number(r.cost_line_count ?? 0), invoiceIssue: Number(r.invoice_issue) === 1,
   })).sort(compareFacts);
@@ -275,14 +310,28 @@ export async function queryVendorJobFacts(driver: OpsSqlDriver, scope: Organizat
  * Whether one job counts toward a measure, and how it came out. `undefined` means the
  * job is not part of that measure (for example, no appointment was set).
  */
+/** The date a vendor was held to: an accepted date they proposed wins over the do-by date we sent. */
+/** Calendar day (YYYY-MM-DD) in the operations time zone. */
+const dayKey = (iso: string) => cachedDateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone: DEFAULT_OPERATIONS_TIME_ZONE }).format(new Date(iso));
+
+export const deadlineOf = (fact: Pick<VendorJobFact, "doBy" | "agreedAt">) => fact.agreedAt ?? fact.doBy;
+
 export function jobResult(fact: VendorJobFact, measure: ScorecardMeasureKey, now: string): { counted: boolean; hit?: boolean; value?: number } {
   switch (measure) {
     case "jobs": return { counted: true };
     case "declined": return { counted: true, hit: fact.declined };
     case "response": return fact.firstResponseAt ? { counted: true, value: (Date.parse(fact.firstResponseAt) - Date.parse(fact.sentAt)) / 3_600_000 } : { counted: false };
-    case "onTime": return fact.appointmentAt && fact.firstCheckInAt ? { counted: true, hit: Date.parse(fact.firstCheckInAt) <= Date.parse(fact.appointmentAt) + ON_TIME_GRACE_MS } : { counted: false };
+    case "onTime": {
+      // The date they were held to: the do-by date on the work order sent to them, or a later date they proposed and we accepted.
+      const target = deadlineOf(fact);
+      if (!target) return { counted: false };
+      // Judged by calendar day: finishing any time on the due day counts.
+      const due = dayKey(target);
+      if (fact.firstCompletedAt) return { counted: true, hit: dayKey(fact.firstCompletedAt) <= due };
+      // Still not done after the day: late. Not done but the day hasn't passed: not judged yet.
+      return dayKey(now) > due ? { counted: true, hit: false } : { counted: false };
+    }
     case "firstFix": return fact.firstOutcome ? { counted: true, hit: fact.firstOutcome === "completed" } : { counted: false };
-    case "fixHeld": return fact.checkDecision ? { counted: true, hit: fact.checkDecision === "verified" } : { counted: false };
     case "callbacks": {
       // A fix needs 30 days behind it before it can be judged.
       if (!fact.completedAt || !fact.assetId || Date.parse(fact.completedAt) + CALLBACK_DAYS * DAY_MS > Date.parse(now)) return { counted: false };
@@ -300,9 +349,8 @@ export type MeasureDirection = "higher" | "lower" | "neutral";
 export const MEASURE_INFO: Record<ScorecardMeasureKey, { label: string; short: string; when?: string; direction: MeasureDirection; definition: string }> = {
   jobs: { label: "Jobs", short: "Jobs", direction: "neutral", definition: "Jobs first sent to this vendor in the period. Cancelled jobs are left out." },
   response: { label: "Typical response", short: "Response", direction: "lower", definition: "Typical (median) time from sending the job to the vendor's first reply." },
-  onTime: { label: "On time", short: "On time", direction: "higher", definition: "Checked in within an hour of the agreed appointment. Only jobs with an appointment and a check-in." },
+  onTime: { label: "Done by the agreed date", short: "Done on time", when: "Date sent, or one we accepted", direction: "higher", definition: "Finished by the do-by date on the work order sent to the vendor, or by a later date they proposed and you accepted. Jobs still open after that date count as late; jobs whose date hasn't come yet aren't counted." },
   firstFix: { label: "Fixed first visit", short: "First visit", direction: "higher", definition: "The vendor's first visit on the job recorded “completed”." },
-  fixHeld: { label: "Passed the check", short: "Passed check", when: "Checked when the job closed", direction: "higher", definition: "When the vendor finished, someone checked the repair. The share confirmed rather than rejected. Only jobs someone checked." },
   callbacks: { label: "Repaired again within 30 days", short: "Again in 30d", when: "Same equipment, any problem", direction: "lower", definition: "The same equipment needed another repair (any problem) within 30 days of this vendor's fix. Not proof the fix failed: open the jobs to compare what was done with what came next. Fixes less than 30 days old are not counted yet." },
   cost: { label: "Average cost per job", short: "Avg cost", direction: "neutral", definition: "Recorded costs from this vendor, per job with a cost. Older costs without a named provider count only on jobs this vendor worked alone." },
   declined: { label: "Declined", short: "Declined", direction: "lower", definition: "Jobs the vendor declined." },
@@ -321,6 +369,24 @@ export interface MeasureSummary {
   rank?: "best" | "worst";
   trend?: "better" | "worse";
   priorValue?: number;
+  /** Plain reason when nothing is counted, e.g. "No equipment on these jobs". */
+  emptyReason?: string;
+}
+
+/** Why a measure has nothing to show, in plain words, from the jobs it looked at. */
+function emptyReasonOf(facts: VendorJobFact[], key: ScorecardMeasureKey): string {
+  if (!facts.length) return "No jobs";
+  switch (key) {
+    case "callbacks": {
+      if (!facts.some(f => f.assetId)) return "No equipment on these jobs";
+      return facts.some(f => f.assetId && f.completedAt) ? "Fixes under 30 days old" : "No equipment fixes finished yet";
+    }
+    case "onTime": return facts.some(f => deadlineOf(f)) ? "No due dates passed yet" : "No do-by dates sent";
+    case "firstFix": return "No visits finished yet";
+    case "response": return "No replies yet";
+    case "cost": return "No costs recorded";
+    default: return "No data yet";
+  }
 }
 
 export interface ScoreRow { key: string; label: string; measures: Record<ScorecardMeasureKey, MeasureSummary> }
@@ -341,7 +407,7 @@ export function summarizeMeasure(facts: VendorJobFact[], key: ScorecardMeasureKe
     : key === "cost" ? (values.length ? values.reduce((a, b) => a + b, 0) / values.length : undefined)
     : results.length ? hits / results.length : undefined;
   const sampled = !["jobs", "invoice"].includes(key);
-  return { key, counted: results.length, hits, value, tooFew: sampled && results.length > 0 && results.length < SMALL_SAMPLE };
+  return { key, counted: results.length, hits, value, tooFew: sampled && results.length > 0 && results.length < SMALL_SAMPLE, ...(results.length ? {} : { emptyReason: emptyReasonOf(facts, key) }) };
 }
 
 /** Change large enough to call better or worse, per measure. */

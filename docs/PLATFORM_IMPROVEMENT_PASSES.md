@@ -4,6 +4,20 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Vendor scorecard: "Done by the agreed date", plain empty notes, grouped header — October 15, 2026
+
+**Decision (with the user).** "Passed the check" is removed (not every job needs a store check, and "Repaired again within 30 days" already covers fixes that didn't hold). "On time" (arrival vs. appointment) is replaced by **Done by the agreed date**: the do-by date on the work order sent to the vendor (`requestedTiming` in the latest issuance's immutable payload), or a later date the vendor proposed and the company accepted (confirmed appointment with `proposedBy = vendor`). Done = the vendor's first completed outcome. Judged by calendar day in the operations time zone; jobs still open after the day count as late; jobs whose day hasn't come yet aren't counted.
+
+**What was done.**
+- `lib/ops/vendor-scorecard.ts`: facts gain `doBy`, `agreedAt`, `firstCompletedAt` in both the fixture builder and the D1/PostgreSQL query (parity test unchanged and passing); `fixHeld` removed from `MEASURES`; new `deadlineOf`, `MEASURE_GROUPS` (Speed / Quality / Cost and admin bands); every empty measure carries a plain `emptyReason` ("No equipment on these jobs", "No do-by dates sent", "Fixes under 30 days old", …).
+- Drill rows read e.g. "Done Oct 12, 2026 · due Oct 17, 2026", "Late: done Mar 17 · due Mar 15", "Still open · agreed Sep 25".
+- Small samples say "Only 4 jobs so far · need 5" instead of "too few to judge".
+- Reports (owner summary, team and vendors) column renamed "Done by agreed date".
+- Header redesign: slimmer title block with a rule, one toolbar holding period, region and what the numbers cover; tables get a two-row grouped heading with band dividers; phone and print layouts updated.
+- Demo: operating-history vendor jobs and the closed per-store jobs now carry a realistic do-by date on the issued work order (no change to the random sequence). Hosted data already loaded keeps its old issuances (insert-only); a demo reset picks this up.
+
+**Validation.** Unit tests for the rule (sent date, accepted date wins, still open late, not yet due, empty reasons, band order). Full checks; browser check of all-vendors desktop/phone and the drill at 1440 and 390 px on a fresh PostgreSQL demo.
+
 ### Callbacks: send, link, close out — October 15, 2026
 
 **Decision (with the user).** A callback is its own work order linked to the earlier job; the earlier job is never changed. The vendor just does the work (no "same problem?" question for anyone in the field: vendors and in-house techs both have a reason to say no). If it turns out to be new work, the vendor tells someone however they normally would, and afterwards the facilities manager closes it out on the callback: **no charge** (stays linked) or **new billable work** (unlinked, with a short reason). There are no approval limits; everything is after the fact. The scorecard keeps one column ("Repaired again within 30 days"); callbacks show only as tags in its drill-down, so charts don't get crowded.

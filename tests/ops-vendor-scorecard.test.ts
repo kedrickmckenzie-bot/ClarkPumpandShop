@@ -7,7 +7,7 @@ import { buildOpsSeedStatements, seedOpsRepository } from "@/lib/ops/seed";
 import { createOpsSqlRepository } from "@/lib/ops/sql-repository";
 import { createOpsFixtureRepository } from "@/lib/ops/fixture-repository";
 import { createOpsPostgresRepository } from "@/lib/ops/postgres-repository";
-import { SMALL_SAMPLE, buildScorecard, jobResult, scorecardWindows, summarizeMeasure, vendorJobFactsFromFixture, type VendorJobFact } from "@/lib/ops/vendor-scorecard";
+import { MEASURES, MEASURE_GROUPS, SMALL_SAMPLE, buildScorecard, jobResult, scorecardWindows, summarizeMeasure, vendorJobFactsFromFixture, type VendorJobFact } from "@/lib/ops/vendor-scorecard";
 import type { OpsRepository } from "@/lib/ops/repository";
 import type { OpsSqlDriver, SqlRow } from "@/lib/ops/sql-driver";
 import type { OpsFixture } from "@/lib/ops/types";
@@ -46,7 +46,7 @@ describe("vendor scorecard facts", () => {
     try {
       const all = await parity(repository, f);
       // Every measure has real source records in the demo, so the page is never empty.
-      for (const key of ["response", "firstFix", "fixHeld", "cost", "declined"] as const) expect(all.some(fact => { const r = jobResult(fact, key, f.asOf); return r.counted && (r.hit || r.value !== undefined); }), key).toBe(true);
+      for (const key of ["response", "firstFix", "onTime", "cost", "declined"] as const) expect(all.some(fact => { const r = jobResult(fact, key, f.asOf); return r.counted && (r.hit || r.value !== undefined); }), key).toBe(true);
     } finally { db.close(); }
   });
 });
@@ -57,6 +57,24 @@ const job = (i: number, extra: Partial<VendorJobFact> = {}): VendorJobFact => ({
 const NOW = "2026-10-06T12:00:00.000Z";
 
 describe("vendor scorecard summary", () => {
+  it("judges done-by-the-agreed-date against the do-by date sent, or a later date we accepted", () => {
+    const doBy = "2026-09-05T00:00:00.000Z";
+    expect(jobResult(job(1), "onTime", NOW)).toEqual({ counted: false });
+    expect(jobResult(job(2, { doBy, firstCompletedAt: "2026-09-04T15:00:00.000Z" }), "onTime", NOW)).toEqual({ counted: true, hit: true });
+    expect(jobResult(job(3, { doBy, firstCompletedAt: "2026-09-08T15:00:00.000Z" }), "onTime", NOW)).toEqual({ counted: true, hit: false });
+    // An accepted vendor date replaces the do-by date.
+    expect(jobResult(job(4, { doBy, agreedAt: "2026-09-09T13:00:00.000Z", firstCompletedAt: "2026-09-08T15:00:00.000Z" }), "onTime", NOW)).toEqual({ counted: true, hit: true });
+    // Still open after the date is late; a date still ahead is not judged yet.
+    expect(jobResult(job(5, { doBy }), "onTime", NOW)).toEqual({ counted: true, hit: false });
+    expect(jobResult(job(6, { doBy: "2026-10-20T00:00:00.000Z" }), "onTime", NOW)).toEqual({ counted: false });
+    expect(summarizeMeasure([job(7)], "onTime", NOW).emptyReason).toBe("No do-by dates sent");
+    expect(summarizeMeasure([job(8, { completedAt: "2026-09-04T15:00:00.000Z" })], "callbacks", NOW).emptyReason).toBe("No equipment on these jobs");
+  });
+
+  it("keeps the column bands in the same order as every row", () => {
+    expect(MEASURE_GROUPS.flatMap(group => group.keys)).toEqual([...MEASURES]);
+  });
+
   it("uses medians, rates and the small-sample rule, and judges callbacks only after 30 days", () => {
     const facts = [1, 2, 3, 4, 5].map(i => job(i, { firstResponseAt: new Date(Date.parse(base.sentAt) + i * 3_600_000).toISOString(), firstOutcome: i <= 4 ? "completed" : "parts_required", completedAt: i <= 4 ? "2026-09-02T10:00:00.000Z" : undefined, assetId: "a", costMinor: i * 10_000, costLineCount: 1 }));
     facts[0]!.callbackAt = "2026-09-20T10:00:00.000Z";
@@ -108,8 +126,8 @@ describe("vendor scorecard page", () => {
       const drill = await drilled(cell.href);
       expect(drill, `${label} ${cell.measure}`).toBeDefined();
       expect(drill!.rows, `${label} ${cell.measure}`).toHaveLength(cell.summary.counted);
-      if (["declined", "invoice", "onTime", "firstFix", "fixHeld", "callbacks"].includes(cell.measure)) {
-        const hitTone = ["onTime", "firstFix", "fixHeld"].includes(cell.measure) ? "good" : "bad";
+      if (["declined", "invoice", "onTime", "firstFix", "callbacks"].includes(cell.measure)) {
+        const hitTone = ["onTime", "firstFix"].includes(cell.measure) ? "good" : "bad";
         expect(drill!.rows.filter(r => r.tone === hitTone), `${label} ${cell.measure}`).toHaveLength(cell.summary.hits);
       }
     }

@@ -3,7 +3,7 @@ import type { OpsRepository } from "@/lib/ops/repository";
 import { formatOperationsDate } from "@/lib/ops/local-time";
 import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import {
-  MEASURES, MEASURE_INFO, RANK_SAMPLE, SMALL_SAMPLE, buildScorecard, historyLength, inWindow, isMeasure, isPeriod, jobResult, rankRows,
+  MEASURES, MEASURE_INFO, RANK_SAMPLE, SMALL_SAMPLE, buildScorecard, deadlineOf, historyLength, inWindow, isMeasure, isPeriod, jobResult, rankRows,
   scoreRows, scorecardWindowAt, summarizeAll, tradeLabel,
   type MeasureSummary, type ScoreRow, type ScorecardMeasureKey, type ScorecardPeriod, type ScorecardWindow, type VendorJobFact,
 } from "@/lib/ops/vendor-scorecard";
@@ -70,8 +70,8 @@ function cellFor(summary: MeasureSummary, href: string): ScorecardCell {
   const key = summary.key;
   const empty = summary.counted === 0 || summary.value === undefined;
   const value = empty || summary.tooFew ? "—" : formatValue(key, summary.value!);
-  const detail = empty ? (key === "callbacks" ? "Too early to tell" : "No data yet")
-    : summary.tooFew ? `${summary.counted} ${summary.counted === 1 ? "job" : "jobs"} · too few to judge`
+  const detail = empty ? summary.emptyReason ?? "No data yet"
+    : summary.tooFew ? `Only ${summary.counted} ${summary.counted === 1 ? "job" : "jobs"} so far · need ${SMALL_SAMPLE}`
     : key === "jobs" ? "sent"
     : key === "response" ? `${summary.counted} replies`
     : key === "cost" ? `${summary.counted} jobs with cost`
@@ -88,9 +88,12 @@ function drillResult(fact: VendorJobFact, measure: ScorecardMeasureKey, now: str
     case "jobs": return { result: fact.declined ? "Declined" : fact.firstOutcome ? "Visited" : fact.firstResponseAt ? "Replied" : "No reply yet", tone: "neutral", counted: true };
     case "response": return { result: hoursLabel(r.value!), tone: "neutral", counted: true };
     case "cost": return { result: money(r.value!), tone: "neutral", counted: true };
-    case "onTime": return { result: r.hit ? "On time" : "Late", tone: r.hit ? "good" : "bad", counted: true };
+    case "onTime": {
+      const target = deadlineOf(fact), dated = (iso?: string) => iso ? formatOperationsDate(iso) : "";
+      const by = `${fact.agreedAt ? "agreed" : "due"} ${dated(target)}`;
+      return { result: r.hit ? `Done ${dated(fact.firstCompletedAt)} · ${by}` : fact.firstCompletedAt ? `Late: done ${dated(fact.firstCompletedAt)} · ${by}` : `Still open · ${by}`, tone: r.hit ? "good" : "bad", counted: true };
+    }
     case "firstFix": return { result: r.hit ? "Fixed first visit" : `First visit: ${(fact.firstOutcome ?? "").replaceAll("_", " ")}`, tone: r.hit ? "good" : "bad", counted: true };
-    case "fixHeld": return { result: r.hit ? "Confirmed" : "Rejected", tone: r.hit ? "good" : "bad", counted: true };
     case "callbacks": return { result: r.hit ? "Repaired again within 30 days" : "No repair within 30 days", tone: r.hit ? "bad" : "good", counted: true };
     case "declined": return { result: r.hit ? "Declined" : "Not declined", tone: r.hit ? "bad" : "neutral", counted: true };
     case "invoice": return { result: r.hit ? "Open invoice issue" : "No open issue", tone: r.hit ? "bad" : "neutral", counted: true };

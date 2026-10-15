@@ -196,6 +196,8 @@ export function buildOperatingHistory(input: OperatingHistoryInput): OperatingHi
     };
     out.workOrders.push(work);
     const urgentHours = plan.priority === "emergency" ? 2 : plan.priority === "urgent" ? 6 : 36;
+    // The do-by date on the work order sent to a vendor: same day for emergencies, next day for urgent, within the week otherwise.
+    const doBy = created + (plan.priority === "emergency" ? 8 : plan.priority === "urgent" ? 30 : 5 * 24) * HOUR;
 
     if (provider.techId) {
       // In-house: assigned, visited, fixed (or once in a while needing a second trip).
@@ -230,7 +232,7 @@ export function buildOperatingHistory(input: OperatingHistoryInput): OperatingHi
       assignmentId = `${id}-assignment-${attempt}`;
       out.assignments.push({ id: assignmentId, organizationId: org, workOrderId: id, kind: "outside_vendor", vendorId: forVendor, status: "accepted", assignedAt: iso(at), supersedesAssignmentId: supersedes });
       const issuanceId = `${id}-issuance-${attempt}`;
-      out.issuances.push({ id: issuanceId, organizationId: org, workOrderId: id, assignmentId, revision: attempt, channel: "email", issuedAt: iso(at + 5 * 60_000), immutablePayloadJson: JSON.stringify({ organizationName: input.organization.name, workOrderNumber: number, store: { id: store.id, storeNumber: store.storeNumber, name: store.name, formattedAddress: [store.address1, `${store.city}, ${store.state} ${store.postalCode}`].join(", ") }, vendor: { id: vendor.id, name: vendor.name }, problem: problem.text, priority: plan.priority, categoryKey: trade, asset: asset ? { id: asset.id, name: asset.name, assetTag: asset.assetTag } : undefined, billingInstruction: `Reference operator work order ${number} on all service paperwork and invoices.` }) });
+      out.issuances.push({ id: issuanceId, organizationId: org, workOrderId: id, assignmentId, revision: attempt, channel: "email", issuedAt: iso(at + 5 * 60_000), immutablePayloadJson: JSON.stringify({ organizationName: input.organization.name, workOrderNumber: number, requestedTiming: iso(doBy), store: { id: store.id, storeNumber: store.storeNumber, name: store.name, formattedAddress: [store.address1, `${store.city}, ${store.state} ${store.postalCode}`].join(", ") }, vendor: { id: vendor.id, name: vendor.name }, problem: problem.text, priority: plan.priority, categoryKey: trade, asset: asset ? { id: asset.id, name: asset.name, assetTag: asset.assetTag } : undefined, billingInstruction: `Reference operator work order ${number} on all service paperwork and invoices.` }) });
       return { issuanceId, vendor };
     };
     let { issuanceId, vendor } = issue(vendorId, assignedAt);

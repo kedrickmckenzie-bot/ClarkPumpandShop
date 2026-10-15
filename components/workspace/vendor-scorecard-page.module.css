@@ -23,21 +23,19 @@
 .srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 /* Header */
-.header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
-.eyebrow { margin: 0 0 6px; color: var(--action); font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
-.header h1 { margin: 0; font-size: 30px; line-height: 1.15; letter-spacing: -.01em; }
-.lede { margin: 8px 0 0; color: var(--copy); font-size: 16px; max-width: 62ch; }
+.header { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.eyebrow { margin: 0 0 4px; color: var(--muted); font-size: 13px; font-weight: 600; }
+.header h1 { margin: 0; font-size: 28px; font-weight: 700; line-height: 1.15; letter-spacing: -.015em; }
+.lede { margin: 6px 0 0; color: var(--copy); font-size: 15px; max-width: 62ch; }
 .printButton { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
 .printButton:hover { border-color: var(--action); color: var(--action); }
 
-.context { display: flex; flex-wrap: wrap; margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
-.context > div { display: flex; align-items: baseline; gap: 8px; padding: 12px 18px; border-right: 1px solid var(--line-soft); }
-.context > div:last-child { border-right: 0; }
-.context dt { color: var(--muted); font-size: 13px; font-weight: 600; }
-.context dd { margin: 0; font-size: 14px; font-weight: 600; }
-
-/* Controls */
-.controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+/* One bar: period, district, and what the numbers cover */
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+.context { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0 0 0 auto; padding-right: 6px; }
+.context > div { display: flex; align-items: baseline; gap: 6px; }
+.context dt { color: var(--muted); font-size: 13px; font-weight: 500; }
+.context dd { margin: 0; color: var(--ink); font-size: 14px; font-weight: 600; }
 .segmented { display: inline-flex; padding: 3px; background: #e9edf3; border-radius: 8px; }
 .segment, .segmentOn { display: inline-flex; align-items: center; min-height: 38px; padding: 0 14px; border-radius: 6px; color: var(--copy); font-size: 14px; font-weight: 600; text-decoration: none; white-space: nowrap; }
 .segment:hover { color: var(--ink); }
@@ -61,8 +59,16 @@
 
 .tableWrap { overflow-x: auto; border-top: 1px solid var(--line); }
 .table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-.table thead th { padding: 10px 12px; background: var(--subtle); border-bottom: 1px solid var(--line); color: var(--copy); font-size: 13px; font-weight: 650; line-height: 1.3; text-align: left; vertical-align: bottom; min-width: 96px; }
-.table thead th:first-child { min-width: 200px; padding-left: 22px; }
+.table thead th { padding: 10px 12px; background: var(--subtle); color: var(--copy); font-size: 13px; font-weight: 650; line-height: 1.3; text-align: left; vertical-align: bottom; min-width: 92px; }
+.table thead th:first-child { min-width: 180px; padding-left: 22px; }
+/* Band row: Volume, Speed, Quality, Cost and admin */
+.bands th { padding: 9px 12px 7px; border-bottom: 1px solid var(--line-soft); color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.bands th + th { border-left: 1px solid var(--line); }
+.bands .firstHead { vertical-align: bottom; padding-bottom: 12px; border-bottom: 2px solid var(--line); color: var(--ink); font-size: 14px; letter-spacing: 0; text-transform: none; }
+.measures th { padding: 9px 12px 11px; border-bottom: 2px solid var(--line); vertical-align: bottom; }
+.measureName { display: block; color: var(--ink); font-size: 14px; font-weight: 650; line-height: 1.3; }
+.measureHint { display: block; margin-top: 3px; color: var(--muted); font-size: 12.5px; font-weight: 500; line-height: 1.3; }
+.table .bandStart { border-left: 1px solid var(--line); }
 .table tbody th { padding: 14px 12px 14px 22px; border-bottom: 1px solid var(--line-soft); text-align: left; font-weight: 650; vertical-align: top; }
 .table tbody th a { color: var(--ink); text-decoration: none; line-height: 1.35; }
 .table tbody th a:hover { color: var(--action); text-decoration: underline; text-underline-offset: 3px; }
@@ -123,10 +129,9 @@
   .header { flex-direction: column; }
   .header h1 { font-size: 26px; }
   .printButton { display: none; }
-  .context { display: grid; }
-  .context > div { border-right: 0; border-bottom: 1px solid var(--line-soft); padding: 10px 14px; }
-  .context > div:last-child { border-bottom: 0; }
-  .controls { display: grid; }
+  .header { align-items: stretch; padding-bottom: 14px; }
+  .toolbar { display: grid; padding: 10px; }
+  .context { display: grid; gap: 4px; margin: 0; padding: 8px 4px 0; border-top: 1px solid var(--line-soft); }
   .segmented { display: grid; grid-template-columns: repeat(4, 1fr); }
   .segment, .segmentOn { justify-content: center; padding: 0 6px; }
   .region { display: grid; gap: 6px; }
@@ -140,7 +145,7 @@
   .table tbody tr { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 8px solid var(--subtle); }
   .table tbody tr:last-child { border-bottom: 0; }
   .table tbody th { grid-column: 1 / -1; position: static; padding: 14px 16px 6px; border-bottom: 0; font-size: 17px; }
-  .table td, .table tbody tr:last-child td { border-bottom: 0; border-top: 1px solid var(--line-soft); }
+  .table td, .table tbody tr:last-child td { border-bottom: 0; border-left: 0; border-top: 1px solid var(--line-soft); }
   /* Measures with nothing recorded yet are left off the phone card; the desktop table keeps every column. */
   .table td.noData { display: none; }
   .cellLink { min-height: 72px; padding: 10px 16px; }
@@ -160,7 +165,9 @@
 
 @media print {
   .page { gap: 12px; font-size: 11px; }
-  .printButton, .controls, .trades, .close, .definitions { display: none !important; }
+  .printButton, .segmented, .region, .trades, .close, .definitions { display: none !important; }
+  .toolbar { padding: 0; border: 0; }
+  .context { margin: 0; }
   .header h1 { font-size: 20px; }
   .lede { font-size: 12px; }
   .group, .drill { break-inside: avoid; border-color: #c3cbd8; }

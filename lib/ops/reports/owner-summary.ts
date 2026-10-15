@@ -97,7 +97,7 @@ export function buildOwnerSummary(ctx: ReportContext, options: ReportOptions, pe
     const vendors = vendorResults(ctx, period).filter(v => v.jobs || v.spend);
     const rate = (m: { value?: number; counted: number; tooFew: boolean }) => m.value === undefined ? "—" : `${pct(m.value)}${m.tooFew ? "*" : ""}`;
     sections.push({ kind: "table", id: "vendors", title: "Outside vendors", note: "Jobs sent in the period. * means fewer than 5 jobs counted, so read it with care. Same rules as Vendor scorecards.",
-      columns: [{ key: "name", label: "Vendor", width: "wide" }, { key: "jobs", label: "Jobs", align: "end" }, { key: "spend", label: "Spend", align: "end" }, { key: "firstFix", label: "Fixed first visit", align: "end" }, { key: "onTime", label: "On time", align: "end" }, { key: "callbacks", label: "Repaired again within 30 days", align: "end" }],
+      columns: [{ key: "name", label: "Vendor", width: "wide" }, { key: "jobs", label: "Jobs", align: "end" }, { key: "spend", label: "Spend", align: "end" }, { key: "firstFix", label: "Fixed first visit", align: "end" }, { key: "onTime", label: "Done by agreed date", align: "end" }, { key: "callbacks", label: "Repaired again within 30 days", align: "end" }],
       rows: vendors.map(v => ({ id: v.vendorId, href: `/app/vendors/${v.vendorId}`, cells: { name: v.name, jobs: count(v.jobs), spend: money(v.spend), firstFix: rate(v.firstFix), onTime: rate(v.onTime), callbacks: rate(v.callbacks) } })),
       empty: "No vendor jobs in this period." });
   }
