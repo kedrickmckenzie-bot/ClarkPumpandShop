@@ -35,7 +35,7 @@ function TechView({ model, card }: { model: TeamScorecardModel; card: TechCard }
       <div>
         <p className={styles.eyebrow}>Team scorecard</p>
         <h1>{card.name}</h1>
-        <p className={styles.lede}>{card.jobs} {card.jobs === 1 ? "job" : "jobs"} in this period{card.openNow !== undefined ? ` · ${card.openNow} open now` : ""}. <Link href={card.dispatchHref} className={styles.inlineLink}>Today&apos;s work<ArrowRight size={14} aria-hidden="true" /></Link></p>
+        <p className={styles.lede}>{card.jobs} {card.jobs === 1 ? "job" : "jobs"} assigned in this period. <Link href={card.dispatchHref} className={styles.inlineLink}>Their work today<ArrowRight size={14} aria-hidden="true" /></Link></p>
       </div>
       <PrintButton className={styles.printButton} />
     </header>

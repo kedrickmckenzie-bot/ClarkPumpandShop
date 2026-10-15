@@ -278,7 +278,7 @@ export function plannedDayResult(fact: Pick<TechJobFact, "plans" | "firstWorkedA
 
 export function teamJobResult(fact: TechJobFact, measure: TeamMeasureKey, now: string): { counted: boolean; hit?: boolean; value?: number } {
   switch (measure) {
-    case "jobs": return { counted: true };
+    case "jobs": return { counted: true, hit: Boolean(fact.firstCompletedAt) };
     case "finish": return fact.firstCompletedAt ? { counted: true, value: Math.max(0, Date.parse(fact.firstCompletedAt) - Date.parse(fact.startedAt)) / 3_600_000 } : { counted: false };
     case "plannedDay": { const r = plannedDayResult(fact, now); return { counted: r.counted, hit: r.hit }; }
     case "firstFix": return fact.pm || !fact.firstOutcome || NOT_A_FIX_ATTEMPT.has(fact.firstOutcome) ? { counted: false } : { counted: true, hit: fact.firstOutcome === "completed" };
@@ -287,6 +287,18 @@ export function teamJobResult(fact: TechJobFact, measure: TeamMeasureKey, now: s
       if (!fact.completedAt || !fact.assetId || Date.parse(fact.completedAt) + CALLBACK_DAYS * DAY_MS > Date.parse(now)) return { counted: false };
       return { counted: true, hit: Boolean(fact.callbackAt && Date.parse(fact.callbackAt) <= Date.parse(fact.completedAt) + CALLBACK_DAYS * DAY_MS) };
     }
+  }
+}
+
+/** Why a job is left out of a measure, in plain words; undefined when it counts. Lets every list add back up to the jobs total. */
+export function notCountedReason(fact: TechJobFact, measure: TeamMeasureKey, now: string): string | undefined {
+  if (teamJobResult(fact, measure, now).counted) return undefined;
+  switch (measure) {
+    case "jobs": return undefined;
+    case "finish": return "not done yet";
+    case "plannedDay": return fact.plans.some(p => p.day) ? "planned day not reached yet" : "no planned day";
+    case "firstFix": return fact.pm ? "routine maintenance" : !fact.firstOutcome ? "not visited yet" : "no repair needed";
+    case "callbacks": return !fact.assetId ? "no equipment on the job" : !fact.completedAt ? "not done yet" : "fixed less than 30 days ago";
   }
 }
 

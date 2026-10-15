@@ -14,7 +14,7 @@ export interface CellLike {
 }
 export interface RowLike { key: string; label: string; sublabel?: string; href?: string; total?: boolean; cells: CellLike[] }
 export interface DrillLike {
-  placement: string; context: string; measureLabel: string; definition: string; headline: string; closeHref: string;
+  placement: string; context: string; measureLabel: string; definition: string; headline: string; closeHref: string; notCounted?: string;
   rows: Array<{ workOrderId: string; number: string; problem: string; store: string; sent: string; result: string; tone: "good" | "bad" | "neutral"; tags?: string[];
     repeat?: { did?: string; nextId: string; nextNumber: string; nextProblem: string; daysLater: number; tags: string[] } }>;
   page?: { label: string; previousHref?: string; nextHref?: string };
@@ -80,6 +80,7 @@ export function Drill({ drill, dateLabel = "Sent" }: { drill: DrillLike; dateLab
         <p className={styles.drillEyebrow}>{drill.context}</p>
         <h3 id="scorecard-jobs-title">{drill.measureLabel}</h3>
         <p className={styles.drillHeadline}>{drill.headline}</p>
+        {drill.notCounted ? <p className={styles.drillNote}>{drill.notCounted}</p> : null}
         <p className={styles.drillDefinition}>{drill.definition}</p>
       </div>
       <Link href={drill.closeHref} scroll={false} className={styles.close}><X size={16} aria-hidden="true" />Close</Link>

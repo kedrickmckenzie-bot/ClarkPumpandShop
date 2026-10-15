@@ -4,6 +4,12 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Team scorecard: numbers that add up — October 15, 2026
+
+**User finding.** "None of it matches": Maria showed 25 assigned, 15 finished, 8 of 8 planned, 14 of 16 first visit, 3 repaired-again — each measure silently counted a different slice of her 25 jobs, and a live "9 open now" sat next to the period's 10 unfinished.
+
+**Fix.** Every number now names its slice: Jobs "15 done · 10 not done yet"; "15 done"; "8 of 8 with a planned day"; "14 of 16 repairs"; "Only 3 equipment fixes 30+ days old so far". Every job list adds back to the total with a plain breakdown, e.g. "Not counted: 17 of 25 jobs — 12 no planned day, 5 planned day not reached yet" (`notCountedReason`). The live "open now" count was removed from the scorecard; "Their work today" links to Dispatch for that. Test: for every cell on the team and technician views, counted rows plus "not counted" equal the jobs total.
+
 ### Team scorecard for the in-house technicians — October 15, 2026
 
 **Decision (with the user).** Managers need the same visibility into in-house results as they have for vendors, without unfair rankings. Recorded as an owner decision in `docs/internal-dispatch/README.md` (narrows the earlier "no productivity score / no ranking" clauses). Research basis: maintenance tools and guidance center technician quality on first-time fix and callbacks, compare within job type, and record a reason for every return; "busyness" measures (utilization, jobs per hour) are widely cautioned against.

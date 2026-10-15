@@ -130,9 +130,14 @@ describe("team scorecard page", () => {
     return { ...first, rows };
   }
   async function expectCellsMatch(cells: Array<{ href: string; measure: string; summary: { counted: number; hits: number } }>, label: string) {
+    const jobs = cells.find(cell => cell.measure === "jobs")!.summary.counted;
     for (const cell of cells) {
       const drill = await drilled(cell.href);
       expect(drill.rows, `${label} ${cell.measure}`).toHaveLength(cell.summary.counted);
+      // Every list adds back up to the jobs total: counted rows plus the "not counted" breakdown.
+      const left = /^Not counted: (\d+) of (\d+) jobs — /.exec(drill.notCounted ?? "");
+      expect(cell.summary.counted + Number(left?.[1] ?? 0), `${label} ${cell.measure} adds up`).toBe(jobs);
+      if (left) expect(Number(left[2]), `${label} ${cell.measure} total`).toBe(jobs);
       if (["plannedDay", "firstFix", "callbacks"].includes(cell.measure)) {
         const hitTone = cell.measure === "callbacks" ? "bad" : "good";
         expect(drill.rows.filter(r => r.tone === hitTone), `${label} ${cell.measure}`).toHaveLength(cell.summary.hits);

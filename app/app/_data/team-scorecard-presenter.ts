@@ -2,10 +2,9 @@ import type { OperatorSession } from "@/components/ops/data-contract";
 import type { OpsRepository } from "@/lib/ops/repository";
 import { formatOperationsDate } from "@/lib/ops/local-time";
 import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
-import { dispatchStatuses } from "@/lib/server/dispatch-board-page";
 import { historyLength, isPeriod, scorecardWindowAt, tradeLabel, type ScorecardPeriod, type ScorecardWindow } from "@/lib/ops/vendor-scorecard";
 import {
-  TEAM_MEASURES, TEAM_MEASURE_INFO, TEAM_SMALL_SAMPLE, FLAG_GAP, FLAG_SAMPLE, inTeamWindow, isTeamMeasure, outsideTheirControl, plannedDayResult, returnReason,
+  TEAM_MEASURES, TEAM_MEASURE_INFO, TEAM_SMALL_SAMPLE, FLAG_GAP, FLAG_SAMPLE, inTeamWindow, isTeamMeasure, notCountedReason, outsideTheirControl, plannedDayResult, returnReason,
   summarizeTeam, teamFlags, teamJobResult, teamRows,
   type TeamMeasureKey, type TeamMeasureSummary, type TeamScoreRow, type TechJobFact,
 } from "@/lib/ops/team-scorecard";
@@ -24,13 +23,15 @@ export interface TeamRow { key: string; label: string; sublabel?: string; href?:
 export type TeamDrillPlacement = "techs" | "summary" | "history" | "trade";
 export interface TeamDrill {
   placement: TeamDrillPlacement; context: string; measure: TeamMeasureKey; measureLabel: string; definition: string; headline: string; closeHref: string;
+  /** The jobs in this slice that don't count toward the measure, and why, so the list adds back up to the jobs total. */
+  notCounted?: string;
   rows: Array<{ workOrderId: string; number: string; problem: string; store: string; sent: string; result: string; tone: "good" | "bad" | "neutral"; tags: string[];
     repeat?: { did?: string; nextId: string; nextNumber: string; nextProblem: string; daysLater: number; tags: string[] } }>;
   page?: { label: string; previousHref?: string; nextHref?: string };
 }
 export interface TeamFlagGroup { techId: string; techName: string; href: string; items: Array<{ label: string; text: string; href: string }> }
 export interface TechCard {
-  id: string; name: string; backHref: string; dispatchHref: string; jobs: number; openNow?: number;
+  id: string; name: string; backHref: string; dispatchHref: string; jobs: number;
   summary: TeamCell[];
   history: { columns: Array<{ label: string; current: boolean }>; rows: Array<{ measure: TeamMeasureKey; label: string; cells: Array<{ value: string; detail: string; href: string; quiet: boolean }> }> };
   byTrade: TeamRow[];
@@ -61,15 +62,23 @@ function cellFor(summary: TeamMeasureSummary, href: string, team?: TeamMeasureSu
   const key = summary.key;
   const empty = summary.counted === 0 || summary.value === undefined;
   const value = empty || summary.tooFew ? "—" : formatValue(key, summary.value!);
+  // Each measure counts a different slice of the jobs, so every detail names its slice.
   const detail = empty ? summary.emptyReason ?? "No data yet"
-    : summary.tooFew ? `Only ${summary.counted} ${summary.counted === 1 ? "job" : "jobs"} so far · need ${TEAM_SMALL_SAMPLE}`
-    : key === "jobs" ? "assigned"
-    : key === "finish" ? `${summary.counted} finished`
-    : `${summary.hits} of ${summary.counted}`;
+    : key === "jobs" ? `${count(summary.hits)} done · ${count(summary.counted - summary.hits)} not done yet`
+    : summary.tooFew ? `Only ${summary.counted} ${SLICE[key](summary.counted)} so far · need ${TEAM_SMALL_SAMPLE}`
+    : key === "finish" ? `${count(summary.counted)} done`
+    : `${summary.hits} of ${summary.counted} ${SLICE[key](summary.counted)}`;
   const trendLabel = summary.trend && summary.priorValue !== undefined ? `${summary.trend === "better" ? "Better" : "Worse"} than the previous period (was ${formatValue(key, summary.priorValue)})` : undefined;
   const compare = team && key !== "jobs" && team.value !== undefined && !team.tooFew ? `Team: ${formatValue(key, team.value)}` : undefined;
   return { measure: key, value, detail, summary, href, empty, trendLabel, compare };
 }
+
+const SLICE: Record<Exclude<TeamMeasureKey, "jobs">, (n: number) => string> = {
+  finish: () => "done",
+  plannedDay: () => "with a planned day",
+  firstFix: n => n === 1 ? "repair" : "repairs",
+  callbacks: n => n === 1 ? "equipment fix 30+ days old" : "equipment fixes 30+ days old",
+};
 
 const civil = (day?: string) => day ? formatOperationsDate(day) : "";
 function drillResult(fact: TechJobFact, measure: TeamMeasureKey, now: string): { result: string; tone: "good" | "bad" | "neutral"; counted: boolean } {
@@ -150,23 +159,19 @@ export async function buildTeamScorecardPage(repository: OpsRepository, session:
     const scoped = (list: TechJobFact[]) => trade ? list.filter(f => f.trade === trade) : list;
     const whole = summarizeTeam(scoped(currentFacts), scoped(priorFacts), now);
     const techRows = teamRows(scoped(currentFacts), scoped(priorFacts), now, f => f.techId, f => f.techName);
-    const open = await Promise.all(techRows.map(row => repository.listWorkOrders(scope, { internalMembershipId: row.key, maintenanceTeamOnly: true, internalOnly: true, statuses: dispatchStatuses.filter(s => !["completed_pending_review", "resolved"].includes(s)), limit: 1 })
-      .then(page => page.totalCount ?? page.items.length).catch(() => undefined)));
     rows = [
       { key: "team", label: "Whole team", total: true, sublabel: `${techRows.length} ${techRows.length === 1 ? "technician" : "technicians"}`, cells: cells(whole, measure => drillLink(measure, { drillTech: "team" })) },
-      ...techRows.map((row: TeamScoreRow, index) => ({ key: row.key, label: row.label, href: techHref(row.key),
-        sublabel: [trade ? undefined : tradeSummary(scoped(currentFacts).filter(f => f.techId === row.key)), open[index] !== undefined ? `${open[index]} open now` : undefined].filter(Boolean).join(" · ") || undefined,
+      ...techRows.map((row: TeamScoreRow) => ({ key: row.key, label: row.label, href: techHref(row.key),
+        sublabel: trade ? undefined : tradeSummary(scoped(currentFacts).filter(f => f.techId === row.key)),
         cells: cells(row.measures, measure => drillLink(measure, { drillTech: row.key })) })),
     ];
   } else {
     const mine = (list: TechJobFact[]) => list.filter(f => f.techId === techId);
     const longFacts = history ?? teamFacts;
     const columns = windows.slice().reverse();
-    const openPage = await repository.listWorkOrders(scope, { internalMembershipId: techId, maintenanceTeamOnly: true, internalOnly: true, statuses: dispatchStatuses.filter(s => !["completed_pending_review", "resolved"].includes(s)), limit: 1 }).catch(() => undefined);
     const team = summarizeTeam(currentFacts, [], now);
     tech = {
       id: techId, name: techName!, backHref: href({ tech: undefined }), dispatchHref: `/app/dispatch/technicians/${encodeURIComponent(techId)}`, jobs: mine(currentFacts).length,
-      openNow: openPage ? openPage.totalCount ?? openPage.items.length : undefined,
       summary: cells(summarizeTeam(mine(currentFacts), mine(priorFacts), now), measure => drillLink(measure, {}), team),
       history: {
         columns: columns.map((window, index) => ({ label: periodLabel(window, period), current: index === columns.length - 1 })),
@@ -212,7 +217,13 @@ export async function buildTeamScorecardPage(repository: OpsRepository, session:
     const pageHref = (value: number) => href({ measure, drillTech: first(query.drillTech), slice: first(query.slice), back: first(query.back), drillPage: value > 1 ? String(value) : undefined }, "#scorecard-jobs");
     drill = {
       placement, context: [name, sliceLabel].filter(Boolean).join(" · "), measure, measureLabel: info.label, definition: info.definition,
-      headline: cell.empty ? "No jobs count toward this yet." : summary.tooFew ? `${cell.detail}. Showing the jobs so far.` : `${cell.value}${cell.detail && cell.detail !== "assigned" ? ` · ${cell.detail}` : ""}`,
+      headline: cell.empty ? "No jobs count toward this yet." : summary.tooFew ? `${cell.detail}. Showing the jobs so far.` : `${cell.value} · ${cell.detail}`,
+      notCounted: (() => {
+        const reasons = new Map<string, number>();
+        for (const fact of pool) { const reason = notCountedReason(fact, measure, now); if (reason) reasons.set(reason, (reasons.get(reason) ?? 0) + 1); }
+        const left = [...reasons.values()].reduce((a, b) => a + b, 0);
+        return left ? `Not counted: ${left} of ${pool.length} jobs — ${[...reasons.entries()].sort((a, b) => b[1] - a[1]).map(([reason, n]) => `${n} ${reason}`).join(", ")}.` : undefined;
+      })(),
       closeHref: href({}, `#${placement === "techs" ? "scorecard-techs" : `scorecard-${placement}`}`),
       page: pages > 1 ? { label: `${(currentPage - 1) * size + 1}–${Math.min(currentPage * size, ranked.length)} of ${ranked.length} jobs`, previousHref: currentPage > 1 ? pageHref(currentPage - 1) : undefined, nextHref: currentPage < pages ? pageHref(currentPage + 1) : undefined } : undefined,
       rows: ranked.slice((currentPage - 1) * size, currentPage * size).map(({ fact, result, tone }) => {
