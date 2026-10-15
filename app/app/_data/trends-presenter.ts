@@ -2696,7 +2696,15 @@ export function buildTrendsModel(
     }
     const ranked = [...groups.entries()].map(([key, group]) => ({ key, label: group.label, total: aggregate(safeMetric, group.records), records: group.records }))
       .sort((left, right) => right.total - left.total || left.label.localeCompare(right.label));
-    const shown = ranked.slice(0, 15);
+    // 15 rows a page, highest first, or every row at once; one color scale across all rows so pages compare.
+    const pageSize = 15, pages = Math.max(1, Math.ceil(ranked.length / pageSize));
+    const showAll = first(query.heatAll) === "1" && ranked.length <= 500;
+    const requestedHeatPage = Number(first(query.heatPage) ?? "1");
+    const heatPage = Number.isInteger(requestedHeatPage) ? Math.min(Math.max(requestedHeatPage, 1), pages) : 1;
+    const shown = showAll ? ranked : ranked.slice((heatPage - 1) * pageSize, heatPage * pageSize);
+    const heatHref = (values: Record<string, string | undefined>) => `${trendHref({ heatPage: undefined, heatAll: undefined, ...values })}#heatmap-title`;
+    const monthTotals = (records: TrendSourceRecord[]) => currentMonths.map((month) => aggregate(safeMetric, records.filter((row) => row.periodKey === month)));
+    const scaleMax = Math.max(0, ...ranked.flatMap((group) => monthTotals(group.records)));
     const rows = shown.map((group) => ({
       id: group.key, label: group.label, totalFormatted: formatMetric(safeMetric, group.total, false, true),
       cells: currentMonths.map((month) => {
@@ -2708,8 +2716,15 @@ export function buildTrendsModel(
     }));
     return {
       noun: breakdownNoun, months: currentMonths.map((month) => ({ key: month, label: monthLabel(month) })),
-      max: Math.max(0, ...rows.flatMap((row) => row.cells.map((cell) => cell.value))),
+      max: scaleMax,
       rows, totalRows: ranked.length,
+      page: ranked.length > pageSize ? {
+        label: showAll ? `All ${ranked.length} ${breakdownNoun}` : `${(heatPage - 1) * pageSize + 1}–${(heatPage - 1) * pageSize + shown.length} of ${ranked.length} ${breakdownNoun}, highest first`,
+        previousHref: !showAll && heatPage > 1 ? heatHref({ heatPage: heatPage > 2 ? String(heatPage - 1) : undefined }) : undefined,
+        nextHref: !showAll && heatPage < pages ? heatHref({ heatPage: String(heatPage + 1) }) : undefined,
+        toggleHref: showAll ? heatHref({}) : heatHref({ heatAll: "1" }),
+        toggleLabel: showAll ? `Show ${pageSize} at a time` : `Show all ${ranked.length}`,
+      } : undefined,
       allLink: { href: `${trendHref({ view: "drivers" })}#change-drivers`, label: `All ${ranked.length} ${breakdownNoun}` },
     };
   })() : undefined;

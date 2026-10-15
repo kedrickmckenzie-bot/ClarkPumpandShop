@@ -153,5 +153,17 @@ describe("trends at 100 stores", () => {
     expect(stores.drivers.rows.length).toBe(25);
     expect(new URL(stores.drivers.pagination!.nextHref!, "http://x").searchParams.get("view")).toBe("stores");
     expect(stores.drivers.quickSorts!.map((sort) => sort.label)).toContain("Biggest increases");
+    // "Where and when": 15 rows a page across every store, or all at once, on one color scale.
+    const heat = first.heatmap!;
+    expect(heat.rows).toHaveLength(15);
+    const all = buildTrendsModel(fixture, session(), Object.fromEntries(new URL(heat.page!.toggleHref, "http://x").searchParams)).heatmap!;
+    expect(all.rows).toHaveLength(heat.totalRows);
+    expect(all.max).toBe(heat.max);
+    const rowsSeen = new Set<string>();
+    for (let page: typeof heat | undefined = heat; page;) {
+      page.rows.forEach((row) => rowsSeen.add(row.id));
+      page = page.page?.nextHref ? buildTrendsModel(fixture, session(), Object.fromEntries(new URL(page.page.nextHref, "http://x").searchParams)).heatmap : undefined;
+    }
+    expect(rowsSeen.size).toBe(heat.totalRows);
   }, 120000);
 });

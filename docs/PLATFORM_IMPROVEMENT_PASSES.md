@@ -4,6 +4,12 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### "Where and when" grid pages through every store — October 15, 2026
+
+**What was done.** The user called the store-by-month grid one of the best charts and asked for paging or "expand all" at scale. It used to show only the top 15 and send the rest to a plain table. Now it shows 15 rows a page, highest first, with "← Higher / Lower →", "16–30 of 100 stores", and "Show all 100" / "Show 15 at a time". Every page uses one color scale, so a dark cell means the same amount on any page.
+
+**How it was tested.** The 100-store test now also checks the grid: 15 rows a page, every store reached across the pages, "Show all" returns every row, and the color scale matches. Browser check on the 100-store test database. Full checks: see the commit.
+
 ### "Jump to a store" on every record page — October 15, 2026
 
 **What was done.** The user asked for a way to search and jump to one store on every page except Trends (for example compliance records).

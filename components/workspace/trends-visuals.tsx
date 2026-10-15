@@ -84,6 +84,10 @@ export function SpendHeatmap({ heatmap, metricLabel }: { heatmap: TrendHeatmapVi
         </tr>)}</tbody>
       </table>
     </div>
-    <p className={styles.note}>{heatmap.totalRows > heatmap.rows.length ? <>Showing the {heatmap.rows.length} highest of {heatmap.totalRows} {heatmap.noun}. <Link href={heatmap.allLink.href}>{heatmap.allLink.label} →</Link></> : <>All {heatmap.totalRows} {heatmap.noun} shown.</>}</p>
+    {heatmap.page ? <nav className={styles.bridgePages} aria-label="More rows">
+      {heatmap.page.previousHref ? <Link href={heatmap.page.previousHref}>← Higher</Link> : <span />}
+      <span>{heatmap.page.label} · <Link href={heatmap.page.toggleHref}>{heatmap.page.toggleLabel}</Link></span>
+      {heatmap.page.nextHref ? <Link href={heatmap.page.nextHref}>Lower →</Link> : <span />}
+    </nav> : <p className={styles.note}>All {heatmap.totalRows} {heatmap.noun} shown.</p>}
   </section>;
 }

@@ -329,6 +329,8 @@ export interface TrendHeatmapViewModel {
   rows: Array<{ id: string; label: string; totalFormatted: string; cells: Array<{ month: string; value: number; formatted: string; count: number; href: string }> }>;
   totalRows: number;
   allLink: SupportingLink;
+  /** Present when there are more rows than one page: 15 at a time, or all at once. */
+  page?: { label: string; previousHref?: string; nextHref?: string; toggleHref: string; toggleLabel: string };
 }
 
 export interface TrendAnalysisPageViewModel {
