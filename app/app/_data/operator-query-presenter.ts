@@ -400,6 +400,7 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
       currency: queryCurrency(query),
       categoryPath: first(query.path)?.split("|").filter(Boolean),
       heldOnly: heldPlan,
+      callbacksOnly: first(query.callbacks) === "1",
       heldStoreGroup,
       heldReviewDeadlineTo: heldPlan && heldReviewWindow === "30" ? new Date(Date.parse(getServerOpsReportingAsOf()) + 30 * 86_400_000).toISOString() : undefined,
       heldConfirmedOpportunityAfter: heldPlan && heldOpportunity === "confirmed" ? getServerOpsReportingAsOf() : undefined,
@@ -409,6 +410,11 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
     result = work; rows = work.items.map(heldPlan ? heldWorkRow : (row) => ({ ...workRow(row, session.organizationName), action: (row.status === "completed_pending_review" || row.needsConfirmation) && roleCan(session, "confirm_observable_result") ? { label: "Confirm work", href: `/app/work-orders/${row.id}?view=confirmation#work-verification` } : undefined })); title = heldPlan ? "Approved work waiting for a suitable visit" : upcomingAppointments ? "Work with a confirmed upcoming appointment" : "Work orders"; eyebrow = heldPlan ? "Held-work portfolio" : upcomingAppointments ? "Scheduled service" : "Maintenance work"; description = heldPlan ? "Review what is authorized, when each job must be reconsidered, and which stores can combine approved work without losing each job's outcome or cost trail." : upcomingAppointments ? "Every result has a vendor-confirmed appointment in the selected scope. Each work order appears once even if its schedule has revisions." : "See who is handling each job and what happens next."; placeholder = "Search number, problem, store, vendor, or category";
     const warranty = await workWarrantyMarkers(repository,scope,work.items.map(row=>row.id),getServerOpsReportingAsOf().slice(0,10));
     rows.forEach(row=>{if(warranty.get(row.id)){const cell=row.cells.find(c=>c.key==="work");if(cell)cell.secondary="May be covered by warranty";}});
+    // Callbacks carry a tag naming the earlier job, so they stand out in any list.
+    const callbackLinks = (await repository.listWorkCallbacks(scope.organizationId, work.items.map((row) => row.id))).filter((link) => link.status === "open" || link.status === "no_charge");
+    const earlierNumbers = new Map((await Promise.all([...new Set(callbackLinks.map((link) => link.originalWorkOrderId))].map((id) => repository.getWorkOrder(scope.organizationId, id)))).flatMap((job) => job ? [[job.id, job.number] as const] : []));
+    rows.forEach((row) => { const link = callbackLinks.find((item) => item.workOrderId === row.id); const cell = row.cells.find((c) => c.key === "work"); if (link && cell) cell.secondary = `Callback for ${earlierNumbers.get(link.originalWorkOrderId) ?? "an earlier job"}${link.status === "no_charge" ? " · no charge" : ""}`; });
+    if (first(query.callbacks) === "1") { title = "Callbacks"; description = "Jobs sent back to fix an earlier job, or linked as one."; }
     const change = sinceWindowFromQuery(first(query.change), first(query.changedFrom), first(query.changedTo));
     if (change) {
       title = SINCE_LABELS[change.kind].filter;
@@ -552,7 +558,10 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
     // A technician's first choice is whose jobs to see, so it leads the filters.
     filters: session.role === "technician" && route === "work-orders"
       ? [...(contextualFilters ?? []), { id: "work-view", label: "Work", options: workListNavigation(query) }, ...(queryFilters(route, query) ?? [])]
-      : [...(route === "work-orders" ? [{ id: "work-view", label: "Work", options: workListNavigation(query) }] : []), ...(queryFilters(route, query) ?? []), ...(contextualFilters ?? [])],
+      : [...(route === "work-orders" ? [{ id: "work-view", label: "Work", options: workListNavigation(query) }, { id: "callbacks", label: "Callbacks", options: [
+        { value: "all", label: "All jobs", href: hrefWithFilter("work-orders", query, "callbacks"), selected: first(query.callbacks) !== "1" },
+        { value: "1", label: "Callbacks only", href: hrefWithFilter("work-orders", query, "callbacks", "1"), selected: first(query.callbacks) === "1" },
+      ] }] : []), ...(queryFilters(route, query) ?? []), ...(contextualFilters ?? [])],
     appliedFilters,
     clearFiltersHref: heldPlan ? "/app/work-orders?visitPlan=ready" : `/app/${route}`,
     pagination: pagination(route, query, result, page),

@@ -203,6 +203,7 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
   if (table === "ops_refrigerant_events") fixture.refrigerantEvents ??= [];
   if (table === "ops_ust_operators") fixture.ustOperators ??= [];
   if (table === "ops_spend_totals") fixture.spendTotals ??= [];
+  if (table === "ops_work_order_callbacks") fixture.workCallbacks ??= [];
   if (table === "ops_equipment_document_pages") fixture.equipmentDocumentPages ??= [];
   const mapping: Record<string, keyof OpsFixture> = {
     ops_store_tasks: "storeTasks", ops_store_task_messages: "storeTaskMessages", ops_store_task_people: "storeTaskPeople", ops_divisions: "divisions", ops_regions: "regions", ops_taxonomy_nodes: "taxonomyNodes",
@@ -213,7 +214,7 @@ function mapTable(fixture: OpsFixture, table: string): Array<Record<string, unkn
     ops_capital_plans: "capitalPlans", ops_store_vendor_preferences: "storeVendorPreferences", ops_vendor_coverage: "vendorCoverage", ops_vendor_qualifications: "vendorQualifications", ops_vendor_compliance_documents: "vendorComplianceDocuments",
     ops_vendor_contracts: "vendorContracts", ops_contract_versions: "contractVersions", ops_contract_scopes: "contractScopes",
     ops_rate_card_lines: "rateCardLines", ops_service_level_policies: "serviceLevelPolicies", ops_scheduling_policies: "schedulingPolicies", ops_vendor_capacity: "vendorCapacity",
-    ops_technician_statuses: "technicianStatuses", ops_route_legs: "routeLegs", ops_equipment_documents: "equipmentDocuments", ops_ai_conversations: "aiConversations", ops_overview_seen_marks: "overviewSeenMarks", ops_report_schedules: "reportSchedules", ops_report_runs: "reportRuns", ops_equipment_notes: "equipmentNotes", ops_asset_refrigerants: "assetRefrigerants", ops_refrigerant_events: "refrigerantEvents", ops_ust_operators: "ustOperators", ops_spend_totals: "spendTotals", ops_equipment_document_pages: "equipmentDocumentPages", ops_technician_profiles: "technicianProfiles", ops_organizations: "organizations", ops_internal_schedules: "internalSchedules", ops_requests: "requests", ops_request_impact_assessments: "requestImpactAssessments", ops_work_orders: "workOrders",
+    ops_technician_statuses: "technicianStatuses", ops_route_legs: "routeLegs", ops_equipment_documents: "equipmentDocuments", ops_ai_conversations: "aiConversations", ops_overview_seen_marks: "overviewSeenMarks", ops_report_schedules: "reportSchedules", ops_report_runs: "reportRuns", ops_equipment_notes: "equipmentNotes", ops_asset_refrigerants: "assetRefrigerants", ops_refrigerant_events: "refrigerantEvents", ops_ust_operators: "ustOperators", ops_spend_totals: "spendTotals", ops_work_order_callbacks: "workCallbacks", ops_equipment_document_pages: "equipmentDocumentPages", ops_technician_profiles: "technicianProfiles", ops_organizations: "organizations", ops_internal_schedules: "internalSchedules", ops_requests: "requests", ops_request_impact_assessments: "requestImpactAssessments", ops_work_orders: "workOrders",
     ops_approval_policies: "approvalPolicies", ops_approval_requests: "approvalRequests", ops_approval_decisions: "approvalDecisions",
     ops_work_order_visit_holds: "workOrderVisitHolds", ops_work_order_assignments: "assignments", ops_work_order_issuances: "issuances",
     ops_vendor_responses: "vendorResponses", ops_work_order_estimate_requests: "estimateRequests",
@@ -752,6 +753,17 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
     return clone((this.fixture.ustOperators ?? []).filter(o => o.organizationId === scope.organizationId && !o.removedAt && stores.has(o.storeId))
       .sort((a, b) => stores.get(a.storeId)!.storeNumber.localeCompare(stores.get(b.storeId)!.storeNumber, "en-US", { numeric: true }) || a.operatorClass.localeCompare(b.operatorClass) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id)));
   }
+  async listWorkCallbacks(org: string, workOrderIds: readonly string[]) {
+    const wanted = new Set(workOrderIds);
+    // Optional fields cleared by an update come back blank, as they do from SQL.
+    return clone((this.fixture.workCallbacks ?? []).filter(c => c.organizationId === org && (wanted.has(c.workOrderId) || wanted.has(c.originalWorkOrderId))).sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)))
+      .map(c => ({ ...c, reason: c.reason ?? undefined, resolvedAt: c.resolvedAt ?? undefined, resolvedByName: c.resolvedByName ?? undefined, createdByActorId: c.createdByActorId ?? undefined }));
+  }
+  async findRecentRepairOnAsset(org: string, assetId: string, excludeWorkOrderId: string, from: string, to: string) {
+    const done = (w: import("./types").WorkOrder) => w.resolvedAt ?? w.closedAt;
+    return this.fixture.workOrders.filter(w => w.organizationId === org && w.assetId === assetId && w.id !== excludeWorkOrderId && w.status !== "cancelled" && done(w) && done(w)! >= from && done(w)! <= to)
+      .sort((a, b) => done(b)!.localeCompare(done(a)!) || b.id.localeCompare(a.id))[0]?.id;
+  }
   async listSpendTotals(org: string) {
     return clone((this.fixture.spendTotals ?? []).filter(t => t.organizationId === org).sort((a, b) => a.periodStart.localeCompare(b.periodStart) || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)));
   }
@@ -1026,6 +1038,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
         && (!query.dueAfter || Boolean(row.dueAt && row.dueAt > query.dueAfter))
         && (!query.excludeHeld || !(this.fixture.workOrderVisitHolds??[]).some(h=>h.organizationId===scope.organizationId&&h.workOrderId===row.id&&h.status==="active"&&row.status==="approved"))
         && (!query.heldOnly || activeHeldWork.has(row.id))
+        && (!query.callbacksOnly || (this.fixture.workCallbacks ?? []).some(c => c.organizationId === scope.organizationId && c.workOrderId === row.id && (c.status === "open" || c.status === "no_charge")))
         && matchesSince(this.fixture, row, query.change)
         && (!query.heldReviewDeadlineTo || (this.fixture.workOrderVisitHolds ?? []).some((hold) => hold.organizationId === scope.organizationId && hold.workOrderId === row.id && hold.status === "active" && hold.deadlineAt <= query.heldReviewDeadlineTo!))
         && (!query.heldConfirmedOpportunityAfter || (this.fixture.serviceAppointments ?? []).some((appointment) => {

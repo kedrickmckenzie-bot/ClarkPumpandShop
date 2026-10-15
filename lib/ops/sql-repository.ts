@@ -617,6 +617,22 @@ class SqlOpsRepository implements OpsRepository {
     return rows.map(row => ({ id: text(row, "id"), organizationId: text(row, "organization_id"), storeId: text(row, "store_id"), operatorClass: text(row, "operator_class") as import("./ust").UstOperatorClass, name: text(row, "name"),
       certificateNumber: maybeText(row, "certificate_number"), trainedOn: maybeText(row, "trained_on"), expiresOn: maybeText(row, "expires_on"), recordedByName: text(row, "recorded_by_name"), createdAt: text(row, "created_at"), removedAt: maybeText(row, "removed_at"), removedByName: maybeText(row, "removed_by_name") }));
   }
+  async listWorkCallbacks(org: string, workOrderIds: readonly string[]) {
+    const rows: Row[] = [];
+    for (let offset = 0; offset < workOrderIds.length; offset += 200) {
+      const slice = workOrderIds.slice(offset, offset + 200), marks = slice.map(() => "?").join(",");
+      rows.push(...await this.all(`SELECT * FROM ops_work_order_callbacks WHERE organization_id = ? AND (work_order_id IN (${marks}) OR original_work_order_id IN (${marks}))`, [org, ...slice, ...slice]));
+    }
+    const seen = new Set<string>();
+    return rows.filter(row => !seen.has(text(row, "id")) && seen.add(text(row, "id"))).map(row => ({ id: text(row, "id"), organizationId: text(row, "organization_id"), workOrderId: text(row, "work_order_id"), originalWorkOrderId: text(row, "original_work_order_id"),
+      source: text(row, "source") as import("./work-callbacks").CallbackSource, status: text(row, "status") as import("./work-callbacks").CallbackStatus, createdAt: text(row, "created_at"), createdByName: text(row, "created_by_name"), createdByActorId: maybeText(row, "created_by_actor_id"),
+      resolvedAt: maybeText(row, "resolved_at"), resolvedByName: maybeText(row, "resolved_by_name"), reason: maybeText(row, "reason") }))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+  }
+  async findRecentRepairOnAsset(org: string, assetId: string, excludeWorkOrderId: string, from: string, to: string) {
+    const row = await this.first("SELECT id FROM ops_work_orders WHERE organization_id = ? AND asset_id = ? AND id <> ? AND status <> 'cancelled' AND COALESCE(resolved_at, closed_at) >= ? AND COALESCE(resolved_at, closed_at) <= ? ORDER BY COALESCE(resolved_at, closed_at) DESC, id DESC LIMIT 1", [org, assetId, excludeWorkOrderId, from, to]);
+    return row ? text(row, "id") : undefined;
+  }
   async listSpendTotals(org: string) {
     const rows = await this.all("SELECT * FROM ops_spend_totals WHERE organization_id = ? ORDER BY period_start, created_at, id", [org]);
     return rows.map(row => ({ id: text(row, "id"), organizationId: text(row, "organization_id"), periodStart: text(row, "period_start"), periodEnd: text(row, "period_end"), kind: text(row, "kind") as import("./spend-totals").SpendTotalKind,
@@ -970,6 +986,7 @@ class SqlOpsRepository implements OpsRepository {
     if (query.dueAfter) { clauses.push("w.due_at > ?"); params.push(query.dueAfter); }
     if (query.excludeHeld) clauses.push("NOT EXISTS (SELECT 1 FROM ops_work_order_visit_holds eh WHERE eh.organization_id=w.organization_id AND eh.work_order_id=w.id AND eh.status='active' AND w.status='approved')");
     if (query.change) { const change = sinceSql(query.change); clauses.push(change.sql); params.push(...change.params); }
+    if (query.callbacksOnly) clauses.push("EXISTS (SELECT 1 FROM ops_work_order_callbacks cb WHERE cb.organization_id = w.organization_id AND cb.work_order_id = w.id AND cb.status IN ('open','no_charge'))");
     if (query.heldOnly) clauses.push("w.status = 'approved' AND EXISTS (SELECT 1 FROM ops_work_order_visit_holds hw WHERE hw.organization_id = w.organization_id AND hw.work_order_id = w.id AND hw.status = 'active')");
     if (query.heldStoreGroup === "multiple") clauses.push("(SELECT COUNT(*) FROM ops_work_order_visit_holds hg JOIN ops_work_orders gw ON gw.organization_id = hg.organization_id AND gw.id = hg.work_order_id WHERE hg.organization_id = w.organization_id AND gw.store_id = w.store_id AND gw.status = 'approved' AND hg.status = 'active') >= 2");
     if (query.upcomingAppointmentAfter) { clauses.push("EXISTS (SELECT 1 FROM ops_service_appointments ua WHERE ua.organization_id = w.organization_id AND ua.work_order_id = w.id AND ua.status = 'confirmed' AND ua.starts_at >= ?)"); params.push(query.upcomingAppointmentAfter); }

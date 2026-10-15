@@ -69,6 +69,7 @@ function Drill({ drill }: { drill: ScorecardDrill }) {
       </tr>, row.repeat ? <tr key={`${row.workOrderId}-repeat`} className={styles.repeatRow}><td colSpan={5}>
         <dl className={styles.repeat}>
           <div><dt>What they did</dt><dd>{row.repeat.did ?? "No note recorded at checkout"}</dd></div>
+          {row.repeat.tags.length ? <div className={styles.repeatTags}>{row.repeat.tags.map((tag) => <span key={tag}>{tag}</span>)}</div> : null}
           <div><dt>Next repair · {row.repeat.daysLater} {row.repeat.daysLater === 1 ? "day" : "days"} later</dt><dd><Link href={`/app/work-orders/${encodeURIComponent(row.repeat.nextId)}`}>{row.repeat.nextNumber}</Link> · {row.repeat.nextProblem}</dd></div>
         </dl>
       </td></tr> : null])}</tbody>

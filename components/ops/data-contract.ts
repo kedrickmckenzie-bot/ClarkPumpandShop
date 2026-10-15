@@ -741,6 +741,8 @@ export interface CreateWorkOrderPageViewModel {
   categories: SelectOptionViewModel[];
   assetLifecycleInputs: AssetLifecycleInputViewModel[];
   lifecycleAsOf: string;
+  /** Sending this job as a callback for an earlier, finished job. */
+  callbackOf?: { id: string; number: string; problem: string };
   defaults?: {
     storeId?: string;
     assetId?: string;

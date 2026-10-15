@@ -4,6 +4,23 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Callbacks: send, link, close out — October 15, 2026
+
+**Decision (with the user).** A callback is its own work order linked to the earlier job; the earlier job is never changed. The vendor just does the work (no "same problem?" question for anyone in the field: vendors and in-house techs both have a reason to say no). If it turns out to be new work, the vendor tells someone however they normally would, and afterwards the facilities manager closes it out on the callback: **no charge** (stays linked) or **new billable work** (unlinked, with a short reason). There are no approval limits; everything is after the fact. The scorecard keeps one column ("Repaired again within 30 days"); callbacks show only as tags in its drill-down, so charts don't get crowded.
+
+**What was done.**
+- `ops_work_order_callbacks` (migration 0089; fixture, D1 and PostgreSQL): one row per callback job, earlier job, how it was linked, status (not closed out / no charge / new work / not a callback), who decided, when and why. Every change is audited.
+- **Call vendor back** on a finished job opens the new work order form prefilled (same store, equipment, vendor; "Callback for CPS-…"), and the link is saved in the same transaction as the new job.
+- **Strip at the top of both jobs:** on the callback, "Callback for CPS-… · status" plus a last-time box (problem then, what they did, finished date, who, whether the store confirmed); on the earlier job, "1 callback on this job" with each callback's number and status. Each number opens the other job.
+- **"Is this a callback?"** when a job is on equipment repaired in the last 30 days and isn't linked: shows the earlier job's summary with Yes, link it / No, new problem (managers and store managers). The answer is kept, so it isn't asked again.
+- **Close-out** (facilities and regional managers): Callback, no charge / New billable work with a reason; can be changed later.
+- **Work orders list:** "Callback for CPS-…" under the number, and a Callbacks only filter.
+- **Invoice review:** a "Billed callback" box when a billed job is a callback closed out as no charge ("check this charge with the vendor") or not closed out yet.
+- **Scorecard drill-down:** each repeat is tagged "Callback · no charge", "Callback · became new work", "Callback · not closed out" or "After maintenance".
+- **Demo:** two callbacks on story jobs (one no charge, one not closed out yet). They arrive with a fresh seed or reset; the startup top-up skips them because generated history differs by build date.
+
+**How it was tested.** New tests: sending, linking, closing out and the Callbacks only list behave the same in fixture and SQL storage; a callback can't point at an unfinished job or another store; new work needs a reason; a "not a callback" answer isn't asked twice; the demo includes both close-out states. Browser on the real build: Call vendor back → prefilled form → saved callback with its strip → closed out as new work → earlier job shows "1 callback · Changed to new work"; no sideways scroll on phone. Full checks: see the commit.
+
 ### "Repaired again within 30 days": a fact, shown side by side — October 15, 2026
 
 **Decision.** The user pointed out the measure is not a 30-day check: it counts any new repair work order on the same equipment within 30 days, so a different failure (or a missed second part) counts too. We discussed asking a person "same problem?" but techs (in-house and vendor) have a reason to say no, and vendors could game "we warned you" notes. The user chose to keep the column for visibility, since quick repeat repairs on the same equipment are worth seeing even when the failure differs, without making it a verdict.

@@ -221,3 +221,5 @@
 .repeat dt { color: #64748b; font-size: 12px; font-weight: 700; }
 .repeat dd { margin: 2px 0 0; font-size: 14px; color: #172033; }
 @media (max-width: 720px) { .repeat { grid-template-columns: 1fr; } }
+.repeatTags { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
+.repeatTags span { padding: 2px 8px; border-radius: 999px; background: #e0ecff; color: #1e3a8a; font-size: 12px; font-weight: 700; }

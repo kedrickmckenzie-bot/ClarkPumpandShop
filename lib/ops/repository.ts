@@ -111,6 +111,8 @@ export interface OrganizationScope {
 }
 
 export interface WorkOrderListQuery extends PageRequest {
+  /** Only jobs linked as callbacks (not closed out as new work). */
+  callbacksOnly?: boolean;
   dispatchQueue?: boolean;
   dispatchUnassigned?: boolean;
   activityOrder?: boolean;
@@ -312,6 +314,10 @@ export interface OpsRepository extends TaskRepository {
   listUstOperators(scope: OrganizationScope): Promise<import("./ust").UstOperator[]>;
   /** Accounting's maintenance spend totals, withdrawn ones included (they stay on record). */
   listSpendTotals(organizationId: string): Promise<import("./spend-totals").SpendTotal[]>;
+  /** Callback links where any of these jobs is the callback or the earlier job. */
+  listWorkCallbacks(organizationId: string, workOrderIds: readonly string[]): Promise<import("./work-callbacks").WorkCallback[]>;
+  /** The latest job on this equipment that finished between `from` and `to`, other than `excludeWorkOrderId`. */
+  findRecentRepairOnAsset(organizationId: string, assetId: string, excludeWorkOrderId: string, from: string, to: string): Promise<string | undefined>;
   listNotificationRecipients(
     organizationId: OpsId,
     role: NotificationRecipientRole,

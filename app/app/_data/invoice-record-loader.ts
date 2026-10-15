@@ -35,7 +35,10 @@ export async function loadInvoiceRecord(id: string, params: Record<string, strin
   ]);
   const linkedWork=[...new Map(matched.rows.filter(row=>row.workId).map(row=>[row.workId!,{id:row.workId!,number:row.workNumber??"Work order",storeId:row.storeId,storeNumber:row.storeNumber}])).values()];
   const reviewReasons=(openFlags?.rows??[]).map(row=>({id:row.id,label:row.label,detail:row.detail}));
-  return { linkedWork, reviewReasons, visitTimes, costChoices, result, section, page, line: first(params.line), match: first(params.match), flag: first(params.flag), basis, open, scopeLabel: session.scopeLabel, canDecide, decisionNote, updated: first(params.updated) === "decision" };
+  // Billed callbacks: a job closed out as a no-charge callback (or not closed out yet) shouldn't usually carry a charge.
+  const callbackLinks=(await repository.listWorkCallbacks(session.organizationId,linkedWork.map(w=>w.id))).filter(link=>linkedWork.some(w=>w.id===link.workOrderId)&&(link.status==="open"||link.status==="no_charge"));
+  const callbacks=await Promise.all(callbackLinks.map(async link=>({workId:link.workOrderId,workNumber:linkedWork.find(w=>w.id===link.workOrderId)!.number,originalId:link.originalWorkOrderId,originalNumber:(await repository.getWorkOrder(session.organizationId,link.originalWorkOrderId))?.number??"an earlier job",noCharge:link.status==="no_charge",decidedBy:link.resolvedByName})));
+  return { linkedWork, reviewReasons, callbacks, visitTimes, costChoices, result, section, page, line: first(params.line), match: first(params.match), flag: first(params.flag), basis, open, scopeLabel: session.scopeLabel, canDecide, decisionNote, updated: first(params.updated) === "decision" };
 }
 
 /** Check-in and checkout times for visits on the work this invoice is matched to. */

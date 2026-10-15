@@ -117,6 +117,7 @@ export async function POST(request: Request) {
         organizationId: context.session.organizationId,
         storeId,
         requestId: formText(formData, "requestId", { max: 120 }) || undefined,
+        callbackOfWorkOrderId: formText(formData, "callbackOf", { max: 120 }) || undefined,
         pmOccurrenceId: formText(formData, "pmOccurrenceId", { max: 120 }) || undefined,
         problem: formText(formData, "problem", { required: true, max: WORK_PROBLEM_MAX_LENGTH }),
         shortName: formText(formData,"shortName",{max:40}) || undefined,

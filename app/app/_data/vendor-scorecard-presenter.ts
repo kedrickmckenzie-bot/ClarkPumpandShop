@@ -26,7 +26,7 @@ export interface ScorecardDrill {
   placement: DrillPlacement; context: string; measure: ScorecardMeasureKey; measureLabel: string; definition: string; headline: string; closeHref: string;
   rows: Array<{ workOrderId: string; number: string; problem: string; store: string; sent: string; result: string; tone: "good" | "bad" | "neutral";
     /** For "Repaired again": what this vendor did, beside the repair that followed on the same equipment. */
-    repeat?: { did?: string; nextId: string; nextNumber: string; nextProblem: string; daysLater: number } }>;
+    repeat?: { did?: string; nextId: string; nextNumber: string; nextProblem: string; daysLater: number; tags: string[] } }>;
   /** Busy vendors can have hundreds of jobs; the list shows 50 at a time. */
   page?: { label: string; previousHref?: string; nextHref?: string };
 }
@@ -219,10 +219,16 @@ export async function buildVendorScorecardPage(repository: OpsRepository, sessio
       await Promise.all(drill.rows.filter((row) => row.tone === "bad").map(async (row) => {
         const fact = pool.find((f) => f.workOrderId === row.workOrderId);
         if (!fact?.callbackWorkOrderId || !fact.completedAt) return;
-        const [outcomes, next] = await Promise.all([repository.listWorkOutcomesForWorkOrder(session.organizationId, fact.workOrderId), repository.getWorkOrder(session.organizationId, fact.callbackWorkOrderId)]);
+        const [outcomes, next, earlier, links] = await Promise.all([repository.listWorkOutcomesForWorkOrder(session.organizationId, fact.workOrderId), repository.getWorkOrder(session.organizationId, fact.callbackWorkOrderId), repository.getWorkOrder(session.organizationId, fact.workOrderId), repository.listWorkCallbacks(session.organizationId, [fact.callbackWorkOrderId])]);
         if (!next) return;
+        // Plain tags, no extra columns: was the next job a callback, and was the earlier visit routine maintenance?
+        const link = links.find((item) => item.workOrderId === next.id && item.originalWorkOrderId === fact.workOrderId && item.status !== "not_callback");
+        const tags = [
+          ...(link ? [link.status === "no_charge" ? "Callback · no charge" : link.status === "new_work" ? "Callback · became new work" : "Callback · not closed out"] : []),
+          ...(earlier?.priority === "planned" ? ["After maintenance"] : []),
+        ];
         const did = outcomes.filter((outcome) => outcome.outcomeNotes?.trim()).sort((a, b) => (b.outcomeRecordedAt ?? "").localeCompare(a.outcomeRecordedAt ?? ""))[0]?.outcomeNotes?.trim();
-        row.repeat = { did, nextId: next.id, nextNumber: next.number, nextProblem: next.problem, daysLater: Math.max(0, Math.round((Date.parse(next.createdAt) - Date.parse(fact.completedAt)) / 86_400_000)) };
+        row.repeat = { did, nextId: next.id, nextNumber: next.number, nextProblem: next.problem, daysLater: Math.max(0, Math.round((Date.parse(next.createdAt) - Date.parse(fact.completedAt)) / 86_400_000)), tags };
       }));
     }
   }

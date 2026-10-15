@@ -2303,6 +2303,21 @@ export const opsSpendTotals = pgTable("ops_spend_totals", {
   check("chk_ops_spend_totals_amount",sql`${t.amountMinor} >= 0`),
   check("chk_ops_spend_totals_range",sql`${t.periodEnd} >= ${t.periodStart}`),
 ]);
+/** Callbacks: a work order sent back to fix an earlier job, or linked to one later. The facilities manager closes it out as a no-charge callback or unlinks it as new billable work. One row per callback work order. */
+export const opsWorkOrderCallbacks = pgTable("ops_work_order_callbacks", {
+  id: text("id").primaryKey(), organizationId: text("organization_id").notNull(), workOrderId: text("work_order_id").notNull(), originalWorkOrderId: text("original_work_order_id").notNull(),
+  source: text("source").notNull(), status: text("status").notNull(), createdAt: text("created_at").notNull(), createdByName: text("created_by_name").notNull(), createdByActorId: text("created_by_actor_id"),
+  resolvedAt: text("resolved_at"), resolvedByName: text("resolved_by_name"), reason: text("reason"),
+},t=>[
+  uniqueIndex("uidx_ops_work_order_callbacks_work").on(t.organizationId,t.workOrderId),
+  index("idx_ops_work_order_callbacks_original").on(t.organizationId,t.originalWorkOrderId),
+  foreignKey({columns:[t.organizationId],foreignColumns:[opsOrganizations.id]}),
+  foreignKey({ name: "fk_ops_work_order_callbacks_work", columns: [t.organizationId, t.workOrderId], foreignColumns: [opsWorkOrders.organizationId, opsWorkOrders.id] }),
+  foreignKey({ name: "fk_ops_work_order_callbacks_original", columns: [t.organizationId, t.originalWorkOrderId], foreignColumns: [opsWorkOrders.organizationId, opsWorkOrders.id] }),
+  check("chk_ops_work_order_callbacks_source",sql`${t.source} IN ('sent','linked','suggested')`),
+  check("chk_ops_work_order_callbacks_status",sql`${t.status} IN ('open','no_charge','new_work','not_callback')`),
+  check("chk_ops_work_order_callbacks_self",sql`${t.workOrderId} <> ${t.originalWorkOrderId}`),
+]);
 /** Fuel tank (UST) operators designated for each store: Class A, B and C. Removing one keeps the row with removed_at set. */
 export const opsUstOperators = pgTable("ops_ust_operators", {
   id: text("id").primaryKey(), organizationId: text("organization_id").notNull(), storeId: text("store_id").notNull(),

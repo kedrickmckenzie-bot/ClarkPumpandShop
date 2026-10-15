@@ -101,6 +101,7 @@ export function CreateWorkOrderForm({ model, componentId, submissionKey = "work-
       {model.state.kind === "ready" ? (
         <WorkOrderScope defaultStoreId={boundStoreId}><RecordForm offerSavedWork={!accountabilityOnly} className={styles.recordForm} action={model.submitAction}>
           <input type="hidden" name="submissionKey" value={submissionKey} />
+          {model.callbackOf ? <><input type="hidden" name="callbackOf" value={model.callbackOf.id} /><p className={styles.callbackBanner} role="note"><strong>Callback for {model.callbackOf.number}</strong> · {model.callbackOf.problem}<br /><small>Sent to the same vendor, expected no charge. Close it out afterwards as a callback or new billable work.</small></p></> : null}
           {model.sourceRequest ? <input type="hidden" name="requestId" value={model.sourceRequest.id} /> : null}
           {model.sourcePm ? <input type="hidden" name="pmOccurrenceId" value={model.sourcePm.occurrenceId} /> : null}
           {model.sourceVisit ? <input type="hidden" name="sourceExceptionId" value={model.sourceVisit.exceptionId} /> : null}

@@ -624,6 +624,13 @@
       "when": 1792031985282,
       "tag": "0088_ordinary_harrier",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "6",
+      "when": 1792081157713,
+      "tag": "0089_powerful_shotgun",
+      "breakpoints": true
     }
   ]
 }

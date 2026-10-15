@@ -41,6 +41,7 @@ import {
   workflowTaskUpdateStatement,
 } from "./workflow-task-commands";
 import type { ServiceAuthorizationSnapshot } from "./view-models";
+import { assertCallbackPair, callbackStatements } from "./work-callbacks";
 import type {
   StoredFile,
   ActorContext,
@@ -645,6 +646,8 @@ export async function createServiceRequest(svc: OpsCommandServices, input: Creat
 }
 
 export interface CreateWorkOrderInput {
+  /** Send this job as a callback for an earlier, finished job (same store). */
+  callbackOfWorkOrderId?: OpsId;
   expectedRequestVersion?: number;
   shortName?: string;
   technicianNotes?: string;
@@ -711,6 +714,7 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
   }
   const store = await repository.getStore(input.organizationId, input.storeId);
   if (!store) throw new OpsDomainError("NOT_FOUND", "Store not found in organization");
+  if (input.callbackOfWorkOrderId) await assertCallbackPair(repository, input.organizationId, undefined, input.callbackOfWorkOrderId, input.storeId);
   if (input.requestId && input.pmOccurrenceId) throw new OpsDomainError("VALIDATION", "A work order cannot begin from both a store request and a PM occurrence");
   let sourceReviewTasks: WorkflowTask[] = [];
   let sourceRequest: ServiceRequest | undefined;
@@ -908,6 +912,7 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
   sourceReviewTasks.filter((task) => task.taskType === "review_issue" && ["open", "in_progress"].includes(task.status)).forEach((task) => {
     statements.push(...buildCompleteWorkflowTaskStatements({ task, actor: input.actor, occurredAt: now, ids, resolutionNote: `Impact review completed; converted to ${number}` }));
   });
+  if (input.callbackOfWorkOrderId) statements.push(...callbackStatements({ organizationId: input.organizationId, workOrderId: id, originalWorkOrderId: input.callbackOfWorkOrderId, source: "sent", status: "open", actor: input.actor, now }));
   statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: id, eventType: "work_order.created", actor: input.actor, occurredAt: now, payload: { technicianNotes: input.technicianNotes, estimatedMinutes: input.estimatedMinutes, confirmationDelay: input.confirmationDelay, requireConfirmation, confirmationMembershipId: input.confirmationMembershipId, internalReviewThresholdMinor: input.internalReviewThresholdMinor, internalReviewCurrency: input.internalReviewThresholdMinor === undefined ? undefined : input.currency ?? "USD", number, storeId: input.storeId, requestId: input.requestId, pmOccurrenceId: input.pmOccurrenceId, classified: Boolean(input.categoryKey), assetLinked: Boolean(input.assetId), repairPlanning: input.repairEstimateAmountMinor === undefined && input.estimatedServiceExtensionMonths === undefined ? undefined : { repairEstimateAmountMinor: input.repairEstimateAmountMinor, repairEstimateCurrency: input.repairEstimateAmountMinor === undefined ? undefined : input.repairEstimateCurrency ?? "USD", estimatedServiceExtensionMonths: input.estimatedServiceExtensionMonths } }, ids }));
   if (input.holdForVisit) statements.push(...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: id, eventType: "work_order.visit_hold_created", actor: input.actor, occurredAt: now, payload: { holdId: visitHoldId, posture: input.holdForVisit.posture, deadlineAt: input.holdForVisit.deadlineAt, internalReviewThresholdRecorded: input.holdForVisit.internalReviewThresholdAmountMinor !== undefined, thresholdMeaning: "internal_invoice_review_not_vendor_price_or_authorization" }, ids }));
   let initialAssignment: WorkOrderAssignment | undefined;

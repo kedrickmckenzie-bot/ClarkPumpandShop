@@ -5297,6 +5297,10 @@ export function buildCreateWorkOrderModel(
     })),
     requireConfirmation: (sourcePmOccurrence ? fixture.pmPlans.find(p => p.id === sourcePmOccurrence.planId)?.requireConfirmation : undefined) ?? fixture.workflowPolicies?.find(p => p.organizationId === session.organizationId && p.status === "active")?.requireConfirmationDefault ?? true,
     lifecycleAsOf: fixture.asOf,
+    callbackOf: (() => {
+      const original = fixture.workOrders.find((work) => work.organizationId === session.organizationId && work.id === first(query.callbackOf) && (work.resolvedAt ?? work.closedAt) && work.status !== "cancelled");
+      return original ? { id: original.id, number: original.number, problem: original.problem } : undefined;
+    })(),
     defaults: {
       vendorId: vendors.some(v=>v.id===first(query.vendor)) ? first(query.vendor) : undefined,
       priority: sourceRequest?.priority ?? "routine",
