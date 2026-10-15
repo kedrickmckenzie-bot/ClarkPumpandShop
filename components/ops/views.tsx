@@ -1,3 +1,4 @@
+import { StoreJump } from "./store-jump";
 import { ReviewRouteButton } from "@/components/workspace/review-routing";
 import { LiveSearchForm } from "./live-search-form";
 import type { ReactNode } from "react";
@@ -461,6 +462,7 @@ function ReviewQueueSurface({ model }: { model: ListPageViewModel }) {
                   <button type="submit">Search</button>
                 </LiveSearchForm>
               ) : <span className={styles.toolbarTitle}>Review queue</span>}
+              <StoreJump />
               <strong className={styles.resultSummary}>{model.resultSummary}</strong>
             </div>
             <FilterGroups filters={model.filters} />
@@ -696,6 +698,7 @@ export function ListSurface({ model, approvedWork, surface, searchParams, canMan
                   <button type="submit">Search</button>
                 </LiveSearchForm>
               ) : <span className={styles.toolbarTitle}>Records</span>}
+              <StoreJump />
               <strong className={styles.resultSummary}>{model.resultSummary}</strong>
             </div>
             <FilterGroups filters={model.filters} moreInUse={Boolean(searchParams.createdFrom || searchParams.createdThrough)} more={surface === "work-orders" ? (
@@ -822,6 +825,7 @@ export function ListView({ model }: { model: ListPageViewModel }) {
                   <button type="submit">Search</button>
                 </LiveSearchForm>
               ) : <span className={styles.toolbarTitle}>Records</span>}
+              <StoreJump />
               <strong className={styles.resultSummary}>{model.resultSummary}</strong>
             </div>
             <FilterGroups filters={model.filters} />
@@ -954,6 +958,7 @@ export function ProgramView({ model, beforeContent, compact = false }: { model: 
         <>
           {beforeContent}
           {compact ? <EquipmentSummary model={model} /> : null}
+          <StoreJump />
           <FilterGroups filters={model.filters} />
           <AppliedFilterBar filters={model.appliedFilters} clearFiltersHref={model.clearFiltersHref} />
           {!compact ? <MetricStrip metrics={model.metrics} heading="Explore the equipment register" description="Open a measure to see the exact equipment, stores, planning coverage, or lifecycle records behind it." /> : null}

@@ -2,7 +2,10 @@ import { InvoiceRecordWorkspace } from "@/components/workspace/invoice-record-wo
 import { invoiceRecordFromFixture } from "@/lib/ops/invoice-record-query";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// The store box reads the page address; static rendering has no router.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }), usePathname: () => "/app/invoices", useSearchParams: () => new URLSearchParams() }));
 import { InvoiceQueueWorkspace } from "@/components/workspace/invoice-queue-workspace";
 import { invoiceQueueFromFixture, type InvoiceQueueView } from "@/lib/ops/invoice-queue-query";
 import { buildNorthlinePresentationFixture } from "@/lib/ops/fixtures";

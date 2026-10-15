@@ -4,6 +4,18 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### "Jump to a store" on every record page — October 15, 2026
+
+**What was done.** The user asked for a way to search and jump to one store on every page except Trends (for example compliance records).
+- **One shared Store box** (`components/ops/store-jump.tsx`): type a store number, name or address, pick it, and the page shows only that store. It turns into a "Store 104 · Ridgeview  ✕ All stores" chip; the choice lives in the page link, so refresh, back and shared links keep it. Paging resets when the store changes.
+- **Where it appears:** Review, Work orders, Requests, Quotes, Service visits, Tasks, Equipment, Invoices, Warranties, PM, Spending and Compliance → Refrigerant. Compliance → Inspections and Repair or replace already had a store picker; Fuel tanks got its store search in the last pass; the Stores list is itself a store search. It is hidden where store doesn't apply (Trends, Vendors, Spend totals, Reports).
+- **Refrigerant** could not filter by store before; it can now.
+- The store-options lookup can now return one store by ID (only if it is in the person's scope), so the chip names the store.
+
+**Audit (100-store test company).** Checked each page: most already filtered by `?store=` behind the scenes (links from store pages used it) but had no box to type in. Now every one above has the box, and picking Store 104 left no other store on Work orders, Spending, Refrigerant, Equipment or PM. No sideways scroll on phone.
+
+**How it was tested.** Browser check on the 100-store test database; updated two test mocks for the new box. Full checks: see the commit.
+
 ### Built for 70–100 stores: paged charts and lists — October 15, 2026
 
 **What was done.** The user pointed out real customers may have 70–100 stores, so charts and lists can't show everything at once.

@@ -11,7 +11,7 @@ import { jobShortName, suggestShortName } from "@/lib/ops/short-name";
 import { ReviewDecide } from "@/components/workspace/review-decide";
 import type { OpsSqlDriver, SqlRow } from "@/lib/ops/sql-driver";
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }), usePathname: () => "/app/action-center", useSearchParams: () => new URLSearchParams() }));
 
 it("splits Review into new, stuck and done the same way in SQL and the fixture", async () => {
   const fixture = buildNorthlinePresentationFixture(), org = fixture.organizations[0].id;

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { StoreJump } from "@/components/ops/store-jump";
 import { loadOperatorSession } from "@/app/app/_data/operator-loader";
 import { getServerOpsRepository } from "@/lib/server/ops-repository-provider";
 import { internalDispatchScope } from "@/lib/server/internal-dispatch-context";
@@ -39,13 +40,13 @@ export function ComplianceTabs({ active }: { active: "inspections" | "refrigeran
 }
 
 /** Every refrigerant number on this page is worked out from the equipment facts and the refrigerant log. */
-export default async function RefrigerantCompliance({ searchParams }: { searchParams: Promise<{ view?: string; offset?: string }> }) {
+export default async function RefrigerantCompliance({ searchParams }: { searchParams: Promise<{ view?: string; offset?: string; store?: string }> }) {
   const query = await searchParams;
   const session = await loadOperatorSession(), repository = await getServerOpsRepository();
   const scope = session.role === "technician" ? await internalDispatchScope(repository, session) : session;
   const organization = await repository.getOrganization(session.organizationId);
   const today = civilDate(new Date().toISOString(), organization?.timeZone ?? "America/New_York"), year = Number(today.slice(0, 4));
-  const equipment = await repository.listRefrigerantEquipment(scope);
+  const equipment = (await repository.listRefrigerantEquipment(scope)).filter((row) => !query.store || row.storeId === query.store);
   const events = await repository.listRefrigerantEvents(session.organizationId, equipment.filter((row) => row.refrigerant).map((row) => row.assetId));
   const byAsset = new Map<string, RefrigerantEvent[]>();
   for (const event of events) byAsset.set(event.assetId, [...(byAsset.get(event.assetId) ?? []), event]);
@@ -73,7 +74,7 @@ export default async function RefrigerantCompliance({ searchParams }: { searchPa
   const view = requested ?? (inView.open.length ? "open" : "covered");
   const offset = Math.min(100_000, Math.max(0, Math.floor(Number(query.offset) || 0)));
   const shown = inView[view].slice(offset, offset + PAGE);
-  const href = (next: RefrigerantView, start = 0) => `/app/compliance/refrigerant?${new URLSearchParams({ view: next, ...(start ? { offset: String(start) } : {}) })}`;
+  const href = (next: RefrigerantView, start = 0) => `/app/compliance/refrigerant?${new URLSearchParams({ view: next, ...(query.store ? { store: query.store } : {}), ...(start ? { offset: String(start) } : {}) })}`;
   const status = (row: Row) => row.clock
     ? <span className={`${styles.tag} ${row.clock.status.endsWith("overdue") ? styles.danger : ""}`}>{CLOCK_LABELS[row.clock.status]}</span>
     : row.missing ? <span className={styles.tag}>{row.missing === "charge" ? "Add full charge" : "Add refrigerant"}</span>
@@ -89,6 +90,7 @@ export default async function RefrigerantCompliance({ searchParams }: { searchPa
         </div>
       </header>
       <ComplianceTabs active="refrigerant" />
+      <StoreJump />
       <div className={styles.metrics}>
         <Link className={styles.metric} href={href("open")}>Leak repairs open<strong>{inView.open.length}</strong>{overdue ? <small className={own.over}>{overdue} overdue</small> : null}</Link>
         <Link className={styles.metric} href={href("covered")}>Covered by the rules<strong>{inView.covered.length}</strong></Link>

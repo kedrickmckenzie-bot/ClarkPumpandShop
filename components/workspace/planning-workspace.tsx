@@ -1,3 +1,4 @@
+import { StoreJump } from "@/components/ops/store-jump";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { WorkReviewButton } from "./work-review";
@@ -142,6 +143,7 @@ function Filters({ model }: { model: ProgramPageViewModel }) {
   const chosen = model.filters.map((filter) => filter.options.find((option) => option.selected)?.label).filter(Boolean).join(" · ");
   // Phones: the filters fold behind one line that names the current choices.
   return <>
+    <StoreJump />
     <details className={styles.phoneFilters}><summary><Filter size={15} aria-hidden="true" />Filters<small>{chosen}</small></summary><FilterRows model={model} /></details>
     <div className={styles.desktopFilters}><FilterRows model={model} /></div>
   </>;

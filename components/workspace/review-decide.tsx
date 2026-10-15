@@ -1,3 +1,4 @@
+import { StoreJump } from "@/components/ops/store-jump";
 import Link from "next/link";
 import { ReviewRouteButton } from "./review-routing";
 import { plainNextAction } from "@/lib/ops/dispatch-calendar";
@@ -58,6 +59,7 @@ export function ReviewDecide({ sections, allOpenCount, asOf, canRoute, storeQuer
       </div>
       <Link className={styles.allLink} href={href({})}>See everything open ({allOpenCount}) →</Link>
     </header>
+    <StoreJump />
     {sections.map(section => <section key={section.stage} className={styles.section} aria-label={copy[section.stage].title}>
       <div className={styles.sectionHead}>
         <h2>{copy[section.stage].title} ({section.totalCount})</h2>
