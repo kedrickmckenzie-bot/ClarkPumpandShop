@@ -25,6 +25,8 @@ export function ComplianceCreateForm({ stores, defaultStoreId, teamOwners = {}, 
     <input type="hidden" name="action" value="create" />
     <input type="hidden" name="submissionId" value={submissionId} />
     {template ? <input type="hidden" name="program" value={template.group} /> : null}
+    {template?.checklist?.length ? <input type="hidden" name="checklist" value={JSON.stringify(template.checklist)} /> : null}
+    {template?.checklist?.length ? <div className={styles.teamOwners}><strong>Asks Yes or No each time:</strong><ul>{template.checklist.map((item) => <li key={item}>{item}</li>)}</ul></div> : null}
     <label>Inspection or renewal name<input name="name" required maxLength={160} placeholder="e.g. Fire extinguisher inspection" defaultValue={template?.name} /></label>
     <label>Type<select name="kind" defaultValue={template?.kind ?? "inspection"}><option value="inspection">Inspection</option><option value="permit">Permit / renewal</option></select></label>
 

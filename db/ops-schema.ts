@@ -926,7 +926,7 @@ export const opsComplianceSchedules = sqliteTable("ops_compliance_schedules", {
  name:text("name").notNull(),instructions:text("instructions").notNull(),requirementSource:text("requirement_source").notNull(),evidenceLabel:text("evidence_label").notNull(),assetId:text("asset_id"),kind:text("kind").notNull(),escalationDays:integer("escalation_days").notNull(),escalationTo:text("escalation_to").notNull(),firstDueDate:text("first_due_date").notNull(),
  intervalUnit:text("interval_unit").notNull(),intervalCount:integer("interval_count").notNull(),leadDays:integer("lead_days").notNull(),
  handler:text("handler").notNull(),membershipId:text("membership_id"),vendorId:text("vendor_id"),evidenceRequired:integer("evidence_required").notNull(),
- program:text("program"),status:text("status").notNull(),createdAt:text("created_at").notNull(),
+ program:text("program"),checklistJson:text("checklist_json"),status:text("status").notNull(),createdAt:text("created_at").notNull(),
 },t=>[
  uniqueIndex("idx_ops_compliance_org_id").on(t.organizationId,t.id),index("idx_ops_compliance_org_store").on(t.organizationId,t.storeId,t.id),
  foreignKey({columns:[t.organizationId,t.storeId],foreignColumns:[opsStores.organizationId,opsStores.id]}),

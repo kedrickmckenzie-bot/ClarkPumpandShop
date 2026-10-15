@@ -4,6 +4,16 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Tank checks: photo for leak detection, yes/no checks for walkthroughs — October 15, 2026
+
+**What was done.** The user asked whether one-click tank checks leave enough accountability. They don't for monthly leak detection: the monitor's result is the legal record (kept 1 year), and a tap alone can be faked.
+- **Monthly leak detection** requires a photo of the monitor screen or printout again. It can't be closed without one, and it asks one yes/no question: "Every tank and line shows a passing leak test this month".
+- **30-day and yearly walkthroughs** ask three yes/no checks each (spill buckets clean, no damage, monitor working; sumps clean, no damage, gauge sticks OK). A photo is optional, because the answers are the record.
+- **How the checks work.** Schedules can carry a checklist (`ops_compliance_schedules.checklist_json`, migration 0088). Both the in-app inspection form and the store's secure inspection link ask every check. All answers must be given, they are saved at the top of the result note with who and when, and any "No" saves the inspection as issues found (corrective work) whatever result was picked. Notes become optional when there are checks.
+- Ready-made schedules carry their checks; the fictional demo's monthly checks do too. Schedules already saved in a hosted preview keep their old settings (insert-only).
+
+**How it was tested.** New test for the checks: every answer is required, the answers go into the note, and any No means issues found. Full checks pass: seed, typecheck, lint, unit tests, e2e, build and Render build. Browser: on Store 108's monthly check, answering "No" saved it as "Corrective action needed".
+
 ### Monthly tank checks made one-click — October 15, 2026
 
 **What was done.** The user asked for whatever is easiest for c-stores. The tank monitor already keeps its own reports, so the ready-made "Monthly tank leak detection result" and "30-day tank walkthrough" schedules no longer require paperwork. The store marks the check passed, or failed (which opens a repair job), and a photo is optional. Everything else stays as built: yearly and 3-year contractor tests still require the tester's report. Applies to schedules made from now on.

@@ -17,6 +17,8 @@ export interface ComplianceTemplate {
   requirementSource: string;
   /** Who usually does it. */
   who: "team" | "vendor";
+  /** Yes/no checks asked each time; a "No" means issues were found. */
+  checklist?: string[];
 }
 
 export type ComplianceTemplateGroup = "ust" | "fire" | "kitchen" | "plumbing" | "fuel";
@@ -31,11 +33,14 @@ export const TEMPLATE_GROUPS: Record<ComplianceTemplateGroup, string> = {
 const UST = "EPA UST rule (40 CFR 280). Your state may be stricter; check your state UST program.";
 
 export const COMPLIANCE_TEMPLATES: readonly ComplianceTemplate[] = [
-  { key: "ust-monthly-leak-detection", group: "ust", name: "Monthly tank leak detection result", kind: "inspection", intervalUnit: "months", intervalCount: 1, leadDays: 7, evidenceLabel: "Optional: photo or printout of the tank monitor report", evidenceRequired: 0, who: "team",
-    instructions: "Look at the tank monitor: does every tank and line show a passing leak test this month? If yes, mark it passed. If anything failed or is missing, mark it failed: that opens a repair job, and call your tank contractor the same day. Keep the monitor's own reports; a photo here is optional.", requirementSource: UST },
+  { key: "ust-monthly-leak-detection", group: "ust", name: "Monthly tank leak detection result", kind: "inspection", intervalUnit: "months", intervalCount: 1, leadDays: 7, evidenceLabel: "Photo of the tank monitor screen or printout", evidenceRequired: 1, who: "team",
+    instructions: "Check that every tank and line shows a passing leak test this month and snap a photo of the monitor screen or printout. That photo is your record. If anything failed or is missing, say so: call your tank contractor the same day.", requirementSource: UST,
+    checklist: ["Every tank and line shows a passing leak test this month"] },
   { key: "ust-30-day-walkthrough", group: "ust", name: "30-day tank walkthrough", kind: "inspection", intervalUnit: "months", intervalCount: 1, leadDays: 7, evidenceLabel: "Optional: photos of anything wrong", evidenceRequired: 0, who: "team",
+    checklist: ["Spill buckets are clean and dry (no fuel, water or debris)", "Spill buckets have no cracks or damage", "Tank monitor shows no alarms and is working"],
     instructions: "Open each spill bucket: remove any fuel, water or debris and check for cracks. Check the tank monitor for alarms and that it is working. Mark it passed, or write down what you found.", requirementSource: UST },
-  { key: "ust-annual-walkthrough", group: "ust", name: "Yearly tank walkthrough", kind: "inspection", intervalUnit: "months", intervalCount: 12, leadDays: 30, evidenceLabel: "Walkthrough checklist", evidenceRequired: 1, who: "team",
+  { key: "ust-annual-walkthrough", group: "ust", name: "Yearly tank walkthrough", kind: "inspection", intervalUnit: "months", intervalCount: 12, leadDays: 30, evidenceLabel: "Optional: photos of anything wrong", evidenceRequired: 0, who: "team",
+    checklist: ["Tank-top and under-dispenser sumps are clean and dry", "Sumps have no cracks, damage or leaks", "Hand-held leak detection equipment (gauge sticks) is in good shape"],
     instructions: "Open the tank-top and under-dispenser sumps: check for damage, leaks, liquid or debris. Check any hand-held leak detection equipment, such as tank gauge sticks.", requirementSource: UST },
   { key: "ust-annual-equipment-test", group: "ust", name: "Yearly leak detection equipment test", kind: "inspection", intervalUnit: "months", intervalCount: 12, leadDays: 30, evidenceLabel: "Tester's report", evidenceRequired: 1, who: "vendor",
     instructions: "A qualified tester checks the tank monitor, probes and sensors, and the automatic line leak detectors.", requirementSource: UST },

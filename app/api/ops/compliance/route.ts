@@ -5,6 +5,7 @@ import { createComplianceSchedulesForStores,storeTeamOwner,type ScheduleAssignme
 import { uploadInspectionFiles as uploadFiles } from "@/lib/server/inspection-uploads";
 import { createInspectionLink } from "@/lib/ops/inspection-access";
 import type { ComplianceSchedule } from "@/lib/ops/compliance-types";
+import { checklistAnswers, checklistJson, parseChecklist } from "@/lib/ops/compliance-checklist";
 export async function POST(request:Request) {
  let back="/app/compliance";
  try {
@@ -28,7 +29,7 @@ export async function POST(request:Request) {
    const who=formText(form,"assignment");
    const assignment:ScheduleAssignment=who==="team"?{kind:"team"}:who==="vendor"?{kind:"vendor",vendorId:formText(form,"assignmentVendorId",{required:true,max:200})}:formText(form,"handler")==="vendor"?{kind:"vendor",vendorId:formText(form,"vendorId",{required:true,max:200})}:{kind:"person",membershipId:formText(form,"membershipId",{required:true,max:200})};
    const templates=await uploadFiles(form,"templates",org,`schedule-${crypto.randomUUID()}`,session.accessMode==="preview");
-   const schedules=await createComplianceSchedulesForStores(svc,{organizationId:org,name:formText(form,"name",{required:true,max:160}),program:formText(form,"program",{max:20})||undefined,instructions:formText(form,"instructions",{max:4000}),requirementSource:formText(form,"requirementSource",{max:500}),evidenceLabel:formText(form,"evidenceLabel",{required:true,max:300}),assetId:assets[0]?.id,kind:formText(form,"kind") as ComplianceSchedule["kind"],firstDueDate:formText(form,"firstDueDate"),intervalUnit:formText(form,"intervalUnit") as ComplianceSchedule["intervalUnit"],intervalCount:Number(form.get("intervalCount")),leadDays:Number(form.get("leadDays")),evidenceRequired:Number(form.get("evidenceRequired")),escalationDays:Number(form.get("escalationDays")),escalationTo:formText(form,"escalationTo",{required:true,max:160})},storeIds,assignment,actor,templates,formText(form,"submissionId",{max:64})||undefined);
+   const schedules=await createComplianceSchedulesForStores(svc,{organizationId:org,name:formText(form,"name",{required:true,max:160}),program:formText(form,"program",{max:20})||undefined,checklistJson:checklistJson(formText(form,"checklist",{max:3000})||undefined),instructions:formText(form,"instructions",{max:4000}),requirementSource:formText(form,"requirementSource",{max:500}),evidenceLabel:formText(form,"evidenceLabel",{required:true,max:300}),assetId:assets[0]?.id,kind:formText(form,"kind") as ComplianceSchedule["kind"],firstDueDate:formText(form,"firstDueDate"),intervalUnit:formText(form,"intervalUnit") as ComplianceSchedule["intervalUnit"],intervalCount:Number(form.get("intervalCount")),leadDays:Number(form.get("leadDays")),evidenceRequired:Number(form.get("evidenceRequired")),escalationDays:Number(form.get("escalationDays")),escalationTo:formText(form,"escalationTo",{required:true,max:160})},storeIds,assignment,actor,templates,formText(form,"submissionId",{max:64})||undefined);
    // Schedules are saved. Preparing their first work is a follow-up step: a failure is reported, not thrown.
    let failed=0;for(const schedule of schedules){try{failed+=(await runInspectionCycle(svc,org,schedule.id)).failed;}catch{failed+=1;}}
    const owners=assignment.kind==="team"?await teamOwnerSummary(repository,org,schedules):"";
@@ -44,10 +45,14 @@ export async function POST(request:Request) {
   else if(action==="pause") {const status=formText(form,"scheduleStatus");if(status!=="active"&&status!=="paused")throw new OpsDomainError("VALIDATION","Choose a schedule status");await setComplianceScheduleStatus(svc,schedule,status,actor);}
   else if(action==="correction") {await createInspectionCorrection(svc,inspection,formText(form,"problem",{required:true,max:4000}),actor);}
   else if(action==="result") {
-   const status=formText(form,"status");if(!["performed","passed","action_needed"].includes(status)||status==="passed"&&!manage)throw new OpsDomainError("FORBIDDEN","Only a maintenance reviewer can close an inspection.");
+   const schedule=await repository.getComplianceSchedule(org,inspection.scheduleId);
+   const checks=checklistAnswers(parseChecklist(schedule?.checklistJson),form,formText(form,"note",{max:4000}));
+   // A "No" on any check means issues were found, whatever result was picked.
+   const status=checks.anyNo?"action_needed":formText(form,"status");if(!["performed","passed","action_needed"].includes(status)||status==="passed"&&!manage)throw new OpsDomainError("FORBIDDEN","Only a maintenance reviewer can close an inspection.");
+   if(!checks.note.trim())throw new OpsDomainError("VALIDATION","Add a short note about what you found.");
    if(inspection.version!==Number(form.get("version")))throw new OpsDomainError("CONFLICT","Inspection changed. Refresh before saving.");
    const storedFiles=await uploadFiles(form,"attachments",org,id,session.accessMode==="preview");
-   await recordInspectionResult(svc,{organizationId:org,inspectionId:id,version:inspection.version,createCorrection:form.get("createCorrection")==="on",status:status as "performed"|"passed"|"action_needed",note:formText(form,"note",{required:true,max:4000}),performedDate:formText(form,"performedDate"),documentExpiresOn:formText(form,"documentExpiresOn")||undefined,files:storedFiles},actor);
+   await recordInspectionResult(svc,{organizationId:org,inspectionId:id,version:inspection.version,createCorrection:form.get("createCorrection")==="on",status:status as "performed"|"passed"|"action_needed",note:checks.note.slice(0,4000),performedDate:formText(form,"performedDate"),documentExpiresOn:formText(form,"documentExpiresOn")||undefined,files:storedFiles},actor);
   }else throw new OpsDomainError("VALIDATION","Unknown inspection action");
   return relativeRedirect303(`${back}?notice=Inspection+updated`);
  }catch(error){if(error instanceof OpsDomainError&&["VALIDATION","CONFLICT"].includes(error.code))return relativeRedirect303(`${back}?error=${encodeURIComponent(error.message)}`);return opsApiError(error);}

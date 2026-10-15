@@ -610,6 +610,13 @@
       "when": 1791920152542,
       "tag": "0086_little_saracen",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "6",
+      "when": 1792029601526,
+      "tag": "0087_zippy_iron_fist",
+      "breakpoints": true
     }
   ]
 }

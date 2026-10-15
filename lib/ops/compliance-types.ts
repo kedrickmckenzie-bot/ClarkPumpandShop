@@ -7,6 +7,8 @@ export interface ComplianceSchedule {
   evidenceRequired:number; status:"active"|"paused"; createdAt:string;
   /** Set by a ready-made schedule, such as "ust" for fuel tanks, so related checks can be listed together. */
   program?:string;
+  /** Yes/no checks asked on each inspection, as a JSON array of short sentences. */
+  checklistJson?:string;
 }
 export interface Inspection {
   masterDocumentsJson?:string;

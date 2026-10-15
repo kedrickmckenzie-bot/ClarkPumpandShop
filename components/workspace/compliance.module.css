@@ -45,3 +45,8 @@
 
 /* A quiet text button inside a table cell (the page button style is a filled blue button). */
 .page .textButton{display:inline;padding:2px 0;border:0;background:none!important;color:#1d4ed8!important;font-size:13px;font-weight:600;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.checklist{display:grid;gap:10px;margin:0;padding:12px 14px;border:1px solid #dbe1e9;border-radius:6px;background:#f8fafc}
+.checklist legend{font-weight:650;padding:0 4px}
+.checkRow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px 16px;align-items:center}
+.page .checkRow label{display:flex;align-items:center;gap:6px;font-weight:600}
+@media(max-width:600px){.checkRow{grid-template-columns:auto auto}.checkRow span{grid-column:1/-1}}

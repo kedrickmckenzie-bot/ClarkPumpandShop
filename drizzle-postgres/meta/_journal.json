@@ -610,6 +610,13 @@
       "when": 1791920156123,
       "tag": "0086_chunky_molly_hayes",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1792029604942,
+      "tag": "0087_low_inertia",
+      "breakpoints": true
     }
   ]
 }

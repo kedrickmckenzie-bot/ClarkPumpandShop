@@ -1,0 +1,1 @@
+ALTER TABLE "ops_compliance_schedules" ADD COLUMN "checklist_json" text;

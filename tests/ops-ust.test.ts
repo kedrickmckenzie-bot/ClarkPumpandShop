@@ -76,3 +76,20 @@ describe("fuel tank operators and checks", () => {
     } finally { sql.close(); }
   }, 60_000);
 });
+
+describe("quick yes/no checks", () => {
+  it("needs every answer, puts them in the note and treats any No as issues found", async () => {
+    const { checklistAnswers, parseChecklist, checklistJson } = await import("@/lib/ops/compliance-checklist");
+    const items = parseChecklist(checklistJson(complianceTemplate("ust-30-day-walkthrough")!.checklist));
+    expect(items).toHaveLength(3);
+    const form = new FormData();
+    form.set("check-0", "yes"); form.set("check-1", "yes");
+    expect(() => checklistAnswers(items, form, "")).toThrow(/every check/);
+    form.set("check-2", "no");
+    const result = checklistAnswers(items, form, "Monitor shows a sump alarm");
+    expect(result.anyNo).toBe(true);
+    expect(result.note.split("\n")).toEqual([`Yes · ${items[0]}`, `Yes · ${items[1]}`, `No · ${items[2]}`, "Monitor shows a sump alarm"]);
+    expect(checklistAnswers([], new FormData(), "plain note")).toEqual({ note: "plain note", anyNo: false });
+    expect(complianceTemplate("ust-monthly-leak-detection")).toMatchObject({ evidenceRequired: 1, evidenceLabel: expect.stringMatching(/photo/i) });
+  });
+});
