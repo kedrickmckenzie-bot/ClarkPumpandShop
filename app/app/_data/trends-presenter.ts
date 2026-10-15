@@ -2084,12 +2084,12 @@ export function buildTrendsModel(
     if (order === 0) return left.label.localeCompare(right.label, undefined, { numeric: true });
     return driverDirection === "asc" ? order : -order;
   });
-  const driverPageSize = 15;
+  const driverPageSize = activeView === "stores" ? 25 : 15;
   const driverTotalPages = Math.max(1, Math.ceil(driverRows.length / driverPageSize));
   const driverPage = Number.isInteger(requestedDriverPage) ? Math.min(Math.max(requestedDriverPage, 1), driverTotalPages) : 1;
   const visibleDriverRows = driverRows.slice((driverPage - 1) * driverPageSize, driverPage * driverPageSize);
   const driverPagination = driverRows.length > driverPageSize
-    ? paginationModel(driverRows.length, driverPage, driverPageSize, (page) => `${trendHref({ view: "drivers", driverPage: String(page) }, { preserveEvidence: true })}#change-drivers`)
+    ? paginationModel(driverRows.length, driverPage, driverPageSize, (page) => `${trendHref({ view: activeView === "stores" ? "stores" : "drivers", driverPage: String(page) }, { preserveEvidence: true })}#change-drivers`)
     : undefined;
   const driverColumnLabel = breakdown === "category" ? "Service area" : breakdown === "profile" ? "Equipment type" : breakdown === "group" ? "Equipment group" : breakdown === "component" ? "Component" : breakdown === "vendor" ? "Vendor" : breakdown === "region" ? "Region" : "Store";
   const driverSortLinks: TrendAnalysisPageViewModel["drivers"]["sortLinks"] = ([
@@ -2661,8 +2661,14 @@ export function buildTrendsModel(
   // Built from the same driver rows and totals shown elsewhere, so the steps reconcile exactly.
   const breakdownNoun = driverDimensionLabel(breakdown);
   const bridge = additive && comparison !== "none" && currentHasData && baselineHasData ? (() => {
-    const movers = driverRows.filter((row) => row.changeValue !== undefined && row.changeValue !== 0)
-      .sort((left, right) => Math.abs(right.changeValue!) - Math.abs(left.changeValue!)).slice(0, 6);
+    // Biggest changes first, a page at a time; the "everything else" bar keeps each page adding up to the total.
+    const ranked = driverRows.filter((row) => row.changeValue !== undefined && row.changeValue !== 0)
+      .sort((left, right) => Math.abs(right.changeValue!) - Math.abs(left.changeValue!) || left.label.localeCompare(right.label));
+    const pageSize = 8, pages = Math.max(1, Math.ceil(ranked.length / pageSize));
+    const requestedPage = Number(first(query.changePage) ?? "1");
+    const page = Number.isInteger(requestedPage) ? Math.min(Math.max(requestedPage, 1), pages) : 1;
+    const movers = ranked.slice((page - 1) * pageSize, page * pageSize);
+    const pageHref = (value: number) => `${trendHref({ changePage: value > 1 ? String(value) : undefined })}#bridge-title`;
     const moved = movers.reduce((sum, row) => sum + row.changeValue!, 0);
     const other = currentValue - baselineValue - moved;
     const signed = (value: number) => `${value >= 0 ? "+" : "−"}${formatMetric(safeMetric, Math.abs(value), false, true)}`;
@@ -2674,8 +2680,9 @@ export function buildTrendsModel(
       endLink: { href: `${trendHref({ view: "records", detailKind: "current", detailMonth: undefined, driverBreakdown: undefined, driverValue: undefined })}#source-records`, label: "Open selected-period records" },
       steps: [
         ...movers.map((row) => ({ id: row.id, label: row.label, value: row.changeValue!, formatted: signed(row.changeValue!), link: { href: `${trendHref({ view: "records", detailKind: "both", detailMonth: undefined, driverBreakdown: breakdown, driverValue: row.id })}#source-records`, label: `Open ${row.label} records for both periods` } })),
-        ...(Math.abs(other) >= 0.5 ? [{ id: "other", label: `All other ${breakdownNoun}`, value: other, formatted: signed(other), link: { href: `${trendHref({ view: "records", detailKind: "both", detailMonth: undefined, driverBreakdown: breakdown, driverValue: `${OTHER_DRIVERS_PREFIX}${movers.map((row) => encodeURIComponent(row.id)).join(",")}` })}#source-records`, label: `Open records for all other ${breakdownNoun} in both periods` } }] : []),
+        ...(Math.abs(other) >= 0.5 ? [{ id: "other", label: page > 1 ? `Every other ${breakdownNoun.replace(/s$/u, "")}` : `All other ${breakdownNoun}`, value: other, formatted: signed(other), link: { href: `${trendHref({ view: "records", detailKind: "both", detailMonth: undefined, driverBreakdown: breakdown, driverValue: `${OTHER_DRIVERS_PREFIX}${movers.map((row) => encodeURIComponent(row.id)).join(",")}` })}#source-records`, label: `Open records for all other ${breakdownNoun} in both periods` } }] : []),
       ],
+      page: pages > 1 ? { page, pages, shownLabel: `${(page - 1) * pageSize + 1}–${(page - 1) * pageSize + movers.length} of ${ranked.length} ${breakdownNoun} that changed`, previousHref: page > 1 ? pageHref(page - 1) : undefined, nextHref: page < pages ? pageHref(page + 1) : undefined } : undefined,
     };
   })() : undefined;
   // Heat map: each row a store (or the selected breakdown), each column a month, darker = more.
@@ -2831,6 +2838,10 @@ export function buildTrendsModel(
       sampleLabel: `${driverRows.length} ${breakdownLabels[breakdown]}${driverRows.length === 1 ? "" : "s"}`,
       sortLinks: driverSortLinks,
       pagination: driverPagination,
+      quickSorts: additive && comparison !== "none" ? ([["change", "desc", "Biggest increases"], ["change", "asc", "Biggest decreases"], ["current", "desc", "Highest now"], ["segment", "asc", "A to Z"]] as const).map(([sort, direction, label]) => ({
+        label, active: driverSort === sort && driverDirection === direction,
+        href: `${trendHref({ view: activeView === "stores" ? "stores" : "drivers", driverSort: sort, driverDirection: direction, driverPage: undefined })}#change-drivers`,
+      })) : undefined,
       rows: visibleDriverRows,
     },
     benchmark: {

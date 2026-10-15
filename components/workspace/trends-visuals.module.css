@@ -62,3 +62,5 @@ a.cell:hover, a.cell:focus-visible { outline: 2px solid #0f172a; outline-offset:
   .changeRow { grid-template-columns: minmax(84px, 110px) 1fr auto; gap: 8px; padding: 6px 4px; }
   .storyList li { font-size: 15px; }
 }
+.bridgePages { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding-top: 10px; border-top: 1px solid #e5e9ef; font-size: 14px; color: #475569; }
+.bridgePages a { color: #1d4ed8; font-weight: 700; text-decoration: none; white-space: nowrap; }

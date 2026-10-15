@@ -42,6 +42,11 @@ export function ChangeBridge({ bridge, metricLabel }: { bridge: TrendBridgeViewM
         </Link>
       </li>)}
     </ol>
+    {bridge.page ? <nav className={styles.bridgePages} aria-label="More rows">
+      {bridge.page.previousHref ? <Link href={bridge.page.previousHref}>← Bigger changes</Link> : <span />}
+      <span>{bridge.page.shownLabel}</span>
+      {bridge.page.nextHref ? <Link href={bridge.page.nextHref}>Smaller changes →</Link> : <span />}
+    </nav> : null}
     <p className={styles.note}>The rows add up exactly to the change in the total.</p>
   </section>;
 }

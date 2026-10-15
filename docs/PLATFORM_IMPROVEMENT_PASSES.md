@@ -4,6 +4,19 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Built for 70–100 stores: paged charts and lists — October 15, 2026
+
+**What was done.** The user pointed out real customers may have 70–100 stores, so charts and lists can't show everything at once.
+- **Trends "Where the change came from"** now pages: 8 stores (or groups) per page, biggest changes first, with "Bigger changes / Smaller changes" and "17–24 of 100 stores that changed". An "every other store" bar keeps each page adding up exactly to the total change.
+- **Trends Stores tab:** 25 per page, page links stay on Stores (they used to jump to Overview), and one-click orderings: Biggest increases, Biggest decreases, Highest now, A to Z.
+- **Spending page "by store" (and every other "by X" chart there):** top 10, "Showing the top 10 of 100 stores. Total includes all.", and "Rank all 100 stores" opens the paged store list sorted by cost. Totals still include every store; the donut only appears when every row is on screen.
+- **Fuel tanks:** opens on stores needing attention (missing operator, expired or expiring training), with "All stores", a store search and pages of 25. The store dropdown became a type-to-find box. It also now counts every store, not just the first 100.
+- **Vendor scorecards and in-house trends:** "the jobs behind this number" lists show 50 at a time.
+
+**Double-check at 100 stores.** Loaded a local test database with the 15 demo stores plus 85 made-up ones (about 5,400 work orders) and opened every main page as a manager. Every page loaded in under 2 seconds. Already fine: Overview (top 5 + view all), heat map (top 15 + all), work orders, requests, visits, equipment, invoices, compliance and the store list (25 per page with search). Fixed above: change chart, Stores tab paging, Spending by store, Fuel tanks, scorecard job lists.
+
+**How it was tested.** New test with a 100-store company: the change chart pages through every store once, each page adds up, and Stores-tab paging stays on Stores. Scorecard test now follows every page. Full checks: see the commit.
+
 ### In-house spend, in-house vs vendors trends, and a simpler Trends page — October 15, 2026
 
 **What was done.** The user asked for rough in-house cost trends from accounting totals, an in-house trend page, and Trends that are easy to use.

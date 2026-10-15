@@ -445,3 +445,6 @@
 .peerDetails { border: 1px solid var(--border); border-radius: 8px; background: #fff; }
 .peerDetails > summary { padding: 14px 16px; cursor: pointer; font-weight: 700; color: #1d4ed8; }
 .peerDetails[open] > summary { border-bottom: 1px solid #e5e9ef; }
+.quickSorts { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 16px; border-bottom: 1px solid #e5e9ef; }
+.quickSorts a { padding: 6px 12px; border: 1px solid #c6ced9; border-radius: 999px; color: #1d4ed8; font-size: 14px; font-weight: 650; text-decoration: none; background: #fff; }
+.quickSorts a[aria-current] { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }

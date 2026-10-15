@@ -68,6 +68,11 @@ function Drill({ drill }: { drill: ScorecardDrill }) {
         <td data-label="Result"><span className={row.tone === "good" ? styles.pillGood : row.tone === "bad" ? styles.pillBad : styles.pill}>{row.result}</span></td>
       </tr>)}</tbody>
     </table></div> : <p className={styles.empty}>No jobs count toward this yet.</p>}
+    {drill.page ? <nav className={styles.drillPages} aria-label="Job pages">
+      {drill.page.previousHref ? <Link href={drill.page.previousHref} scroll={false}>← Previous</Link> : <span />}
+      <span>{drill.page.label}</span>
+      {drill.page.nextHref ? <Link href={drill.page.nextHref} scroll={false}>Next →</Link> : <span />}
+    </nav> : null}
   </section>;
 }
 

@@ -169,45 +169,63 @@ export default async function InHouseTrends({ session, query }: { session: Opera
         <p className={styles.note}>Repairs only (planned maintenance left out). Jobs both sides worked on count for neither. Differences are worth a look, not proof.</p>
       </section>
 
-      {show ? <Records ctx={ctx} show={show} categoryName={categoryName} window={window} closeHref={`/app/trends?${new URLSearchParams(base)}`} /> : null}
+      {show ? <Records ctx={ctx} show={show} categoryName={categoryName} window={window} closeHref={`/app/trends?${new URLSearchParams(base)}`} page={Number(one(query.page)) || 1} pageHref={(value) => link({ show, page: String(value) })} /> : null}
     </div>
   );
 }
 
-function Records({ ctx, show, categoryName, window, closeHref }: { ctx: ReportContext; show: string; categoryName: (key?: string) => string; window: Range; closeHref: string }) {
+const PAGE = 50;
+
+function Records({ ctx, show, categoryName, window, closeHref, page, pageHref }: { ctx: ReportContext; show: string; categoryName: (key?: string) => string; window: Range; closeHref: string; page: number; pageHref: (page: number) => string }) {
   const [kind, a, b, c] = show.split(":");
   const valid = (value?: string) => Boolean(value && /^\d{4}-\d{2}-\d{2}$/u.test(value));
-  let title = "", body: React.ReactNode = null;
+  let title = "", head: string[] = [], rows: Array<{ key: string; cells: React.ReactNode[] }> = [];
   const jobLink = (job: JobFact) => <><Link href={`/app/work-orders/${encodeURIComponent(job.id)}`}>{job.number}</Link><small>{job.problem}</small></>;
   if (kind === "vendor-cost" && valid(a) && valid(b)) {
     const range = { from: a!, to: b! };
     const jobs = ctx.jobs.map((job) => ({ job, cost: costIn(job, range, "vendor") })).filter((row) => row.cost !== 0).sort((x, y) => y.cost - x.cost);
     title = `Vendor costs · ${rangeLabel(range)} · ${money(jobs.reduce((sum, row) => sum + row.cost, 0))}`;
-    body = <table className={styles.table}><thead><tr><th>Work order</th><th>Store</th><th>Vendor</th><th className={styles.num}>Cost in these dates</th></tr></thead><tbody>{jobs.map(({ job, cost }) => <tr key={job.id}><td data-label="Work order">{jobLink(job)}</td><td data-label="Store">{job.storeName}</td><td data-label="Vendor">{job.vendorName ?? "—"}</td><td data-label="Cost" className={styles.num}>{money(cost)}</td></tr>)}</tbody></table>;
+    head = ["Work order", "Store", "Vendor", "Cost in these dates"];
+    rows = jobs.map(({ job, cost }) => ({ key: job.id, cells: [jobLink(job), job.storeName, job.vendorName ?? "—", money(cost)] }));
   } else if ((kind === "done" && (a === "in_house" || a === "vendor") && valid(b) && valid(c)) || (kind === "no-cost" && valid(a) && valid(b))) {
     const range = kind === "done" ? { from: b!, to: c! } : { from: a!, to: b! };
-    const jobs = ctx.jobs.filter((job) => !job.pm && completedIn(job, range) && (kind === "done" ? job.provider === a : job.provider === "vendor" && !job.costs.some((line) => line.provider === "vendor")));
+    const jobs = ctx.jobs.filter((job) => !job.pm && completedIn(job, range) && (kind === "done" ? job.provider === a : job.provider === "vendor" && !job.costs.some((line) => line.provider === "vendor")))
+      .sort((x, y) => y.completedAt!.localeCompare(x.completedAt!));
     title = kind === "done" ? `Repairs done ${a === "vendor" ? "by vendors" : "in-house"} · ${rangeLabel(range)} · ${jobs.length}` : `Vendor jobs with no cost yet · ${rangeLabel(range)} · ${jobs.length}`;
-    body = <table className={styles.table}><thead><tr><th>Work order</th><th>Store</th><th>Equipment type</th><th>Done</th><th>{a === "in_house" ? "Technician" : "Vendor"}</th></tr></thead><tbody>{jobs.map((job) => <tr key={job.id}><td data-label="Work order">{jobLink(job)}</td><td data-label="Store">{job.storeName}</td><td data-label="Type">{categoryName(job.category)}</td><td data-label="Done">{day(job.completedAt!.slice(0, 10))}</td><td data-label="Who">{a === "in_house" ? job.techName ?? "—" : job.vendorName ?? "—"}</td></tr>)}</tbody></table>;
+    head = ["Work order", "Store", "Equipment type", "Done", a === "in_house" ? "Technician" : "Vendor"];
+    rows = jobs.map((job) => ({ key: job.id, cells: [jobLink(job), job.storeName, categoryName(job.category), day(job.completedAt!.slice(0, 10)), a === "in_house" ? job.techName ?? "—" : job.vendorName ?? "—"] }));
   } else if (kind === "hours" && valid(a) && valid(b)) {
     const range = { from: a!, to: b! };
     const visits = teamVisits(ctx, range);
     const covered = new Map<string, JobFact[]>();
-    const linked = ctx.fixture.siteVisitWorkOrders.filter((row) => row.organizationId === ctx.organizationId);
     const jobById = new Map(ctx.jobs.map((job) => [job.id, job]));
-    for (const row of linked) { const job = jobById.get(row.workOrderId); if (job) covered.set(row.visitId, [...(covered.get(row.visitId) ?? []), job]); }
+    for (const row of ctx.fixture.siteVisitWorkOrders.filter((link) => link.organizationId === ctx.organizationId)) { const job = jobById.get(row.workOrderId); if (job) covered.set(row.visitId, [...(covered.get(row.visitId) ?? []), job]); }
     title = `Team visits · ${rangeLabel(range)} · ${hours(visits.reduce((sum, visit) => sum + (visit.observedDurationSeconds ?? 0), 0))}`;
-    body = <table className={styles.table}><thead><tr><th>Checked in</th><th>Store</th><th>Technician</th><th className={styles.num}>On site</th><th>Work orders</th></tr></thead><tbody>{visits.map((visit) => <tr key={visit.id}><td data-label="Checked in">{formatOperationsDate(visit.checkedInAt, "America/New_York")}</td><td data-label="Store">{ctx.storeLabel(visit.storeId)}</td><td data-label="Technician">{ctx.personName(visit.internalMembershipId)}</td><td data-label="On site" className={styles.num}>{visit.observedDurationSeconds ? hours(visit.observedDurationSeconds) : "Still on site or not checked out"}</td><td data-label="Work orders">{(covered.get(visit.id) ?? []).map((job) => <Link key={job.id} href={`/app/work-orders/${encodeURIComponent(job.id)}`}>{job.number} </Link>)}</td></tr>)}</tbody></table>;
+    head = ["Checked in", "Store", "Technician", "On site", "Work orders"];
+    rows = [...visits].reverse().map((visit) => ({ key: visit.id, cells: [formatOperationsDate(visit.checkedInAt, "America/New_York"), ctx.storeLabel(visit.storeId), ctx.personName(visit.internalMembershipId), visit.observedDurationSeconds ? hours(visit.observedDurationSeconds) : "Not checked out", (covered.get(visit.id) ?? []).map((job) => <Link key={job.id} href={`/app/work-orders/${encodeURIComponent(job.id)}`}>{job.number} </Link>)] }));
   } else if (kind === "quality" && (a === "in_house" || a === "vendor") && b) {
-    const rows: QualityJob[] = repairQuality(ctx, window, a, b === "all" ? undefined : b).jobs;
+    const quality: QualityJob[] = repairQuality(ctx, window, a, b === "all" ? undefined : b).jobs;
     const yesNo = (value?: boolean) => value === undefined ? "—" : value ? "Yes" : "No";
-    title = `${a === "vendor" ? "Vendor" : "In-house"} repairs · ${b === "all" ? "All equipment" : categoryName(b === "unclassified" ? undefined : b)} · ${rows.length}`;
-    body = <table className={styles.table}><thead><tr><th>Work order</th><th>Store</th><th>Fixed first visit</th><th>Broke again in 30 days</th><th className={styles.num}>Time to fix</th></tr></thead><tbody>{rows.map((row) => <tr key={row.job.id}><td data-label="Work order">{jobLink(row.job)}</td><td data-label="Store">{row.job.storeName}</td><td data-label="Fixed first visit">{yesNo(row.firstVisitFixed)}</td><td data-label="Broke again">{yesNo(row.brokeAgain)}</td><td data-label="Time to fix" className={styles.num}>{days(row.days)}</td></tr>)}</tbody></table>;
+    title = `${a === "vendor" ? "Vendor" : "In-house"} repairs · ${b === "all" ? "All equipment" : categoryName(b === "unclassified" ? undefined : b)} · ${quality.length}`;
+    head = ["Work order", "Store", "Fixed first visit", "Broke again in 30 days", "Time to fix"];
+    rows = quality.map((row) => ({ key: row.job.id, cells: [jobLink(row.job), row.job.storeName, yesNo(row.firstVisitFixed), yesNo(row.brokeAgain), days(row.days)] }));
   } else return null;
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE)), current = Math.min(Math.max(1, page), pages);
+  const shown = rows.slice((current - 1) * PAGE, current * PAGE);
   return (
     <section className={styles.panel} id="records" aria-labelledby="records-title">
       <div className={styles.recordsHead}><h2 id="records-title">{title}</h2><Link href={closeHref}>Close</Link></div>
-      <div className={styles.scroll}>{body}</div>
+      <div className={styles.scroll}>
+        <table className={styles.table}>
+          <thead><tr>{head.map((label, index) => <th key={label} className={index === head.length - 1 && kind !== "hours" && kind !== "done" && kind !== "no-cost" ? styles.num : undefined}>{label}</th>)}</tr></thead>
+          <tbody>{shown.length ? shown.map((row) => <tr key={row.key}>{row.cells.map((cell, index) => <td key={head[index]} data-label={head[index]} className={index === head.length - 1 && kind !== "hours" && kind !== "done" && kind !== "no-cost" ? styles.num : undefined}>{cell}</td>)}</tr>) : <tr><td colSpan={head.length}>Nothing here.</td></tr>}</tbody>
+        </table>
+      </div>
+      {pages > 1 ? <nav className={styles.pager} aria-label="Pages">
+        {current > 1 ? <Link href={pageHref(current - 1)}>← Previous</Link> : <span />}
+        <span>{(current - 1) * PAGE + 1}–{(current - 1) * PAGE + shown.length} of {rows.length}</span>
+        {current < pages ? <Link href={pageHref(current + 1)}>Next →</Link> : <span />}
+      </nav> : null}
     </section>
   );
 }

@@ -682,6 +682,8 @@ function rollingMonthKeys(asOf: string, count = 12): string[] {
 }
 
 
+const BREAKDOWN_LIMIT = 10;
+
 function costBreakdown(
   title: string,
   values: Map<string, number>,
@@ -693,16 +695,21 @@ function costBreakdown(
     sourceHref?: string;
     sourceLabel?: string;
     amountLabel?: string;
+    /** What the rows are, for "Showing 10 of 100 stores". */
+    noun?: string;
   } = {},
 ): BreakdownViewModel {
   const entries = [...values.entries()].sort((a, b) => b[1] - a[1]);
   const total = entries.reduce((sum, [, value]) => sum + value, 0);
+  // A chart shows the biggest few; the link opens the full ranked list. The total always includes every row.
   return {
     id: title.toLocaleLowerCase("en-US").replace(/\W+/g, "-"),
     title,
     description: options.description,
     totalLabel: money(total),
-    segments: entries.map(([key, value], index) => ({
+    totalValue: total,
+    coverageLabel: entries.length > BREAKDOWN_LIMIT ? `Showing the top ${BREAKDOWN_LIMIT} of ${entries.length} ${options.noun ?? "groups"}. Total includes all.` : undefined,
+    segments: entries.slice(0, BREAKDOWN_LIMIT).map(([key, value], index) => ({
       id: key,
       label: options.labelFor?.(key) ?? sentence(key || "unclassified"),
       value,
@@ -734,7 +741,9 @@ function countBreakdown(
     title,
     description: options.description,
     totalLabel: `${total} ${options.totalNoun ?? "records"}`,
-    segments: entries.map(([key, value], index) => ({
+    totalValue: total,
+    coverageLabel: entries.length > BREAKDOWN_LIMIT ? `Showing the top ${BREAKDOWN_LIMIT} of ${entries.length}. Total includes all.` : undefined,
+    segments: entries.slice(0, BREAKDOWN_LIMIT).map(([key, value], index) => ({
       id: key,
       label: options.labelFor?.(key) ?? sentence(key),
       value,
@@ -3461,7 +3470,9 @@ export function buildProgramModel(
                   const store = storeById.get(key);
                   return store ? `Store ${store.storeNumber}` : "Unknown store";
                 },
-                sourceHref: workLink({ hasCost: "true" }),
+                noun: "stores",
+                sourceHref: storeCost.size > BREAKDOWN_LIMIT ? `/app/stores?${new URLSearchParams({ sort: "cost", costFrom: periodStart, costTo: fixture.asOf.slice(0, 10), currency: "USD" })}` : workLink({ hasCost: "true" }),
+                sourceLabel: storeCost.size > BREAKDOWN_LIMIT ? `Rank all ${storeCost.size} stores` : undefined,
                 amountLabel: basis === "recorded" ? "recorded cost" : "linked invoice amount",
               },
             ),

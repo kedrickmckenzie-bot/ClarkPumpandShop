@@ -177,7 +177,8 @@ function MetricStrip({ model, kind }: { model: ProgramPageViewModel; kind: Plann
 }
 
 function Breakdown({ model }: { model: BreakdownViewModel }) {
-  const ranked = model.segments.length > 8;
+  // Ranked bars when there are many rows or only the top few are shown; a donut only when every row is on screen.
+  const ranked = model.segments.length > 8 || Boolean(model.coverageLabel);
   const maximum = Math.max(1, ...model.segments.map(s => s.value));
   const total = model.segments.reduce((sum, segment) => sum + Math.max(0, segment.value), 0);
   let cursor = 0;
@@ -203,7 +204,7 @@ function Breakdown({ model }: { model: BreakdownViewModel }) {
           ))}</div>
         </div>
       ) : <div className={styles.empty}><Inbox size={19} aria-hidden="true" />No source records match this context.</div>}
-      <footer><Link href={model.sourceLink.href}>{model.sourceLink.label}<ExternalLink size={13} aria-hidden="true" /></Link></footer>
+      <footer>{model.coverageLabel ? <small>{model.coverageLabel}</small> : null}<Link href={model.sourceLink.href}>{model.sourceLink.label}<ExternalLink size={13} aria-hidden="true" /></Link></footer>
     </article>
   );
 }

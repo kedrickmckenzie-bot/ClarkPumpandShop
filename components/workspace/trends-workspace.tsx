@@ -235,6 +235,7 @@ function DriversTable({ model }: { model: TrendAnalysisPageViewModel }) {
         </div>
         <strong>{model.drivers.sampleLabel}</strong>
       </header>
+      {model.drivers.quickSorts ? <nav className={styles.quickSorts} aria-label="Order">{model.drivers.quickSorts.map((sort) => <Link key={sort.label} href={sort.href} aria-current={sort.active ? "true" : undefined}>{sort.label}</Link>)}</nav> : null}
       <div className={styles.tableScroller}>
         <table className={styles.driverTable}>
           <caption>{model.drivers.reconciliationLabel}</caption>

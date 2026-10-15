@@ -49,3 +49,5 @@
   .table td small{display:inline;margin-left:4px}
   .num{text-align:right!important}
 }
+.pager{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:12px;font-size:14px;color:#475569}
+.pager a{color:#1d4ed8;font-weight:700;text-decoration:none}

@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { OperatorSession } from "@/components/ops/data-contract";
-import { buildNorthlinePresentationFixture, NORTHLINE_ORGANIZATION_ID } from "@/lib/ops/fixtures";
+import { buildNorthlinePresentationFixture, buildSyntheticTrendScaleFixture, NORTHLINE_ORGANIZATION_ID } from "@/lib/ops/fixtures";
 
 vi.mock("server-only", () => ({}));
 let buildTrendsModel: typeof import("@/app/app/_data/trends-presenter").buildTrendsModel;
@@ -131,3 +131,27 @@ describe("trends change-by switch", () => {
   });
 });
 
+
+describe("trends at 100 stores", () => {
+  it("pages the change chart, keeps every page adding up, and keeps the Stores tab on its own pages", () => {
+    const fixture = buildSyntheticTrendScaleFixture(100, 24);
+    const first = buildTrendsModel(fixture, session(), { compare: "previous_year", period: "12" });
+    expect(first.bridge!.page).toBeDefined();
+    const seen = new Set<string>();
+    for (let href: string | undefined = undefined, page = first; ;) {
+      const bridge = page.bridge!;
+      const movers = bridge.steps.filter((step) => step.id !== "other");
+      expect(movers.length).toBeLessThanOrEqual(8);
+      movers.forEach((step) => { expect(seen.has(step.id)).toBe(false); seen.add(step.id); });
+      expect(Math.round(bridge.startValue + bridge.steps.reduce((sum, step) => sum + step.value, 0))).toBe(Math.round(bridge.endValue));
+      href = bridge.page?.nextHref;
+      if (!href) break;
+      page = buildTrendsModel(fixture, session(), Object.fromEntries(new URL(href, "http://x").searchParams));
+    }
+    expect(seen.size).toBeGreaterThan(8);
+    const stores = buildTrendsModel(fixture, session(), { view: "stores", compare: "previous_year", period: "12" });
+    expect(stores.drivers.rows.length).toBe(25);
+    expect(new URL(stores.drivers.pagination!.nextHref!, "http://x").searchParams.get("view")).toBe("stores");
+    expect(stores.drivers.quickSorts!.map((sort) => sort.label)).toContain("Biggest increases");
+  }, 120000);
+});

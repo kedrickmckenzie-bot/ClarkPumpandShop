@@ -94,7 +94,15 @@ describe("vendor scorecard page", () => {
   const f = fixture(), repository = createOpsFixtureRepository(f);
   const session: OperatorSession = { organizationId: f.organizations[0]!.id, organizationName: "Clark Pump and Shop", userId: "u", membershipId: "m", displayName: "Jordan", email: "j@example.test", scopeLabel: "All stores", role: "facilities", demoEdition: "complete" };
 
-  const drilled = async (href: string) => (await buildVendorScorecardPage(repository, session, Object.fromEntries(new URL(href, "https://test.invalid").searchParams), f.asOf)).drill;
+  // Follows every page of a job list (50 per page), so the full list can be checked against the number.
+  const drilled = async (href: string) => {
+    const open = async (link: string) => (await buildVendorScorecardPage(repository, session, Object.fromEntries(new URL(link, "https://test.invalid").searchParams), f.asOf)).drill;
+    const first = await open(href);
+    if (!first) return first;
+    const rows = [...first.rows];
+    for (let next = first.page?.nextHref; next;) { const page = (await open(next))!; expect(page.rows.length).toBeLessThanOrEqual(50); rows.push(...page.rows); next = page.page?.nextHref; }
+    return { ...first, rows };
+  };
   async function expectCellsMatch(cells: Array<{ href: string; measure: string; summary: { counted: number; hits: number } }>, label: string) {
     for (const cell of cells) {
       const drill = await drilled(cell.href);

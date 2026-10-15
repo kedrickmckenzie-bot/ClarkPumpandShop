@@ -312,6 +312,8 @@ export interface TrendBridgeViewModel {
   /** The change in the total, signed and formatted with its relative change. */
   changeFormatted: string;
   steps: Array<{ id: string; label: string; value: number; formatted: string; link: SupportingLink }>;
+  /** Present when there are more rows than fit on one page. */
+  page?: { page: number; pages: number; shownLabel: string; previousHref?: string; nextHref?: string };
 }
 
 /** Plain-language findings computed from the same records as the charts; each opens its records. */
@@ -385,6 +387,8 @@ export interface TrendAnalysisPageViewModel {
     sampleLabel: string;
     sortLinks: TrendDriverSortLinkViewModel[];
     pagination?: PaginationViewModel;
+    /** One-click orderings, e.g. biggest increases first. */
+    quickSorts?: Array<{ label: string; href: string; active: boolean }>;
     rows: TrendDriverRowViewModel[];
   };
   benchmark: {

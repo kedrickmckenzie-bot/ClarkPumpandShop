@@ -213,3 +213,5 @@
   .back { display: none !important; }
   .tile .value { font-size: 14px; }
 }
+.drillPages { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 12px; font-size: 14px; color: #475569; }
+.drillPages a { color: #1d4ed8; font-weight: 700; text-decoration: none; }

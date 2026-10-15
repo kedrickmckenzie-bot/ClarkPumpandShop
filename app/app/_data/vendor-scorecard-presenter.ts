@@ -25,6 +25,8 @@ export type DrillPlacement = "vendors" | "summary" | "history" | "district" | "t
 export interface ScorecardDrill {
   placement: DrillPlacement; context: string; measure: ScorecardMeasureKey; measureLabel: string; definition: string; headline: string; closeHref: string;
   rows: Array<{ workOrderId: string; number: string; problem: string; store: string; sent: string; result: string; tone: "good" | "bad" | "neutral" }>;
+  /** Busy vendors can have hundreds of jobs; the list shows 50 at a time. */
+  page?: { label: string; previousHref?: string; nextHref?: string };
 }
 export interface HistoryCell { value: string; detail: string; href: string; quiet: boolean; counted: number }
 export interface VendorCard {
@@ -200,7 +202,15 @@ export async function buildVendorScorecardPage(repository: OpsRepository, sessio
       placement, context: [name, sliceLabel].filter(Boolean).join(" · "), measure, measureLabel: info.label, definition: info.definition,
       headline: cell.empty ? "No jobs count toward this yet." : summary.tooFew ? `${cell.detail}. Showing the jobs so far.` : `${cell.value}${cell.detail && !["sent", "none open"].includes(cell.detail) ? ` · ${cell.detail}` : ""}`,
       closeHref: href({}, `#${placement === "vendors" ? "scorecard-vendors" : placement.startsWith("compare:") ? `scorecard-${sliceValue}` : `scorecard-${placement}`}`),
-      rows: rows.map(({ fact, result, tone }) => ({ workOrderId: fact.workOrderId, number: fact.number, problem: fact.problem, store: `Store ${fact.storeNumber}`, sent: formatOperationsDate(fact.sentAt.slice(0, 10)), result, tone })),
+      ...(() => {
+        const size = 50, pages = Math.max(1, Math.ceil(rows.length / size));
+        const current = Math.min(pages, Math.max(1, Math.floor(Number(first(query.drillPage)) || 1)));
+        const pageHref = (value: number) => href({ measure, drillVendor: first(query.drillVendor), slice: first(query.slice), drillPage: value > 1 ? String(value) : undefined }, "#scorecard-jobs");
+        return {
+          page: pages > 1 ? { label: `${(current - 1) * size + 1}–${Math.min(current * size, rows.length)} of ${rows.length} jobs`, previousHref: current > 1 ? pageHref(current - 1) : undefined, nextHref: current < pages ? pageHref(current + 1) : undefined } : undefined,
+          rows: rows.slice((current - 1) * size, current * size).map(({ fact, result, tone }) => ({ workOrderId: fact.workOrderId, number: fact.number, problem: fact.problem, store: `Store ${fact.storeNumber}`, sent: formatOperationsDate(fact.sentAt.slice(0, 10)), result, tone })),
+        };
+      })(),
     };
   }
 
