@@ -148,7 +148,7 @@ export interface QualityJob { job: JobFact; firstVisitFixed?: boolean; brokeAgai
 export interface QualityRow { jobs: QualityJob[]; completed: number; firstVisitFix?: number; firstVisitCounted: number; brokeAgain?: number; brokeAgainCounted: number; typicalDays?: number }
 
 /**
- * Repair quality by who did the work, with no money involved: fixed on the first visit, broke again within 30 days on
+ * Repair quality by who did the work, with no money involved: fixed on the first visit, needed another repair within 30 days on
  * the same equipment, and typical days to fix. Planned maintenance is left out; jobs both sides worked on count for neither.
  */
 export function repairQuality(ctx: ReportContext, range: { from: string; to: string }, provider: "vendor" | "in_house", category?: string): QualityRow {

@@ -60,13 +60,18 @@ function Drill({ drill }: { drill: ScorecardDrill }) {
     {drill.rows.length ? <div className={styles.drillTable}><table>
       <caption className={styles.srOnly}>Jobs behind {drill.measureLabel} for {drill.context}</caption>
       <thead><tr><th scope="col">Job</th><th scope="col">Store</th><th scope="col">Problem</th><th scope="col">Sent</th><th scope="col">Result</th></tr></thead>
-      <tbody>{drill.rows.map(row => <tr key={row.workOrderId}>
+      <tbody>{drill.rows.flatMap(row => [<tr key={row.workOrderId}>
         <td data-label="Job"><Link href={`/app/work-orders/${encodeURIComponent(row.workOrderId)}`}>{row.number}</Link></td>
         <td data-label="Store">{row.store}</td>
         <td data-label="Problem" className={styles.problem}>{row.problem}</td>
         <td data-label="Sent">{row.sent}</td>
         <td data-label="Result"><span className={row.tone === "good" ? styles.pillGood : row.tone === "bad" ? styles.pillBad : styles.pill}>{row.result}</span></td>
-      </tr>)}</tbody>
+      </tr>, row.repeat ? <tr key={`${row.workOrderId}-repeat`} className={styles.repeatRow}><td colSpan={5}>
+        <dl className={styles.repeat}>
+          <div><dt>What they did</dt><dd>{row.repeat.did ?? "No note recorded at checkout"}</dd></div>
+          <div><dt>Next repair · {row.repeat.daysLater} {row.repeat.daysLater === 1 ? "day" : "days"} later</dt><dd><Link href={`/app/work-orders/${encodeURIComponent(row.repeat.nextId)}`}>{row.repeat.nextNumber}</Link> · {row.repeat.nextProblem}</dd></div>
+        </dl>
+      </td></tr> : null])}</tbody>
     </table></div> : <p className={styles.empty}>No jobs count toward this yet.</p>}
     {drill.page ? <nav className={styles.drillPages} aria-label="Job pages">
       {drill.page.previousHref ? <Link href={drill.page.previousHref} scroll={false}>← Previous</Link> : <span />}

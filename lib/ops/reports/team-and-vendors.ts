@@ -20,7 +20,7 @@ export function buildVendorPerformance(ctx: ReportContext, options: ReportOption
   const sections: Section[] = [{
     kind: "table", id: "records", title: "Each vendor", note: "* fewer than 5 jobs counted, so read it with care. On time: checked in within an hour of the agreed appointment.",
     columns: [{ key: "name", label: "Vendor", width: "wide" }, { key: "jobs", label: "Jobs", align: "end" }, { key: "spend", label: "Spend", align: "end" }, { key: "change", label: `Spend vs ${period.prior?.label ?? "last year"}` },
-      { key: "response", label: "Typical reply", align: "end" }, { key: "onTime", label: "On time", align: "end" }, { key: "firstFix", label: "Fixed first visit", align: "end" }, { key: "callbacks", label: "Broke again in 30 days", align: "end" }, { key: "declined", label: "Declined", align: "end" }, { key: "invoice", label: "Invoice issues", align: "end" }],
+      { key: "response", label: "Typical reply", align: "end" }, { key: "onTime", label: "On time", align: "end" }, { key: "firstFix", label: "Fixed first visit", align: "end" }, { key: "callbacks", label: "Repaired again within 30 days", align: "end" }, { key: "declined", label: "Declined", align: "end" }, { key: "invoice", label: "Invoice issues", align: "end" }],
     rows: vendors.map(v => ({ id: v.vendorId, href: `/app/vendors/${v.vendorId}`, cells: { name: v.name, jobs: count(v.jobs), spend: money(v.spend),
       change: prior ? change(v.spend, prior.get(v.vendorId)?.spend ?? 0, period.prior!.label, { lowerIsBetter: true }).text : "—",
       response: v.response.value === undefined ? "—" : v.response.value < 1 ? "Under 1 h" : `${Math.round(v.response.value)} h`, onTime: rate(v.onTime), firstFix: rate(v.firstFix), callbacks: rate(v.callbacks), declined: count(v.declined.hits), invoice: count(v.invoice.hits) } })),
@@ -34,7 +34,7 @@ export function buildVendorPerformance(ctx: ReportContext, options: ReportOption
   }
   return {
     reportId: "vendor-performance", title: "Vendor performance", audience: "vendor", organizationName: ctx.organizationName, scopeLabel: scopeLabel(ctx, options), period, options,
-    purpose: "How each outside vendor did: speed, showing up on time, fixing it the first time, passing the check, and whether it broke again within 30 days.",
+    purpose: "How each outside vendor did: speed, showing up on time, fixing it the first time, passing the check, and whether the same equipment needed another repair within 30 days.",
     howCounted: ["Jobs first sent to each vendor in the period; cancelled jobs are left out.", "Spend is vendor cost recorded in the period.", "Same rules as Vendor scorecards, so the numbers match the screen."],
     highlights: [
       `${count(vendors.length)} vendors handled ${count(jobs)} jobs for ${money(spend)}.`,

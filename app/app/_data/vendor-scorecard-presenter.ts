@@ -24,7 +24,9 @@ export interface ScorecardRow { key: string; label: string; sublabel?: string; h
 export type DrillPlacement = "vendors" | "summary" | "history" | "district" | "trade" | `compare:${string}`;
 export interface ScorecardDrill {
   placement: DrillPlacement; context: string; measure: ScorecardMeasureKey; measureLabel: string; definition: string; headline: string; closeHref: string;
-  rows: Array<{ workOrderId: string; number: string; problem: string; store: string; sent: string; result: string; tone: "good" | "bad" | "neutral" }>;
+  rows: Array<{ workOrderId: string; number: string; problem: string; store: string; sent: string; result: string; tone: "good" | "bad" | "neutral";
+    /** For "Repaired again": what this vendor did, beside the repair that followed on the same equipment. */
+    repeat?: { did?: string; nextId: string; nextNumber: string; nextProblem: string; daysLater: number } }>;
   /** Busy vendors can have hundreds of jobs; the list shows 50 at a time. */
   page?: { label: string; previousHref?: string; nextHref?: string };
 }
@@ -89,7 +91,7 @@ function drillResult(fact: VendorJobFact, measure: ScorecardMeasureKey, now: str
     case "onTime": return { result: r.hit ? "On time" : "Late", tone: r.hit ? "good" : "bad", counted: true };
     case "firstFix": return { result: r.hit ? "Fixed first visit" : `First visit: ${(fact.firstOutcome ?? "").replaceAll("_", " ")}`, tone: r.hit ? "good" : "bad", counted: true };
     case "fixHeld": return { result: r.hit ? "Confirmed" : "Rejected", tone: r.hit ? "good" : "bad", counted: true };
-    case "callbacks": return { result: r.hit ? "Broke again within 30 days" : "Held 30 days", tone: r.hit ? "bad" : "good", counted: true };
+    case "callbacks": return { result: r.hit ? "Repaired again within 30 days" : "No repair within 30 days", tone: r.hit ? "bad" : "good", counted: true };
     case "declined": return { result: r.hit ? "Declined" : "Not declined", tone: r.hit ? "bad" : "neutral", counted: true };
     case "invoice": return { result: r.hit ? "Open invoice issue" : "No open issue", tone: r.hit ? "bad" : "neutral", counted: true };
   }
@@ -212,6 +214,17 @@ export async function buildVendorScorecardPage(repository: OpsRepository, sessio
         };
       })(),
     };
+    if (measure === "callbacks") {
+      // Side by side: what this vendor recorded doing, and the repair that followed on the same equipment.
+      await Promise.all(drill.rows.filter((row) => row.tone === "bad").map(async (row) => {
+        const fact = pool.find((f) => f.workOrderId === row.workOrderId);
+        if (!fact?.callbackWorkOrderId || !fact.completedAt) return;
+        const [outcomes, next] = await Promise.all([repository.listWorkOutcomesForWorkOrder(session.organizationId, fact.workOrderId), repository.getWorkOrder(session.organizationId, fact.callbackWorkOrderId)]);
+        if (!next) return;
+        const did = outcomes.filter((outcome) => outcome.outcomeNotes?.trim()).sort((a, b) => (b.outcomeRecordedAt ?? "").localeCompare(a.outcomeRecordedAt ?? ""))[0]?.outcomeNotes?.trim();
+        row.repeat = { did, nextId: next.id, nextNumber: next.number, nextProblem: next.problem, daysLater: Math.max(0, Math.round((Date.parse(next.createdAt) - Date.parse(fact.completedAt)) / 86_400_000)) };
+      }));
+    }
   }
 
   const dated = (iso: string) => formatOperationsDate(iso.slice(0, 10));

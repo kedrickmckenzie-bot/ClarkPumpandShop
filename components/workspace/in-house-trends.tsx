@@ -145,7 +145,7 @@ export default async function InHouseTrends({ session, query }: { session: Opera
           <table className={`${styles.table} ${styles.quality}`}>
             <thead>
               <tr><th rowSpan={2}>Equipment type</th><th colSpan={4} className={styles.group}>In-house</th><th colSpan={4} className={styles.group}>Outside vendors</th></tr>
-              <tr>{["in_house", "vendor"].flatMap((side) => [<th key={`${side}-d`} className={styles.num}>Repairs</th>, <th key={`${side}-f`} className={styles.num}>Fixed first visit</th>, <th key={`${side}-b`} className={styles.num}>Broke again in 30 days</th>, <th key={`${side}-t`} className={styles.num}>Typical time to fix</th>])}</tr>
+              <tr>{["in_house", "vendor"].flatMap((side) => [<th key={`${side}-d`} className={styles.num}>Repairs</th>, <th key={`${side}-f`} className={styles.num}>Fixed first visit</th>, <th key={`${side}-b`} className={styles.num}>Repaired again within 30 days</th>, <th key={`${side}-t`} className={styles.num}>Typical time to fix</th>])}</tr>
             </thead>
             <tbody>{[undefined, ...categories].map((category) => {
               const row = quality(category);
@@ -157,7 +157,7 @@ export default async function InHouseTrends({ session, query }: { session: Opera
                     return [
                       <td key={`${side}-d`} data-label={`${side === "vendor" ? "Vendors" : "In-house"} repairs`} className={styles.num}><Link href={href}>{q.completed}</Link></td>,
                       <td key={`${side}-f`} data-label="Fixed first visit" className={styles.num}>{pct(q.firstVisitFix)}{q.firstVisitCounted && q.firstVisitCounted < q.completed ? <small>of {q.firstVisitCounted} with visits</small> : null}</td>,
-                      <td key={`${side}-b`} data-label="Broke again in 30 days" className={styles.num}>{pct(q.brokeAgain)}{q.brokeAgainCounted && q.brokeAgainCounted < q.completed ? <small>of {q.brokeAgainCounted} on equipment</small> : null}</td>,
+                      <td key={`${side}-b`} data-label="Repaired again within 30 days" className={styles.num}>{pct(q.brokeAgain)}{q.brokeAgainCounted && q.brokeAgainCounted < q.completed ? <small>of {q.brokeAgainCounted} on equipment</small> : null}</td>,
                       <td key={`${side}-t`} data-label="Typical time to fix" className={styles.num}>{days(q.typicalDays)}</td>,
                     ];
                   })}
@@ -207,7 +207,7 @@ function Records({ ctx, show, categoryName, window, closeHref, page, pageHref }:
     const quality: QualityJob[] = repairQuality(ctx, window, a, b === "all" ? undefined : b).jobs;
     const yesNo = (value?: boolean) => value === undefined ? "—" : value ? "Yes" : "No";
     title = `${a === "vendor" ? "Vendor" : "In-house"} repairs · ${b === "all" ? "All equipment" : categoryName(b === "unclassified" ? undefined : b)} · ${quality.length}`;
-    head = ["Work order", "Store", "Fixed first visit", "Broke again in 30 days", "Time to fix"];
+    head = ["Work order", "Store", "Fixed first visit", "Repaired again within 30 days", "Time to fix"];
     rows = quality.map((row) => ({ key: row.job.id, cells: [jobLink(row.job), row.job.storeName, yesNo(row.firstVisitFixed), yesNo(row.brokeAgain), days(row.days)] }));
   } else return null;
   const pages = Math.max(1, Math.ceil(rows.length / PAGE)), current = Math.min(Math.max(1, page), pages);

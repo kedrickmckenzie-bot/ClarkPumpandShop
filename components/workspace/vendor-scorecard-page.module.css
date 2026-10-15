@@ -216,3 +216,8 @@
 .drillPages { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 12px; font-size: 14px; color: #475569; }
 .drillPages a { color: #1d4ed8; font-weight: 700; text-decoration: none; }
 .when { display: block; margin-top: 2px; color: var(--muted, #64748b); font-size: 12px; font-weight: 500; text-transform: none; letter-spacing: 0; }
+.repeatRow td { padding-top: 0 !important; border-top: 0 !important; }
+.repeat { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 20px; margin: 0; padding: 10px 12px; border-left: 3px solid #cbd5e1; background: #f8fafc; border-radius: 4px; }
+.repeat dt { color: #64748b; font-size: 12px; font-weight: 700; }
+.repeat dd { margin: 2px 0 0; font-size: 14px; color: #172033; }
+@media (max-width: 720px) { .repeat { grid-template-columns: 1fr; } }

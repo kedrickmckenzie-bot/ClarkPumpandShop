@@ -4,6 +4,16 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### "Repaired again within 30 days": a fact, shown side by side — October 15, 2026
+
+**Decision.** The user pointed out the measure is not a 30-day check: it counts any new repair work order on the same equipment within 30 days, so a different failure (or a missed second part) counts too. We discussed asking a person "same problem?" but techs (in-house and vendor) have a reason to say no, and vendors could game "we warned you" notes. The user chose to keep the column for visibility, since quick repeat repairs on the same equipment are worth seeing even when the failure differs, without making it a verdict.
+
+**What was done.** Renamed "Broke again in 30 days" to **"Repaired again within 30 days"** with the note "Same equipment, any problem" (scorecard, vendor tiles, in-house vs vendors, owner and vendor reports). The definition says it is not proof the fix failed. Opening the number now shows each repeat side by side: what the vendor recorded doing at checkout, and the next repair (number, problem, days later). Results read "Repaired again within 30 days" / "No repair within 30 days". 30 days kept.
+
+**Open question for the user.** Routine maintenance visits (e.g. quarterly rooftop inspections) count as the earlier job, so a breakdown weeks after an inspection counts too.
+
+**How it was tested.** Full checks pass. Browser: ClearFlow's list shows 12 of 70 with both sides of each repeat.
+
 ### Vendor scorecard: "Passed the check" vs "Broke again in 30 days" — October 15, 2026
 
 **What was done.** The user asked how "Fix held up" differs from "Broke again in 30 days" and why they disagree for the same vendor. They measure different moments and different jobs: one is the check when the job closed (confirmed vs rejected, only jobs someone checked), the other is whether the same equipment needed another repair within 30 days (only equipment-linked jobs finished 30+ days ago). "Fix held up" is renamed **"Passed the check"**, and both columns (headers and vendor tiles) show when they are measured: "Checked when the job closed" / "Checked 30 days later". The vendor performance report description says the same.
