@@ -215,3 +215,4 @@
 }
 .drillPages { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 12px; font-size: 14px; color: #475569; }
 .drillPages a { color: #1d4ed8; font-weight: 700; text-decoration: none; }
+.when { display: block; margin-top: 2px; color: var(--muted, #64748b); font-size: 12px; font-weight: 500; text-transform: none; letter-spacing: 0; }

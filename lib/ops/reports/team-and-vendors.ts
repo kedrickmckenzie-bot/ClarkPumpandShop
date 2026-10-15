@@ -34,7 +34,7 @@ export function buildVendorPerformance(ctx: ReportContext, options: ReportOption
   }
   return {
     reportId: "vendor-performance", title: "Vendor performance", audience: "vendor", organizationName: ctx.organizationName, scopeLabel: scopeLabel(ctx, options), period, options,
-    purpose: "How each outside vendor did: speed, showing up on time, fixing it the first time, and whether the fix held.",
+    purpose: "How each outside vendor did: speed, showing up on time, fixing it the first time, passing the check, and whether it broke again within 30 days.",
     howCounted: ["Jobs first sent to each vendor in the period; cancelled jobs are left out.", "Spend is vendor cost recorded in the period.", "Same rules as Vendor scorecards, so the numbers match the screen."],
     highlights: [
       `${count(vendors.length)} vendors handled ${count(jobs)} jobs for ${money(spend)}.`,

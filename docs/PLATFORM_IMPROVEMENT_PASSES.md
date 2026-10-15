@@ -4,6 +4,12 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Vendor scorecard: "Passed the check" vs "Broke again in 30 days" — October 15, 2026
+
+**What was done.** The user asked how "Fix held up" differs from "Broke again in 30 days" and why they disagree for the same vendor. They measure different moments and different jobs: one is the check when the job closed (confirmed vs rejected, only jobs someone checked), the other is whether the same equipment needed another repair within 30 days (only equipment-linked jobs finished 30+ days ago). "Fix held up" is renamed **"Passed the check"**, and both columns (headers and vendor tiles) show when they are measured: "Checked when the job closed" / "Checked 30 days later". The vendor performance report description says the same.
+
+**How it was tested.** Full checks pass. One full run had the internal scheduling tests fail while sharing the test database with other tests running at once; that file passed alone and the whole suite passed on the re-run (1,592 tests). Browser: scorecard headers show the new name and notes.
+
 ### "Where and when" grid pages through every store — October 15, 2026
 
 **What was done.** The user called the store-by-month grid one of the best charts and asked for paging or "expand all" at scale. It used to show only the top 15 and send the rest to a plain table. Now it shows 15 rows a page, highest first, with "← Higher / Lower →", "16–30 of 100 stores", and "Show all 100" / "Show 15 at a time". Every page uses one color scale, so a dark cell means the same amount on any page.

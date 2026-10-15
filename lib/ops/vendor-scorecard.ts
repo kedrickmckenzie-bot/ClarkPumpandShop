@@ -296,13 +296,14 @@ export function jobResult(fact: VendorJobFact, measure: ScorecardMeasureKey, now
 /* ---------------- Summary ---------------- */
 
 export type MeasureDirection = "higher" | "lower" | "neutral";
-export const MEASURE_INFO: Record<ScorecardMeasureKey, { label: string; short: string; direction: MeasureDirection; definition: string }> = {
+/** `when` says when a measure is taken, where two measures could otherwise be confused. */
+export const MEASURE_INFO: Record<ScorecardMeasureKey, { label: string; short: string; when?: string; direction: MeasureDirection; definition: string }> = {
   jobs: { label: "Jobs", short: "Jobs", direction: "neutral", definition: "Jobs first sent to this vendor in the period. Cancelled jobs are left out." },
   response: { label: "Typical response", short: "Response", direction: "lower", definition: "Typical (median) time from sending the job to the vendor's first reply." },
   onTime: { label: "On time", short: "On time", direction: "higher", definition: "Checked in within an hour of the agreed appointment. Only jobs with an appointment and a check-in." },
   firstFix: { label: "Fixed first visit", short: "First visit", direction: "higher", definition: "The vendor's first visit on the job recorded “completed”." },
-  fixHeld: { label: "Fix held up", short: "Held up", direction: "higher", definition: "Of repairs that were checked, the share confirmed rather than rejected." },
-  callbacks: { label: "Broke again in 30 days", short: "Again in 30d", direction: "lower", definition: "The same equipment needed another repair within 30 days of this vendor's fix. Fixes less than 30 days old are not judged yet." },
+  fixHeld: { label: "Passed the check", short: "Passed check", when: "Checked when the job closed", direction: "higher", definition: "When the vendor finished, someone checked the repair. The share confirmed rather than rejected. Only jobs someone checked." },
+  callbacks: { label: "Broke again in 30 days", short: "Again in 30d", when: "Checked 30 days later", direction: "lower", definition: "The same equipment needed another repair within 30 days of this vendor's fix. Fixes less than 30 days old are not judged yet." },
   cost: { label: "Average cost per job", short: "Avg cost", direction: "neutral", definition: "Recorded costs from this vendor, per job with a cost. Older costs without a named provider count only on jobs this vendor worked alone." },
   declined: { label: "Declined", short: "Declined", direction: "lower", definition: "Jobs the vendor declined." },
   invoice: { label: "Invoice issues", short: "Invoices", direction: "lower", definition: "Jobs with an open invoice problem on this vendor's invoice." },

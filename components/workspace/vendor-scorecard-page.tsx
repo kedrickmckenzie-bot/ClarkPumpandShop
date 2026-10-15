@@ -34,7 +34,7 @@ function ScoreTable({ caption, firstColumn, rows }: { caption: string; firstColu
   return <div className={styles.tableWrap}>
     <table className={styles.table}>
       <caption className={styles.srOnly}>{caption}</caption>
-      <thead><tr><th scope="col">{firstColumn}</th>{MEASURES.map(key => <th scope="col" key={key} title={MEASURE_INFO[key].definition}>{MEASURE_INFO[key].label}</th>)}</tr></thead>
+      <thead><tr><th scope="col">{firstColumn}</th>{MEASURES.map(key => <th scope="col" key={key} title={MEASURE_INFO[key].definition}>{MEASURE_INFO[key].label}{MEASURE_INFO[key].when ? <small className={styles.when}>{MEASURE_INFO[key].when}</small> : null}</th>)}</tr></thead>
       <tbody>{rows.map(row => <tr key={row.key}>
         <th scope="row">
           {row.href ? <Link href={row.href} className={styles.rowLink}>{row.label}<ChevronRight size={15} aria-hidden="true" /></Link> : <span className={styles.rowName}>{row.label}</span>}
@@ -129,7 +129,7 @@ function VendorView({ model, card }: { model: ScorecardPageModel; card: VendorCa
       <header className={styles.groupHead}><h2 id="scorecard-summary-title">This period</h2></header>
       <div className={styles.tiles}>
         {card.summary.map(cell => <div key={cell.measure} className={`${styles.tile} ${cellClass(cell) ?? ""}`}>
-          <span className={styles.tileLabel}>{MEASURE_INFO[cell.measure].label}</span>
+          <span className={styles.tileLabel}>{MEASURE_INFO[cell.measure].label}{MEASURE_INFO[cell.measure].when ? <small className={styles.when}>{MEASURE_INFO[cell.measure].when}</small> : null}</span>
           <CellContent cell={cell} rowLabel={card.name} />
         </div>)}
       </div>
