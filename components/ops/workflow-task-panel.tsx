@@ -281,7 +281,7 @@ function WorkflowTaskRecord({ task, model, active }: { task: WorkflowTaskItemVie
       </header>
       <dl className={styles.taskFacts}>
         <div><dt><UserRound aria-hidden="true" size={14} />Who acts</dt><dd>{task.assigneeLabel}<small>{task.assigneeTypeLabel}</small></dd></div>
-        <div><dt><CalendarClock aria-hidden="true" size={14} />When</dt><dd>{task.dueLabel}<small>{task.noSlaReason ? `No deadline: ${task.noSlaReason}` : task.slaClockLabel ? `${task.slaClockLabel} clock` : "Deadline recorded"}</small></dd></div>
+        <div><dt><CalendarClock aria-hidden="true" size={14} />Deadline</dt><dd>{task.dueLabel}<small>{task.noSlaReason ? `No deadline: ${task.noSlaReason}` : task.slaClockLabel ? `${task.slaClockLabel} clock` : "Deadline recorded"}</small></dd></div>
         <div><dt><CheckCircle2 aria-hidden="true" size={14} />Done when</dt><dd>{task.completionCriteria}<small>{task.requiredForProgress ? "Required for progress" : "Other work can continue while this task is open."}</small></dd></div>
         <div><dt><ArrowUpRight aria-hidden="true" size={14} />Escalation</dt><dd>{task.escalationDestination}<small>Level {task.escalationLevel}</small></dd></div>
       </dl>

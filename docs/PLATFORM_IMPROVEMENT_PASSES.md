@@ -4,6 +4,10 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### "Planned for" and "Deadline" — October 15, 2026
+
+User asked what "When" meant beside "Due" on a technician's job. "When" was the manager's plan; "Due" the moving next-step deadline (`WorkOrder.dueAt`). Renamed on technician and dispatch screens (my-work job, job list, dispatch board, planning panel, change-plan page) to **Planned for** and **Deadline**; Review's "When" column and task "When" also became **Deadline**. `dueLabel` now reads "Deadline today, noon" / "Late · deadline was …", with a bare form under a "Deadline" label. Manager pages that already say "Due" with plain-time wording are unchanged.
+
 ### Team scorecard: numbers that add up — October 15, 2026
 
 **User finding.** "None of it matches": Maria showed 25 assigned, 15 finished, 8 of 8 planned, 14 of 16 first visit, 3 repaired-again — each measure silently counted a different slice of her 25 jobs, and a live "9 open now" sat next to the period's 10 unfinished.

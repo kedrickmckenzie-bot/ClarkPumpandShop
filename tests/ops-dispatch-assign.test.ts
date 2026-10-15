@@ -18,10 +18,11 @@ describe("Approved Assign dataset and insert-only release",()=>{
     expect(new Set(loads.values()).size).toBeGreaterThan(3);
     expect(new Set(fixture.internalSchedules!.map(s=>s.durationMinutes)).size).toBeGreaterThan(3);
     expect(fixture.workResults?.some(r=>r.blocker==="parts"&&r.followUpId)).toBe(true);
-    expect(dueLabel(projection(page.items.find(j=>j.id==="dispatch-study-job-25")!,"America/New_York"),"2026-10-07","America/New_York","2026-10-07T14:00:00.000Z")).toBe("Due today, noon");
+    expect(dueLabel(projection(page.items.find(j=>j.id==="dispatch-study-job-25")!,"America/New_York"),"2026-10-07","America/New_York","2026-10-07T14:00:00.000Z")).toBe("Deadline today, noon");
   });
   it("marks a passed deadline late even when it is still today",()=>{
-    expect(dueLabel({dueAt:"2026-10-07T16:00:00.000Z",storeZone:"America/New_York"},"2026-10-07","America/New_York","2026-10-07T17:00:00.000Z")).toBe("Late · due today, noon");
+    expect(dueLabel({dueAt:"2026-10-07T16:00:00.000Z",storeZone:"America/New_York"},"2026-10-07","America/New_York","2026-10-07T17:00:00.000Z")).toBe("Late · deadline was today, noon");
+    expect(dueLabel({dueAt:"2026-10-07T16:00:00.000Z",storeZone:"America/New_York"},"2026-10-07","America/New_York","2026-10-07T17:00:00.000Z",true)).toBe("Late · was today, noon");
   });
   it("finds and pages dated commitments in planning order, independently of priority pages",async()=>{
     const repository=createOpsFixtureRepository(buildShowcaseFixture("2026-10-07"));

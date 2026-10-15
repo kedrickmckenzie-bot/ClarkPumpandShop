@@ -113,8 +113,8 @@ export default async function InternalJob({ params, searchParams }: { params: Pr
         <div><dt>Status</dt><dd>{status}</dd></div>
         <div><dt>Who</dt><dd>{work.internalAssigneeName ?? "Any technician can take it"}</dd></div>
         <div><dt>Manager</dt><dd>{work.internalAccountableParty}</dd></div>
-        {work.schedule ? <div><dt>When</dt><dd>{dispatchPlanLabel(work.schedule,organization!.timeZone)}</dd></div> : null}
-        {work.dueAt && !(resultBlocked && !manager) ? <div><dt>Due</dt><dd>{dueLabel({dueAt:work.dueAt,storeZone:zone},civilDate(new Date().toISOString(),zone),organization!.timeZone)}</dd></div> : null}
+        {work.schedule ? <div><dt>Planned for</dt><dd>{dispatchPlanLabel(work.schedule,organization!.timeZone)}</dd></div> : null}
+        {work.dueAt && !(resultBlocked && !manager) ? <div><dt>Deadline</dt><dd>{dueLabel({dueAt:work.dueAt,storeZone:zone},civilDate(new Date().toISOString(),zone),organization!.timeZone,undefined,true)}</dd></div> : null}
         {work.targetCompletionAt && !(resultBlocked && !manager) ? <div><dt>Finish by</dt><dd>{dispatchTime(work.targetCompletionAt,zone,organization!.timeZone)}</dd></div> : null}
       </dl>
       {work.asset ? <p><strong>Equipment:</strong> {work.asset.name} · {work.asset.assetTag}{work.component ? ` · ${work.component.name}` : ""}</p> : null}

@@ -218,8 +218,8 @@ export function JobSheet({ selection, manager, organizationZone, week, onClose, 
   return <Sheet title={`Store ${job.storeNumber} · ${job.number}`} onClose={onClose}>
     <div className={styles.sheetBody}><h2>{job.problem}</h2><p><Link href={`/app/stores/${encodeURIComponent(job.storeId)}`}>Store {job.storeNumber} · {job.storeName}</Link></p>
       <span className={styles.status} data-tone={status.tone}>{status.label}</span>
-      <dl className={styles.facts}><div><dt>Technician</dt><dd>{job.internalAssigneeName ?? "Needs a technician"}</dd></div>{job.schedule ? <div><dt>When</dt><dd>{dispatchPlanLabel(job.schedule, organizationZone)}</dd></div> : null}
-        {job.dueAt ? <div><dt>Due</dt><dd>{dueLabel(job,new Date().toLocaleDateString("en-CA",{timeZone:job.storeZone??organizationZone}),organizationZone).replace(/^Due /,"")}</dd></div> : null}
+      <dl className={styles.facts}><div><dt>Technician</dt><dd>{job.internalAssigneeName ?? "Needs a technician"}</dd></div>{job.schedule ? <div><dt>Planned for</dt><dd>{dispatchPlanLabel(job.schedule, organizationZone)}</dd></div> : null}
+        {job.dueAt ? <div><dt>Deadline</dt><dd>{dueLabel(job,new Date().toLocaleDateString("en-CA",{timeZone:job.storeZone??organizationZone}),organizationZone,undefined,true)}</dd></div> : null}
         {job.targetCompletionAt ? <div><dt>Finish by</dt><dd>{dispatchTime(job.targetCompletionAt, job.storeZone ?? organizationZone, organizationZone)}</dd></div> : null}
         <div><dt>Manager</dt><dd>{job.internalAccountableParty}</dd></div></dl>
       {job.technicianNotes?<p><strong>Notes for the tech</strong><br/>{job.technicianNotes}</p>:null}

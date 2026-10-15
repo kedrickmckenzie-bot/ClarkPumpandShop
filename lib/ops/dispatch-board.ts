@@ -56,10 +56,12 @@ export function orderedStops<T extends Pick<DispatchJob, "id" | "schedule" | "pr
     || a.id.localeCompare(b.id));
 }
 
-export function dueLabel(job:Pick<DispatchJob,"dueAt"|"storeZone">,today:string,zone:string,at=new Date().toISOString()) {
+/** The next-step deadline in plain words. `bare` leaves out the word "Deadline" where a label already says it. */
+export function dueLabel(job:Pick<DispatchJob,"dueAt"|"storeZone">,today:string,zone:string,at=new Date().toISOString(),bare=false) {
   if(!job.dueAt)return "";
   const localZone=job.storeZone??zone, date=civilDate(job.dueAt,localZone);
   const time=cachedDateTimeFormat("en-US",{timeZone:localZone,hour:"numeric",minute:"2-digit"}).format(new Date(job.dueAt)).replace(":00","").replace("12 PM","noon");
   const label=date===today?"today":date===addCalendarDays(today,1)?"tomorrow":cachedDateTimeFormat("en-US",{timeZone:localZone,month:"short",day:"numeric"}).format(new Date(job.dueAt));
-  return `${Date.parse(job.dueAt)<Date.parse(at)?"Late · due":"Due"} ${label}, ${time}`;
+  const late=Date.parse(job.dueAt)<Date.parse(at);
+  return bare?`${late?"Late · was ":""}${label}, ${time}`:`${late?"Late · deadline was":"Deadline"} ${label}, ${time}`;
 }

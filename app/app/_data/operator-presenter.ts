@@ -1265,7 +1265,7 @@ const columns: Record<OperatorListRoute, TableColumnViewModel[]> = {
     { key: "store", label: "Location" },
     { key: "record", label: "Related record" },
     { key: "owner", label: "Owner" },
-    { key: "due", label: "When" },
+    { key: "due", label: "Deadline" },
     { key: "priority", label: "Priority" },
   ],
   requests: [

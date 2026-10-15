@@ -516,7 +516,7 @@ function ReviewQueueSurface({ model }: { model: ListPageViewModel }) {
                               <strong>{owner?.value ?? "Unassigned"}</strong>
                             </div>
                             <div className={styles.reviewQueueDue}>
-                              <span><CalendarClock aria-hidden="true" size={15} />When</span>
+                              <span><CalendarClock aria-hidden="true" size={15} />Deadline</span>
                               <strong>{due?.value ?? "No deadline"}</strong>
                             </div>
                             <ChevronRight className={styles.reviewQueueChevron} aria-hidden="true" size={19} />

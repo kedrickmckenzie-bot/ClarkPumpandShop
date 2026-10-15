@@ -70,7 +70,7 @@ export function InternalJobRow({ row, session, technician, returnTo, week, showW
       <div className={styles.jobFacts}>
         <span><span className={`${styles.badge} ${toneClass}`} style={{ marginLeft: 0 }}>{status.text}</span></span>
         {showWho && !(technician && mine) ? <span>Who: <strong>{whoLabel(row)}</strong></span> : null}
-        {row.schedule ? <span>When: <strong>{dispatchPlanLabel(row.schedule,organizationZone)}</strong></span> : null}
+        {row.schedule ? <span>Planned for: <strong>{dispatchPlanLabel(row.schedule,organizationZone)}</strong></span> : null}
         {row.dueAt && !(technician && row.hasOpenFollowUp) ? <span><strong>{dueLabel({dueAt:row.dueAt,storeZone},civilDate(new Date().toISOString(),storeZone),organizationZone)}</strong></span> : null}
         {row.targetCompletionAt && !(technician && row.hasOpenFollowUp) ? <span>Finish by: <strong>{dispatchTime(row.targetCompletionAt,storeZone,organizationZone)}</strong></span> : null}
       </div>
