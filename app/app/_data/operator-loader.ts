@@ -320,7 +320,7 @@ export async function loadListModel(route: ListRouteId, searchParams: OperatorSe
     requests: new Set(["q", "page", "status", "store", "selected"]),
     "work-orders": new Set(["q", "page", "status", "stage", "store", "vendor", "region", "category", "path", "asset", "component", "hasCost", "createdFrom", "createdThrough", "costFrom", "costTo", "costMonth", "currency", "basis", "period", "selected", "visitPlan", "storeGroup", "appointment", "reviewWindow", "opportunity", "assignee", "change", "changedFrom", "changedTo"]),
     visits: new Set(["q", "page", "status", "store", "vendor", "review", "selected", "layout"]),
-    stores: new Set(["q", "page", "selected"]),
+    stores: new Set(["q", "page", "selected", "attention"]),
     vendors: new Set(["q", "page", "selected"]),
   };
   const usesSpecialFixtureProjection = requestedKeys.some((key) => !supportedQueryKeys[route]?.has(key));

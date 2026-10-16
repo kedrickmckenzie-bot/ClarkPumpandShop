@@ -1,3 +1,4 @@
+import { attentionReason, storesNeedingAttention } from "@/lib/ops/stores-needing-attention";
 import { providerKindLabel, providerName, providerTag } from "@/lib/product/provider-label";
 import { plainDue } from "@/lib/ops/plain-time";
 import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
@@ -149,6 +150,7 @@ function queryAppliedFilters(route: OperatorListRoute, query: OperatorSearchPara
       : key === "costFrom" ? `Cost from ${formatOperationsDate(value)}`
       : key === "costTo" ? `Cost through ${formatOperationsDate(value)}`
       : key === "path" ? value.split("|").join(" › ")
+      : key === "attention" ? "Needs attention"
       : key === "store" ? "Selected store"
       : key === "region" ? "Selected region"
       : key === "asset" ? value === "unlinked" ? "No equipment linked" : value === "needed" ? "Needs equipment linked" : "Selected equipment"
@@ -500,17 +502,36 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
     ];
     }
   } else if (route === "stores") {
-    const [stores, storeSummary] = await Promise.all([
-      repository.searchStores(scope, q, request),
+    // "Needs attention" replaces the all-history cost tile; tapping it narrows the list to those stores.
+    const attentionOnly = first(query.attention) === "1";
+    const [attention, storeSummary] = await Promise.all([
+      storesNeedingAttention(repository, scope, new Date().toISOString()),
       repository.getStorePortfolioSummary(scope),
     ]);
-    result = stores; rows = stores.items.map(storeRow); title = "Stores"; eyebrow = "Operating network"; description = "Find any location by store number, address, name, city, or alias and open its maintenance history."; placeholder = "Search store number, name, address, city, or alias";
+    const attentionById = new Map(attention.map(row => [row.storeId, row]));
+    const stores = attentionOnly
+      ? attention.length ? await repository.searchStores({ ...scope, storeIds: attention.map(row => row.storeId) }, q, request) : { items: [], totalCount: 0 }
+      : await repository.searchStores(scope, q, request);
+    const rank = new Map(attention.map((row, index) => [row.storeId, index]));
+    const items = attentionOnly ? [...stores.items].sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0)) : stores.items;
+    result = stores; rows = items.map(row => {
+      const built = storeRow(row), why = attentionById.get(row.id);
+      return attentionOnly && why ? { ...built, cells: [...built.cells, { key: "attention", value: attentionReason(why), tone: why.stopped || why.urgentLate ? "critical" as const : "warning" as const }] } : built;
+    });
+    title = "Stores"; eyebrow = "Operating network"; description = "Find any location by store number, address, name, city, or alias and open its maintenance history."; placeholder = "Search store number, name, address, city, or alias";
     if (roleCan(session, "create_store")) primaryAction = { label: "Add store", href: "/app/stores/new" };
+    const count = (key: "stopped" | "limited" | "urgentLate" | "complianceOverdue") => attention.filter(row => row[key] > 0).length;
+    const why = [
+      count("stopped") ? `${count("stopped")} can't operate` : undefined,
+      count("limited") ? `${count("limited")} partly operating` : undefined,
+      count("urgentLate") ? `${count("urgentLate")} with urgent jobs late` : undefined,
+      count("complianceOverdue") ? `${count("complianceOverdue")} with compliance overdue` : undefined,
+    ].filter(Boolean).join(" · ");
     metrics = [
       { id: "stores-in-scope", label: "Stores in scope", value: String(storeSummary.stores), supportingText: "Portfolio-wide for your operating scope; search below filters the directory", tone: "neutral", link: { href: "/app/stores", label: "Open full directory" } },
       { id: "store-open-work", label: "Open work orders", value: String(storeSummary.openWorkOrders), supportingText: "Current open work across the scoped store portfolio", tone: storeSummary.openWorkOrders ? "warning" : "positive", link: { href: "/app/work-orders?status=open", label: "Open source work" } },
       { id: "store-onsite-now", label: "Visits without checkout", value: String(storeSummary.activeVisits), supportingText: "Active server-timestamped check-ins across the scoped portfolio", tone: storeSummary.activeVisits ? "info" : "neutral", link: { href: "/app/visits?status=active", label: "Open active visits" } },
-      { id: "store-recorded-cost", label: "Recorded work cost · all history", value: money(storeSummary.recordedCostMinor), supportingText: "Saved work costs across the full scoped history, including matched invoice costs", tone: "neutral", link: { href: "/app/work-orders?hasCost=true", label: "Open every work order with recorded cost" } },
+      { id: "store-attention", label: "Needs attention", value: String(attention.length), supportingText: why || "No store has a stopped operation, a late urgent job, or overdue compliance", tone: attention.length ? "warning" : "positive", link: attentionOnly ? { href: "/app/stores", label: "Show all stores" } : { href: "/app/stores?attention=1", label: "Show these stores" } },
     ];
   } else {
     const vendors = await repository.listVendors(scope, q, request);
@@ -543,7 +564,8 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
   const appliedFilters = queryAppliedFilters(route, query).map((filter) => filter.id === "store" && storeCell
     ? { ...filter, label: storeCell.value } : filter);
   return {
-    state: rows.length || !q ? { kind: "ready" } : { kind: "empty", title: "No matching records", message: "Try another store number, address, vendor, or keyword." },
+    state: route === "stores" && first(query.attention) === "1" && !rows.length && !q ? { kind: "empty", title: "No store needs attention", message: "No store has a stopped operation, a late urgent job, or overdue compliance right now." }
+      : rows.length || !q ? { kind: "ready" } : { kind: "empty", title: "No matching records", message: "Try another store number, address, vendor, or keyword." },
     rowNavigation: costEvidence || route === "visits" && first(query.status) === "upcoming" ? "record" : undefined,
     page: { ...commonPage(session, title, eyebrow, description), primaryAction, secondaryAction,
       ...(costEvidence ? { scopeLabel: [first(query.store) ? storeCell ? `${storeCell.value} · ${storeCell.secondary ?? ""}` : "Selected store · no matching costs" : session.scopeLabel,
@@ -552,7 +574,8 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
     metrics,
     table: { id: route, caption: title, columns: heldPlan ? [
       { key: "work", label: "Approved work" }, { key: "store", label: "Store" }, { key: "assignment", label: "Authorized during visit" }, { key: "next", label: "Review and owner" }, { key: "cost", label: "Recorded cost", align: "end" as const }, { key: "status", label: "Timing" },
-    ] : costEvidence ? [...columns["work-orders"].filter(column => ! ["updated", "cost"].includes(column.key)), { key: "cost", label: "Recorded cost", align: "end" as const }] : columns[route as QueryListRoute], rows },
+    ] : costEvidence ? [...columns["work-orders"].filter(column => ! ["updated", "cost"].includes(column.key)), { key: "cost", label: "Recorded cost", align: "end" as const }]
+      : route === "stores" && first(query.attention) === "1" ? [columns.stores[0]!, { key: "attention", label: "Needs attention" }, ...columns.stores.slice(1)] : columns[route as QueryListRoute], rows },
     resultSummary: summary,
     search: searchControl(route, query, `Search ${title}`, placeholder),
     // A technician's first choice is whose jobs to see, so it leads the filters.

@@ -4,6 +4,14 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Stores: "Needs attention" tile and filter — October 16, 2026
+
+**Decision (with the user).** No separate store status board; it would repeat Reported operating problems, Review and the Stores list. Instead the Stores page's all-history "Recorded work cost" tile (Spend & planning covers money; each store still shows its cost) becomes **Needs attention**: the number of stores with an unresolved can't-operate or partly-operating report, an open urgent or emergency job past its next-step deadline, or compliance past due and not passed. The tile says which ("10 partly operating · 5 with urgent jobs late · 5 with compliance overdue"; the other three tiles, including Stores in scope, stay) and tapping it filters the list to those stores, most serious first, each showing its reason; "Show all stores" and the filter chip clear it. Page layout and the other tiles are unchanged.
+
+**Built.** `lib/ops/stores-needing-attention.ts` (reads existing scoped queries: operating risks, work orders, inspections; no new tables), the stores query presenter tile, `attention=1` filter, reason column placed first so cards show it, empty state.
+
+**Validation.** `tests/ops-stores-needing-attention.test.ts` (late urgent count matches source work orders, region scope, order, wording). Browser on a fresh PostgreSQL demo: tile shows 12 stores; filter lists 12 with reasons ("Partly operating · 3 urgent jobs late · 1 compliance item overdue"); phone at 390 px has no sideways scroll. The demo flags 12 of 15 stores, mostly from partly-operating reports still open; real customers will see what their records say.
+
 ### Job page for technicians and vendor technicians — October 16, 2026
 
 **Decisions (with the user).** The manager's "Notes for the tech" and time estimate are the manager's instructions, so they are read-only for technicians (enforced in the command, not just hidden); a tech can still say a job is running long. Techs' own information already has homes: result notes, store access notes, and "Found another problem". Vendor technicians keep their account-free secure link, but see more: when it was reported, equipment make, model, serial, install date and warranty, photos the operator marked as shared with the vendor, and **only their own company's earlier work on that unit** — never other vendors' work, our technicians' names, costs or internal files. The existing frozen service message on the work order is the vendor's notes box, now titled "Notes from {company}".
