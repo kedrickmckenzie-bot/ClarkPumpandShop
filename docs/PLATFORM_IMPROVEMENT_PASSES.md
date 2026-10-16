@@ -4,6 +4,14 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### My week: "No day yet" with Ready and Stuck — October 16, 2026
+
+**Decision (with the user).** Stuck jobs have no day, so they sit beside the tech's week board like the manager board's backlog, not on My work. My week now shows the days (planned jobs only) and one **No day yet** area split into **Ready** (nothing blocks it; waiting to be planned) and **Stuck**, grouped Parts · Vendor · Approval · Needs help · Sent to manager, longest-stuck first, each with how long, the tech's note when it adds something, and who has it. "Sent to manager" lists problems the tech reported until a manager routes them. No texts or alerts are sent — a manager sees sent problems in Review.
+
+**Built.** `lib/ops/tech-week.ts` (reason from status or the latest unfinished result's blocker; stuck-since from that result, else the last change); `foundByMembershipId` list filter in fixture and SQL repositories; My week page and styles. Stuck jobs never also appear on a day. The in-memory test repository now looks up a job's assignments by job instead of scanning every assignment per row; the 30-technician, 200-job board test was hovering at its 5-second limit on a 4-core machine (it failed on the already-pushed code too) and now runs about 2 seconds faster.
+
+**Validation.** `tests/ops-tech-week.test.ts` (reasons, since, grouping order) and the found-problem test (the tech can list what they sent). Browser on a fresh PostgreSQL demo as Maria Santos: sent a found problem, then My week showed Ready 2 and Stuck 2 (Parts 1, Sent to manager 1), page under 0.2 s, no sideways scroll at 390 px. Full checks before push.
+
 ### Technician tools: found problems, warranty guard, My week — October 15, 2026
 
 **Decisions (with the user).** Techs can create work only for a problem they find on site, with no approval wait: **I'll fix it now** (the job is theirs) or **Send to my manager** (a manager routes it; vendors stay a manager's job). Managers see both afterwards in Review as "Reported by …". Warrantied equipment can't be fixed on the spot — a tech repair can void coverage — so it goes to the manager. Jobs a tech found count only toward "Repaired again within 30 days" on the Team scorecard, so parts surprises don't count against them and they can't pad other numbers; no extra labels on the scorecard. Work history leaves the tech menu (Stores, Equipment and Search already cover store/equipment history and finding a job); **My week** takes its place. Alerts, scanning and offline stay production items.

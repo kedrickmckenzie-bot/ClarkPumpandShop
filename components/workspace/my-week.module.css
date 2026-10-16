@@ -12,7 +12,7 @@
 .day h2 span, .today h2 span { color: #64748b; font-weight: 500; }
 .today h2 em { margin-left: auto; padding: 0 8px; border-radius: 999px; background: #2457d6; color: #fff; font-size: 12px; font-style: normal; font-weight: 700; }
 
-.days ul, .side ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.days ul, .side ul, .group ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .card { display: grid; gap: 3px; padding: 10px; border: 1px solid #e3e8ef; border-radius: 6px; background: #f8fafc; color: inherit; text-decoration: none; }
 .card:hover { border-color: #2457d6; background: #eef3fd; }
 .card:focus-visible { outline: 2px solid #2457d6; outline-offset: 1px; }
@@ -24,8 +24,14 @@
 
 .side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .side section { background: #fff; border: 1px solid #d8dee8; border-radius: 8px; padding: 14px; }
-.side h2 { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px; font-size: 17px; }
-.side h2 span { color: #64748b; font-size: 14px; font-weight: 600; }
+.noDay { display: grid; gap: 10px; }
+.noDay > h2 { margin: 0; font-size: 19px; }
+.side h3 { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px; font-size: 17px; }
+.side h3 span, .group h4 span { color: #64748b; font-size: 14px; font-weight: 600; }
+.group + .group { margin-top: 14px; }
+:global(#main-content) .group .groupTitle { display: flex; align-items: baseline; gap: 6px; margin: 0 0 6px; color: #475569; font-size: 13px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
+.stuckFor { color: #a15c07; font-size: 13px; font-weight: 700; }
+.note { color: #334155; font-size: 13px; font-style: italic; overflow-wrap: anywhere; }
 
 /* Phone: one day after another, today highlighted; the side lists follow. */
 @media (max-width: 760px) {

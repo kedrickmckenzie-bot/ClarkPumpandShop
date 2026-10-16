@@ -33,6 +33,10 @@ describe("a technician reports a problem they found", () => {
     const work = await reportFoundProblem({ repository }, { organizationId: org, actor, storeId: store, problem: "Back door closer is broken", fixNow: false, today: TODAY, key: "found-problem-test-2" });
     expect(await repository.getWorkOrder(org, work.id)).toMatchObject({ foundByMembershipId: tech, accountableParty: "Facilities coordinator" });
     expect(await repository.getActiveAssignment(org, work.id)).toMatchObject({ kind: "choose_later" });
+    // The tech can still find what they sent, until a manager routes it.
+    const scope = { organizationId: org, storeIds: [store] };
+    const sent = await repository.listWorkOrders(scope, { foundByMembershipId: tech, limit: 25 });
+    expect(sent.items.find(job => job.id === work.id)).toMatchObject({ assignmentKind: "choose_later" });
   });
 
   it("won't let a tech repair warrantied equipment on the spot, and keeps techs to their own stores", async () => {

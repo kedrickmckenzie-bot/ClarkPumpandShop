@@ -951,6 +951,7 @@ class SqlOpsRepository implements OpsRepository {
     if (query.internalOnly) clauses.push("a.kind = 'internal' AND a.status IN ('pending','issued','opened','accepted')");
     if (query.internalTarget) { clauses.push("a.kind = 'internal' AND COALESCE(a.internal_target, 'person') = ? AND a.status IN ('pending','issued','opened','accepted')"); params.push(query.internalTarget); }
     if (query.internalMembershipId) { clauses.push("a.kind = 'internal' AND a.internal_membership_id = ?"); params.push(query.internalMembershipId); }
+    if (query.foundByMembershipId) { clauses.push("w.found_by_membership_id = ?"); params.push(query.foundByMembershipId); }
     if (query.maintenanceTeamOnly) clauses.push("a.kind = 'internal' AND (COALESCE(a.internal_target, 'person') <> 'person' OR EXISTS (SELECT 1 FROM ops_memberships tm WHERE tm.organization_id = w.organization_id AND tm.id = a.internal_membership_id AND tm.role = 'internal_technician'))");
     if (query.categoryKey === "unclassified") clauses.push("w.category_key IS NULL");
     else if (query.categoryKey) { clauses.push("w.category_key = ?"); params.push(query.categoryKey); }

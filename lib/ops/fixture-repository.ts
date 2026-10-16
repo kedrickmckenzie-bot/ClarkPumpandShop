@@ -150,8 +150,20 @@ function visitRow(fixture: OpsFixture, visit: VisitSession, siteVisitWorkOrder?:
   };
 }
 
+// Assignments grouped by job, rebuilt when rows are added or the array is replaced; rows are updated in place, so status stays current.
+const assignmentIndex = new WeakMap<OpsFixture["assignments"], { length: number; byWork: Map<string, OpsFixture["assignments"]> }>();
+function assignmentsForWork(fixture: OpsFixture, workId: string) {
+  let index = assignmentIndex.get(fixture.assignments);
+  if (!index || index.length !== fixture.assignments.length) {
+    const byWork = new Map<string, OpsFixture["assignments"]>();
+    for (const a of fixture.assignments) { const list = byWork.get(a.workOrderId); if (list) list.push(a); else byWork.set(a.workOrderId, [a]); }
+    index = { length: fixture.assignments.length, byWork };
+    assignmentIndex.set(fixture.assignments, index);
+  }
+  return index.byWork.get(workId) ?? [];
+}
 function currentAssignment(fixture: OpsFixture, org: string, workId: string) {
-  return fixture.assignments.filter(a => a.organizationId === org && a.workOrderId === workId)
+  return assignmentsForWork(fixture, workId).filter(a => a.organizationId === org)
     .sort((a,b) => Number(!["pending","issued","opened","accepted"].includes(a.status)) - Number(!["pending","issued","opened","accepted"].includes(b.status)) || b.assignedAt.localeCompare(a.assignedAt) || b.id.localeCompare(a.id))[0];
 }
 
@@ -1029,6 +1041,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
         && (!query.vendorId || this.fixture.assignments.some((assignment) => assignment.organizationId === scope.organizationId && assignment.workOrderId === row.id && assignment.vendorId === query.vendorId))
         && (!query.internalOnly || (() => {const a=currentAssignment(this.fixture, scope.organizationId, row.id);return a?.kind==='internal'&&['pending','issued','opened','accepted'].includes(a.status);})())
         && (!query.internalTarget || (() => {const a=currentAssignment(this.fixture, scope.organizationId, row.id);return a?.kind==='internal'&&['pending','issued','opened','accepted'].includes(a.status)&&(a.internalTarget??(a.internalMembershipId?'person':undefined))===query.internalTarget;})())
+        && (!query.foundByMembershipId || row.foundByMembershipId === query.foundByMembershipId)
         && (!query.internalMembershipId || (() => { const current = currentAssignment(this.fixture, scope.organizationId, row.id); return current?.kind === "internal" && current.internalMembershipId === query.internalMembershipId; })())
         && (!query.maintenanceTeamOnly || (() => { const current = currentAssignment(this.fixture, scope.organizationId, row.id); if (current?.kind !== "internal") return false; if ((current.internalTarget ?? "person") !== "person") return true; return this.fixture.memberships.some(m => m.organizationId === scope.organizationId && m.id === current.internalMembershipId && m.role === "internal_technician"); })())
         && (!query.categoryKey || (row.categoryKey ?? "unclassified") === query.categoryKey)
