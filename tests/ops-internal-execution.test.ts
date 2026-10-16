@@ -20,7 +20,7 @@ import { resolveWorkOrderWorkspace } from "@/lib/ops/work-order-workspace";
 import { dispatchActor, dispatchChange, dispatchJob, dispatchManager, dispatchNow, dispatchOrg, dispatchServices, dispatchTech } from "./helpers/internal-dispatch-regression";
 import { insertDispatchRecord } from "@/lib/ops/internal-dispatch";
 import type { OpsRepository } from "@/lib/ops/repository";
-import { bulkSeedD1 } from "./helpers/d1-bulk-seed";
+import { backfillNewRows, bulkSeedD1 } from "./helpers/d1-bulk-seed";
 
 const postgresUrl=process.env.OPS_DISPATCH_TEST_DATABASE_URL;
 it("offers only authorized outcomes for look-and-report job and checkout forms", () => {
@@ -36,7 +36,7 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
     const fixture=buildShowcaseFixture(dispatchNow);fixture.outboxMessages=[];
     if(adapter==="fixture")r=createOpsFixtureRepository(fixture);
     const historical=structuredClone(fixture);
-    historical.technicianProfiles=[];historical.internalSchedules=[];historical.workResults=[];for(const job of historical.workOrders){delete job.shortName;delete job.foundByMembershipId;}historical.equipmentDocuments=[];historical.aiConversations=[];historical.equipmentNotes=[];historical.assetRefrigerants=[];historical.refrigerantEvents=[];historical.ustOperators=[];historical.spendTotals=[];historical.workCallbacks=[];historical.complianceSchedules=historical.complianceSchedules?.filter(c=>!c.program);historical.inspections=historical.inspections?.filter(i=>!i.id.startsWith("ust-demo-"));
+    historical.technicianProfiles=[];historical.internalSchedules=[];historical.workResults=[];for(const job of historical.workOrders){delete job.shortName;delete job.foundByMembershipId;delete job.technicianNotes;}historical.equipmentDocuments=[];historical.aiConversations=[];historical.equipmentNotes=[];historical.assetRefrigerants=[];historical.refrigerantEvents=[];historical.ustOperators=[];historical.spendTotals=[];historical.workCallbacks=[];historical.complianceSchedules=historical.complianceSchedules?.filter(c=>!c.program);historical.inspections=historical.inspections?.filter(i=>!i.id.startsWith("ust-demo-"));
     for(const rows of [historical.workOrders,historical.assignments,historical.workflowTasks,historical.followUps,historical.workOrderVisitHolds??[],historical.auditEvents]){for(let i=rows.length-1;i>=0;i--)if(rows[i].id.startsWith("dispatch-study-")||rows[i].id.startsWith("ai-demo-"))rows.splice(i,1);}
     // Everyday in-house history also arrives later, through the insert-only backfill.
     const later=(id?:string)=>Boolean(id?.startsWith("inhouse-demo-"));for(const rows of [historical.workOrders,historical.assignments,historical.followUps,historical.visits,historical.siteVisitWorkOrders] as Array<Array<{id:string;workOrderId?:string}>>){for(let i=rows.length-1;i>=0;i--)if(later(rows[i].id)||later(rows[i].workOrderId))rows.splice(i,1);}
@@ -56,7 +56,7 @@ for(const adapter of ["fixture","D1","PostgreSQL"] as const)describe.skipIf(adap
       r=createOpsPostgresRepository(pool);await seedOpsRepository(r,historical,[],{omitStoreContacts:true});
       for(const file of migrations.filter(f=>f>="0068"))for(const sql of readFileSync(`drizzle-postgres/${file}`,"utf8").split("--> statement-breakpoint").map(s=>s.trim()).filter(Boolean))await pool.query(sql);
     }
-    if(adapter!=="fixture")await seedOpsRepository(r,fixture);
+    if(adapter==="D1")await backfillNewRows(r,fixture,historical,{omitStoreContacts:true});else if(adapter!=="fixture")await seedOpsRepository(r,fixture);
     for(const decision of fixture.workOrderVerifications)expect(await r.listWorkOrderVerifications(dispatchOrg,decision.workOrderId)).toContainEqual(expect.objectContaining({id:decision.id,siteVisitWorkOrderId:decision.siteVisitWorkOrderId,decision:decision.decision}));
   },120000);
   afterAll(async()=>{await runtime?.dispose();await pool?.end();if(databaseName){const admin=new Pool({connectionString:postgresUrl});try{await admin.query(`DROP DATABASE ${databaseName}`);}finally{await admin.end();}}});

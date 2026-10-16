@@ -6,6 +6,7 @@ import { dueLabel, dispatchPlanLabel } from "@/lib/ops/dispatch-board";
 import { formatOperationsDate } from "@/lib/ops/local-time";
 import type { WorkOrderListQuery } from "@/lib/ops/repository";
 import type { WorkOrderListRow } from "@/lib/ops/view-models";
+import { jobShortName } from "@/lib/ops/short-name";
 import { groupStuck, stuckFor, stuckReason, stuckSince, type StuckJob } from "@/lib/ops/tech-week";
 import { getOpsRequestContext } from "@/lib/server/ops-request-context";
 import { internalDispatchScope } from "@/lib/server/internal-dispatch-context";
@@ -53,9 +54,10 @@ async function renderMyWeek(query: Query) {
   const shown = days.filter((day, i) => i < 5 || byDay.get(day)!.length);
   const card = (job: WorkOrderListRow, held?: StuckJob) => {
     const late = job.dueAt && Date.parse(job.dueAt) < Date.parse(now);
-    return <li key={job.id}><Link className={styles.card} href={`/app/my-work/${encodeURIComponent(job.id)}`}>
+    return <li key={job.id}><Link className={styles.card} href={`/app/my-work/${encodeURIComponent(job.id)}?from=week`}>
       <span className={styles.store}>Store {job.storeNumber}</span>
-      <span className={styles.problem}>{job.shortName ?? job.problem}</span>
+      <span className={styles.problem}>{jobShortName(job)}</span>
+      {jobShortName(job) !== job.problem ? <span className={styles.detail}>{job.problem}</span> : null}
       {held ? <span className={styles.stuckFor}>Stuck {stuckFor(held.since, now)}</span> : null}
       {held?.note ? <span className={styles.note}>“{held.note}”</span> : null}
       {held ? <span className={styles.meta}>{held.reason === "manager" ? "Waiting for a manager to pick it up" : `With ${job.accountableParty}`}</span> : null}

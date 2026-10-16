@@ -605,9 +605,22 @@ function costForWorkIds(costByWork: Map<string, number>, workIds: Iterable<strin
   return total;
 }
 
+// Assignments grouped by job, so per-job lookups don't rescan every assignment. Rebuilt if rows are added.
+const assignmentsByWork = new WeakMap<OpsFixture["assignments"], { length: number; byWork: Map<string, OpsFixture["assignments"]> }>();
+function assignmentsForWork(fixture: OpsFixture, workOrderId: string) {
+  let index = assignmentsByWork.get(fixture.assignments);
+  if (!index || index.length !== fixture.assignments.length) {
+    const byWork = new Map<string, OpsFixture["assignments"]>();
+    for (const a of fixture.assignments) { const list = byWork.get(a.workOrderId); if (list) list.push(a); else byWork.set(a.workOrderId, [a]); }
+    index = { length: fixture.assignments.length, byWork };
+    assignmentsByWork.set(fixture.assignments, index);
+  }
+  return index.byWork.get(workOrderId) ?? [];
+}
+
 function assignmentForWork(fixture: OpsFixture, organizationId: string, workOrderId: string) {
-  return fixture.assignments
-    .filter((assignment) => assignment.organizationId === organizationId && assignment.workOrderId === workOrderId)
+  return assignmentsForWork(fixture, workOrderId)
+    .filter((assignment) => assignment.organizationId === organizationId)
     .sort((a, b) => Number(!["pending","issued","opened","accepted"].includes(a.status)) - Number(!["pending","issued","opened","accepted"].includes(b.status)) || b.assignedAt.localeCompare(a.assignedAt) || b.id.localeCompare(a.id))[0];
 }
 

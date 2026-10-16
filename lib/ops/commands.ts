@@ -652,6 +652,8 @@ export interface CreateWorkOrderInput {
   shortName?: string;
   /** Set when a technician reports a problem they found on site. */
   foundByMembershipId?: OpsId;
+  /** Photos or files already in private storage, attached to the new job in the same write. */
+  files?: StoredFile[];
   technicianNotes?: string;
   estimatedMinutes?: number;
   confirmationDelay?: "next_morning" | "four_hours";
@@ -875,6 +877,11 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
   if (input.confirmationMembershipId) await confirmationAssignee(repository, { organizationId: input.organizationId, storeId: input.storeId, confirmationMembershipId: input.confirmationMembershipId });
   const statements: OpsStatement[] = [insert("ops_work_orders", { short_name: input.shortName?.trim() || undefined, found_by_membership_id: input.foundByMembershipId, technician_notes: input.technicianNotes?.trim() || undefined, estimated_minutes: input.estimatedMinutes, confirmation_delay: input.confirmationDelay, require_confirmation: requireConfirmation ? 1 : 0, confirmation_membership_id: input.confirmationMembershipId, id, organization_id: input.organizationId, number, store_id: input.storeId, request_id: input.requestId, problem, authorized_scope: input.authorizedScope, category_key: input.categoryKey, taxonomy_node_id: input.taxonomyNodeId, asset_id: input.assetId, component_id: input.componentId, priority, status, version: 0, internal_accountable_party: internalAccountableParty, internal_accountable_type: internalAccountableType, internal_accountable_id: internalAccountableId, accountable_party: accountableParty, next_action: nextAction, due_at: dueAt, escalation_to: escalationTo, internal_review_threshold_minor: input.internalReviewThresholdMinor, internal_review_currency: input.internalReviewThresholdMinor === undefined ? undefined : input.currency ?? "USD", nte_amount_minor: input.nteAmountMinor, nte_currency: input.nteAmountMinor === undefined ? undefined : input.currency ?? "USD", repair_estimate_amount_minor: input.repairEstimateAmountMinor, repair_estimate_currency: input.repairEstimateAmountMinor === undefined ? undefined : input.repairEstimateCurrency ?? "USD", estimated_service_extension_months: input.estimatedServiceExtensionMonths, created_at: now })];
   if (input.idempotency) statements.unshift(idempotencyStatement(input.organizationId, id, now, input.idempotency));
+  if ((input.files?.length ?? 0) > 5 || input.files?.some(file => file.organizationId !== input.organizationId || file.status !== "available")) throw new OpsDomainError("VALIDATION", "Attach up to five available files.");
+  for (const file of input.files ?? []) statements.push(
+    insert("ops_files", { id: file.id, organization_id: file.organizationId, storage_key: file.storageKey, sha256: file.sha256, original_name: file.originalName, content_type: file.contentType, byte_length: file.byteLength, status: file.status, created_at: file.createdAt }),
+    insert("ops_entity_files", { id: ids.next("entity-file"), organization_id: input.organizationId, entity_type: "work_order", entity_id: id, file_id: file.id, purpose: file.contentType.startsWith("image/") ? "photo" : "service_document", uploaded_by_name: input.actor.actorName, created_at: now }),
+  );
   if (sourcePmOccurrence) {
     const sourceProgram = sourcePmOccurrence.programId
       ? await repository.getMaintenanceProgram(input.organizationId, sourcePmOccurrence.programId)

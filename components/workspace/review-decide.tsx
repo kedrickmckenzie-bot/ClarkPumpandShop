@@ -3,7 +3,8 @@ import Link from "next/link";
 import { ReviewRouteButton } from "./review-routing";
 import { plainNextAction } from "@/lib/ops/dispatch-calendar";
 import { plainDay, plainDue } from "@/lib/ops/plain-time";
-import type { DecideRow, DecideSection, DecideStage } from "@/lib/server/review-decide";
+import { stuckFor } from "@/lib/ops/tech-week";
+import type { DecideRow, DecideSection, DecideStage, SentRow } from "@/lib/server/review-decide";
 import styles from "./review-decide.module.css";
 
 const copy: Record<DecideStage, { title: string; hint: string; empty: string }> = {
@@ -32,7 +33,7 @@ function Row({ row, stage, asOf, canRoute }: { row: DecideRow; stage: DecideStag
       <p className={styles.meta}>
         {row.storeLabel ?? "Companywide"}
         {row.workNumber ?? row.requestReference ? ` · ${row.workNumber ?? row.requestReference}` : ""}
-        {row.reportedAt ? ` · reported ${plainDay(row.reportedAt, asOf)}` : ""}
+        {row.stuckSince ? <> · <span className={styles.stuckFor}>stuck {stuckFor(row.stuckSince, asOf)}</span></> : row.reportedAt ? ` · reported ${plainDay(row.reportedAt, asOf)}` : ""}
         {due ? <> · <span className={due.late ? styles.late : undefined}>{due.text}</span></> : null}
       </p>
     </div>
@@ -47,9 +48,35 @@ function Row({ row, stage, asOf, canRoute }: { row: DecideRow; stage: DecideStag
   </li>;
 }
 
+function SentByTechs({ rows, asOf, canRoute }: { rows: SentRow[]; asOf: string; canRoute: boolean }) {
+  if (!rows.length) return null;
+  return <section className={`${styles.section} ${styles.sent}`} aria-label="Sent by techs">
+    <div className={styles.sectionHead}>
+      <h2>Sent by techs ({rows.length})</h2>
+      <p>Problems techs found on site. Choose who handles each one.</p>
+    </div>
+    <ul className={styles.list}>{rows.map(row => {
+      const due = row.dueAt ? plainDue(row.dueAt, asOf) : undefined;
+      return <li key={row.id} className={styles.row}>
+        <div className={styles.main}>
+          <p className={styles.problem}>{row.problem}<span className={styles.found}>Reported by {row.foundBy}</span></p>
+          <p className={styles.meta}>
+            {row.storeLabel} · {row.number} · reported {plainDay(row.reportedAt, asOf)}
+            {due ? <> · <span className={due.late ? styles.late : undefined}>{due.text}</span></> : null}
+          </p>
+        </div>
+        <div className={styles.actions}>
+          {canRoute ? <ReviewRouteButton id={row.id} kind="work" label="Decide" primary/> : null}
+          <Link className={canRoute ? styles.btn : `${styles.btn} ${styles.btnPrimary}`} href={`/app/work-orders/${encodeURIComponent(row.id)}`}>{canRoute ? "Details" : "Open"}</Link>
+        </div>
+      </li>;
+    })}</ul>
+  </section>;
+}
+
 /** Review's default view for managers: three short sections that each end in one decision. */
-export function ReviewDecide({ sections, allOpenCount, asOf, canRoute, storeQuery }: {
-  sections: DecideSection[]; allOpenCount: number; asOf: string; canRoute: boolean; storeQuery?: string;
+export function ReviewDecide({ sections, sent = [], allOpenCount, asOf, canRoute, storeQuery }: {
+  sections: DecideSection[]; sent?: SentRow[]; allOpenCount: number; asOf: string; canRoute: boolean; storeQuery?: string;
 }) {
   const href = (extra: Record<string, string>) => `/app/action-center?${new URLSearchParams({ lane: "all", ...extra, ...(storeQuery ? { store: storeQuery } : {}) })}`;
   return <div className={styles.page}>
@@ -61,6 +88,7 @@ export function ReviewDecide({ sections, allOpenCount, asOf, canRoute, storeQuer
       <Link className={styles.allLink} href={href({})}>See everything open ({allOpenCount}) →</Link>
     </header>
     <StoreJump />
+    <SentByTechs rows={sent} asOf={asOf} canRoute={canRoute}/>
     {sections.map(section => <section key={section.stage} className={styles.section} aria-label={copy[section.stage].title}>
       <div className={styles.sectionHead}>
         <h2>{copy[section.stage].title} ({section.totalCount})</h2>

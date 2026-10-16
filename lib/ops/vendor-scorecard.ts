@@ -318,7 +318,7 @@ export const deadlineOf = (fact: Pick<VendorJobFact, "doBy" | "agreedAt">) => fa
 
 export function jobResult(fact: VendorJobFact, measure: ScorecardMeasureKey, now: string): { counted: boolean; hit?: boolean; value?: number } {
   switch (measure) {
-    case "jobs": return { counted: true };
+    case "jobs": return { counted: true, hit: Boolean(fact.firstCompletedAt) };
     case "declined": return { counted: true, hit: fact.declined };
     case "response": return fact.firstResponseAt ? { counted: true, value: (Date.parse(fact.firstResponseAt) - Date.parse(fact.sentAt)) / 3_600_000 } : { counted: false };
     case "onTime": {
@@ -339,6 +339,19 @@ export function jobResult(fact: VendorJobFact, measure: ScorecardMeasureKey, now
     }
     case "cost": return fact.costLineCount > 0 ? { counted: true, value: fact.costMinor } : { counted: false };
     case "invoice": return { counted: true, hit: fact.invoiceIssue };
+  }
+}
+
+/** Why a job is left out of a measure, in plain words; undefined when it counts. Lets every list add back up to the jobs total. */
+export function notCountedReason(fact: VendorJobFact, measure: ScorecardMeasureKey, now: string): string | undefined {
+  if (jobResult(fact, measure, now).counted) return undefined;
+  switch (measure) {
+    case "response": return "no reply yet";
+    case "onTime": return deadlineOf(fact) ? "due date not reached yet" : "no do-by date";
+    case "firstFix": return "not visited yet";
+    case "callbacks": return !fact.assetId ? "no equipment on the job" : !fact.completedAt ? "not done yet" : "fixed less than 30 days ago";
+    case "cost": return "no cost recorded";
+    default: return undefined;
   }
 }
 

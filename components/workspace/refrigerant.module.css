@@ -46,3 +46,5 @@
 .warn { margin: 0; padding: 8px 12px; border: 1px solid #f5c26b; border-radius: 5px; background: #fffaeb; }
 .secondary { justify-self: start; min-height: 40px; padding: 7px 16px; border: 1px solid var(--product-action, #2563eb) !important; border-radius: 6px; background: #ffffff !important; color: var(--product-action, #2563eb) !important; font: inherit; font-weight: 650; cursor: pointer; }
 .button { display: inline-flex; align-items: center; min-height: 40px; padding: 7px 16px; border-radius: 6px; background: var(--product-action, #2563eb); color: #ffffff !important; font-weight: 650; text-decoration: none !important; }
+:global(#main-content) .choices input[type=radio] { flex: 0 0 auto; width: 18px; height: 18px; min-height: 0; margin: 0; padding: 0; accent-color: #2457d6; }
+:global(#main-content) .choices label { display: flex; justify-content: flex-start; text-align: left; }

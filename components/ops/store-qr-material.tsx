@@ -74,7 +74,7 @@ export function StoreQrMaterial({
         </div>
       </header>
       {error ? <p role="alert">{error}</p> : null}
-      {!createdPath ? <button className={styles.primaryAction} type="button" disabled={creating} onClick={createLink}>{creating ? "Creating…" : "Create store QR code"}</button> : <div className={styles.content}>
+      {!createdPath ? <button className={styles.secondaryAction} type="button" disabled={creating} onClick={createLink}>{creating ? "Creating…" : "Create store QR code"}</button> : <div className={styles.content}>
         <div className={styles.qrFrame}>
           {qrDataUrl ? (
             <Image

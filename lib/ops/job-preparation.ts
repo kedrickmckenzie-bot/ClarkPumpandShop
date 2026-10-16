@@ -110,6 +110,9 @@ export async function updateJobPreparation(
         "FORBIDDEN",
         "A manager changes confirmation timing.",
       );
+    // The manager's instructions and time estimate are read-only for technicians; a tech can still say the job is running long.
+    if ((input.technicianNotes?.trim() || undefined) !== (work.technicianNotes?.trim() || undefined) || (input.estimatedMinutes ?? undefined) !== (work.estimatedMinutes ?? undefined))
+      throw new OpsDomainError("FORBIDDEN", "Your manager sets the notes and time estimate. Call them if something should change.");
   }
   const notes = input.technicianNotes?.trim() || undefined;
   // Technicians keep the manager's planning label; managers may change or clear it.

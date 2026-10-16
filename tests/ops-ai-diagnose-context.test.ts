@@ -13,6 +13,8 @@ describe("troubleshooting context for a job not linked to equipment", () => {
     const repository = resetNorthlineFixtureRepository();
     const job = (await repository.listWorkOrders({ organizationId: NORTHLINE_ORGANIZATION_ID }, { search: "evaporator fan stops intermittently", limit: 5 })).items.find(row => row.storeNumber === "104");
     expect(job).toBeDefined();
+    // The demo links this job to the beer cave; unlink it to test a report that only names the equipment.
+    await repository.atomicWrite([{ sql: "UPDATE ops_work_orders SET asset_id = NULL WHERE organization_id = ? AND id = ?", params: [NORTHLINE_ORGANIZATION_ID, job!.id] }]);
     const context = await aiDiagnoseContext(repository, session, { workOrderId: job!.id });
     expect(context.assetId).toBe("asset-104-beer-cave");
     expect(context.equipment).toContain("NOT linked on this job");

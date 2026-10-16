@@ -58,7 +58,7 @@ export default async function StoreDetailPage({ params, searchParams }: { params
               description="Add equipment and preventive maintenance when it creates useful visibility; neither is required to report or authorize service."
               actions={[
                 ...(canSetupEquipment
-                  ? [{ label: "Set up store equipment", href: `/app/stores/${encodeURIComponent(id)}/equipment-setup`, icon: "asset" as const }]
+                  ? [{ label: "Set up store equipment", href: `/app/stores/${encodeURIComponent(id)}/equipment-setup`, kind: "secondary" as const, icon: "asset" as const }]
                   : []),
                 ...(canSetupPm
                   ? [{ label: "Manage store PM", href: `/app/pm?store=${encodeURIComponent(id)}&setup=plans`, kind: "secondary" as const, icon: "pm" as const }, { label: "Create PM plan", href: `/app/pm/new?store=${encodeURIComponent(id)}`, kind: "secondary" as const, icon: "pm" as const }]

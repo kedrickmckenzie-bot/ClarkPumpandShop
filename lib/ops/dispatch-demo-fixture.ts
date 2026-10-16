@@ -7,6 +7,17 @@ import { addAiDiagnosticDemo } from "./ai-demo-fixture";
 import type { OpsFixture } from "./types";
 import { addCalendarDays } from "./internal-schedule-types";
 import { mondayOf } from "./dispatch-calendar";
+
+/** What a dispatching manager might write for the technician before a visit. */
+const DEMO_TECH_NOTES: Record<string, string> = {
+  refrigeration: "Bring the gauge set and a spare fan motor. Product is in the backup cooler, so take the time you need.",
+  hvac: "Roof hatch key is on the office hook. Check the filters while you're up there.",
+  plumbing: "Shut-off valve is under the back sink. Store asks to avoid the lunch rush.",
+  doors: "Bring the closer adjustment kit. The store manager will hold the door during the fix.",
+  electrical: "Breaker panel is in the stockroom. Lock out before opening the fixture.",
+  foodservice: "Kitchen opens at 10. Try to finish before then.",
+  general_repairs: "Small job. Pair it with anything else at this store if you can.",
+};
 const examples = [
   {
     "store": 104,
@@ -240,7 +251,10 @@ export function addDispatchDemo(f: OpsFixture, options: { centralTeam?: boolean 
     const dueAt=`${addCalendarDays(date,i===25?-1:i%3===0?0:2)}T16:00:00.000Z`;
     const nextAction=waiting?"Arrange parts":held?"Wait for a suitable internal visit":membershipId?"Begin internal work":"Arrange team pickup";
     const categoryKey=tech===undefined?["plumbing","doors","plumbing","general_repairs","doors","foodservice"][i-24]:people[tech][1];
-    f.workOrders.push({id,organizationId:org,number:`CPS-2026-${String(8401+i).padStart(4,"0")}`,storeId,problem:e.problem,shortName:demoShortNames[e.problem.slice(0,40)],categoryKey,priority:e.urgent?"urgent":"routine",status:waiting?"waiting_on_parts":started?"in_progress":"approved",version:0,internalAccountableType:"membership",internalAccountableId:manager,internalAccountableParty:managerName,accountableParty:waiting||held?managerName:who,nextAction,dueAt,escalationTo:"Facilities leadership",createdAt});
+    // Linked to the store's matching equipment when there is one, with the manager's notes on some jobs.
+    const demoAsset=f.assets.find(a=>a.organizationId===org&&a.storeId===storeId&&a.categoryKey===categoryKey);
+    const demoNotes=i%3===0?DEMO_TECH_NOTES[categoryKey]:undefined;
+    f.workOrders.push({id,organizationId:org,number:`CPS-2026-${String(8401+i).padStart(4,"0")}`,storeId,problem:e.problem,shortName:demoShortNames[e.problem.slice(0,40)],categoryKey,assetId:demoAsset?.id,technicianNotes:demoNotes,priority:e.urgent?"urgent":"routine",status:waiting?"waiting_on_parts":started?"in_progress":"approved",version:0,internalAccountableType:"membership",internalAccountableId:manager,internalAccountableParty:managerName,accountableParty:waiting||held?managerName:who,nextAction,dueAt,escalationTo:"Facilities leadership",createdAt});
     f.assignments.push({id:assignmentId,organizationId:org,workOrderId:id,kind:"internal",internalTarget:membershipId?"person":"pool",internalMembershipId:membershipId,status:membershipId?"accepted":"pending",assignedAt:createdAt});
     if(!held && (started||i%7!==0)){
       const scheduleId=`${id}-schedule`;

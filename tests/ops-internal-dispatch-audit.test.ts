@@ -1,3 +1,4 @@
+import { bulkSeedD1 } from "./helpers/d1-bulk-seed";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { Miniflare } from "miniflare";
@@ -43,6 +44,7 @@ for (const adapter of ["fixture", "D1", "PostgreSQL"] as const) describe.skipIf(
         for (const sql of readFileSync(`drizzle/${file}`, "utf8").split("--> statement-breakpoint").map(s => s.trim()).filter(Boolean)) await db.prepare(sql).run();
       }
       repository = createOpsD1Repository(db as unknown as D1Database);
+      await bulkSeedD1(db, fixture);
     }
     if (adapter === "PostgreSQL") {
       const parsed = new URL(postgresUrl!);
@@ -57,7 +59,7 @@ for (const adapter of ["fixture", "D1", "PostgreSQL"] as const) describe.skipIf(
       }
       repository = createOpsPostgresRepository(pool);
     }
-    if (adapter !== "fixture") await seedOpsRepository(repository, fixture);
+    if (adapter === "PostgreSQL") await seedOpsRepository(repository, fixture);
     mocks.repository.mockImplementation(async () => repository);
     mocks.session.mockResolvedValue({ accessMode: "authenticated", role: "facilities", userId: "user-northline-facilities", membershipId: "membership-northline-facilities", organizationId: dispatchOrg, organizationName: "Fictional demo", displayName: "Jordan Lee", email: "qa@example.test", scopeLabel: "Company", companywide: true, permissions: ["ops:write"] });
   }, 120000);

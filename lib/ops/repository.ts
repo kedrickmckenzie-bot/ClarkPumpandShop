@@ -141,6 +141,8 @@ export interface WorkOrderListQuery extends PageRequest {
   internalMembershipId?: OpsId;
   /** Work a technician reported themselves (found on site). */
   foundByMembershipId?: OpsId;
+  /** Any work a technician reported themselves. */
+  foundByTechnician?: boolean;
   internalOnly?: boolean;
   /** Dispatch shows work for the maintenance team, not store-team checks assigned to store staff. */
   maintenanceTeamOnly?: boolean;

@@ -1,4 +1,6 @@
 "use client";
+import { jobShortName } from "@/lib/ops/short-name";
+import { stuckFor } from "@/lib/ops/tech-week";
 import { cachedDateTimeFormat } from "@/lib/ops/intl-format-cache";
 
 import Link from "next/link";
@@ -84,8 +86,8 @@ export function DispatchBoard(props: DispatchBoardProps) {
       onPointerUp={event=>{const drag=pointerDrag.current;pointerDrag.current=undefined;setDragged(undefined);setHover(undefined);if(!drag?.moved)return;suppressDragClick.current=true;const destination=dragDestination(event.clientX,event.clientY);if(destination){opener.current=event.currentTarget;setSelected({job:drag.job,mode:"schedule",day:destination.day,person:destination.person??{id:"",name:"Needs a technician"}});}}}
       onPointerCancel={()=>{pointerDrag.current=undefined;setDragged(undefined);setHover(undefined);}}
       onClick={event=>{if(event.detail!==0&&suppressDragClick.current){suppressDragClick.current=false;return;}openJob(job);}} aria-label={`${job.number}, Store ${job.storeNumber}, ${job.problem}, ${status.label}`}>
-      <span className={styles.chipTitle}><strong>{job.storeNumber}</strong> {job.problem}</span>
-      <span className={styles.status} data-tone={status.tone}>{urgent ? "Urgent · " : ""}{status.label}</span>
+      <span className={styles.chipTitle} title={job.problem}><strong>{job.storeNumber}</strong> {jobShortName(job)}</span>
+      <span className={styles.status} data-tone={status.tone}>{urgent ? "Urgent · " : ""}{status.label}{status.tone === "waiting" && job.updatedAt ? ` · ${stuckFor(job.updatedAt, new Date().toISOString()).replace("since today", "today")}` : ""}</span>
       {mobile ? <span className={styles.phoneAction}>View job</span> : null}
     </button>;
   };
@@ -312,7 +314,7 @@ function DaySheet({ day, person, filters, bucket, organizationZone, onClose, onO
   }, [day,person,filters,bucket]);
   return <Sheet title={`${person?.name ?? "Not assigned"} · ${dateLabel(day, true)}`} onClose={onClose}><div className={styles.sheetBody}>
     {error ? <p role="alert">{error} <button type="button" onClick={() => void load()}>Try again</button></p> : null}
-    {!page ? <div className={styles.skeleton} role="status">Loading…</div> : <>{orderedStops(page.items).map(job => <button type="button" className={styles.dayJob} key={job.id} onClick={() => onOpen(job)}><strong>Store {job.storeNumber} · {job.problem}</strong><span>{dispatchStatus(job).label} · {dispatchPlanLabel(job.schedule, organizationZone)}</span></button>)}
+    {!page ? <div className={styles.skeleton} role="status">Loading…</div> : <>{orderedStops(page.items).map(job => <button type="button" className={styles.dayJob} key={job.id} onClick={() => onOpen(job)}><strong>Store {job.storeNumber} · {jobShortName(job)}</strong><span>{dispatchStatus(job).label} · {dispatchPlanLabel(job.schedule, organizationZone)}</span></button>)}
       <p>Showing {page.items.length} of {page.totalCount ?? page.items.length}</p>{page.nextCursor ? <button type="button" disabled={pending} onClick={() => void load(page.nextCursor)}>Show more</button> : null}
       {!page.items.length ? <p>No jobs match this day. Close to choose another day.</p> : null}</>}
   </div></Sheet>;

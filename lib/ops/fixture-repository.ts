@@ -548,6 +548,27 @@ function applyStatement(fixture: OpsFixture, idempotencyKeys: IdempotencyKey[], 
   throw new Error(`Fixture repository cannot execute statement: ${statement.sql}`);
 }
 
+/**
+ * A copy of the fixture to apply one atomic write to: the tables the statements change are deep-copied, the rest are
+ * shared because nothing writes to them. Copying the whole demo dataset per write took most of the time of every save.
+ * Falls back to a full copy when a statement's table can't be matched to one fixture array.
+ */
+function writeCandidate(fixture: OpsFixture, statements: readonly OpsStatement[]): OpsFixture {
+  const candidate = { ...fixture } as OpsFixture & Record<string, unknown>, copied = new Set<string>();
+  for (const statement of statements) {
+    if (statement.dispatchAccess || statement.storeNotesFence) continue;
+    const table = statement.sql.match(/^(?:INSERT INTO|UPDATE|DELETE FROM) ([a-z0-9_]+)/i)?.[1];
+    if (!table) return clone(fixture);
+    if (table === "ops_idempotency_keys") continue;
+    let rows: unknown;
+    try { rows = mapTable(fixture, table); } catch { return clone(fixture); }
+    const key = Object.keys(fixture).find(name => (fixture as unknown as Record<string, unknown>)[name] === rows);
+    if (!key) return clone(fixture);
+    if (!copied.has(key)) { copied.add(key); candidate[key] = clone(rows); }
+  }
+  return candidate;
+}
+
 class FixtureOpsRepository implements MutableOpsFixtureRepository {
   async listDispatchPeople(scope: OrganizationScope, storeId: string, search = "", cursor?: string, kind?: "technician" | "manager") {
     const store=this.fixture.stores.find(s=>s.organizationId===scope.organizationId&&s.id===storeId); if(!store||!storeAllowed(this.fixture,scope,storeId)) return {items:[]};
@@ -691,6 +712,8 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
     }
   }
   snapshot() { return clone(this.fixture); }
+  /** Whether the stored data has every collection this build expects, checked without copying it. */
+  hasCurrentShape() { const f = this.fixture as Partial<OpsFixture>; return [f.equipmentTemplates, f.componentTemplates, f.replacementProfiles, f.requestImpactAssessments, f.siteVisitWorkOrders].every(Array.isArray); }
 
   async getOrganization(organizationId: OpsId) { return clone(this.fixture.organizations.find((row) => row.id === organizationId) ?? null); }
   async getDivision(organizationId: OpsId, divisionId: OpsId) { return clone(this.fixture.divisions.find((row) => row.organizationId === organizationId && row.id === divisionId) ?? null); }
@@ -1042,6 +1065,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
         && (!query.internalOnly || (() => {const a=currentAssignment(this.fixture, scope.organizationId, row.id);return a?.kind==='internal'&&['pending','issued','opened','accepted'].includes(a.status);})())
         && (!query.internalTarget || (() => {const a=currentAssignment(this.fixture, scope.organizationId, row.id);return a?.kind==='internal'&&['pending','issued','opened','accepted'].includes(a.status)&&(a.internalTarget??(a.internalMembershipId?'person':undefined))===query.internalTarget;})())
         && (!query.foundByMembershipId || row.foundByMembershipId === query.foundByMembershipId)
+        && (!query.foundByTechnician || Boolean(row.foundByMembershipId))
         && (!query.internalMembershipId || (() => { const current = currentAssignment(this.fixture, scope.organizationId, row.id); return current?.kind === "internal" && current.internalMembershipId === query.internalMembershipId; })())
         && (!query.maintenanceTeamOnly || (() => { const current = currentAssignment(this.fixture, scope.organizationId, row.id); if (current?.kind !== "internal") return false; if ((current.internalTarget ?? "person") !== "person") return true; return this.fixture.memberships.some(m => m.organizationId === scope.organizationId && m.id === current.internalMembershipId && m.role === "internal_technician"); })())
         && (!query.categoryKey || (row.categoryKey ?? "unclassified") === query.categoryKey)
@@ -1339,7 +1363,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
 
   async deleteSavedView(organizationId: OpsId, ownerMembershipId: OpsId, id: OpsId): Promise<boolean> { const candidate = clone(this.fixture); const before = (candidate.savedViews ?? []).length; candidate.savedViews = (candidate.savedViews ?? []).filter((row) => !(row.organizationId === organizationId && row.ownerMembershipId === ownerMembershipId && row.id === id)); if ((candidate.savedViews ?? []).length === before) return false; this.fixture = candidate; return true; }
 
-  async atomicWrite(statements: readonly OpsStatement[]) { const candidate = clone(this.fixture); const candidateIdempotencyKeys = clone(this.idempotencyKeys); statements.forEach((statement) => applyStatement(candidate, candidateIdempotencyKeys, statement)); this.fixture = candidate; this.idempotencyKeys = candidateIdempotencyKeys; }
+  async atomicWrite(statements: readonly OpsStatement[]) { const candidate = writeCandidate(this.fixture, statements); const candidateIdempotencyKeys = clone(this.idempotencyKeys); statements.forEach((statement) => applyStatement(candidate, candidateIdempotencyKeys, statement)); this.fixture = candidate; this.idempotencyKeys = candidateIdempotencyKeys; }
 }
 
 export function createOpsFixtureRepository(fixture: OpsFixture): MutableOpsFixtureRepository {
@@ -1383,8 +1407,8 @@ export function getNorthlineFixtureRepository(): MutableOpsFixtureRepository {
   // Refresh command/read methods after local hot reload without replacing source records.
   if (Object.getPrototypeOf(repository) !== FixtureOpsRepository.prototype) Object.setPrototypeOf(repository, FixtureOpsRepository.prototype);
   setPresentationRuntimeRepository(repository);
-  const snapshot = repository.snapshot() as Partial<OpsFixture>;
-  if (!Array.isArray(snapshot.equipmentTemplates) || !Array.isArray(snapshot.componentTemplates) || !Array.isArray(snapshot.replacementProfiles) || !Array.isArray(snapshot.requestImpactAssessments) || !Array.isArray(snapshot.siteVisitWorkOrders)) {
+  // Checked in place: copying the whole demo dataset on every repository lookup made each request slow.
+  if (!(repository as unknown as FixtureOpsRepository).hasCurrentShape()) {
     return setPresentationRuntimeRepository(createNorthlineFixtureRepository(process.env.VITEST ? undefined : new Date().toISOString()));
   }
   return repository;

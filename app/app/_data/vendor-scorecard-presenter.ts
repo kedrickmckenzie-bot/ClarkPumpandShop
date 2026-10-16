@@ -3,7 +3,7 @@ import type { OpsRepository } from "@/lib/ops/repository";
 import { formatOperationsDate } from "@/lib/ops/local-time";
 import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import {
-  MEASURES, MEASURE_INFO, RANK_SAMPLE, SMALL_SAMPLE, buildScorecard, deadlineOf, historyLength, inWindow, isMeasure, isPeriod, jobResult, rankRows,
+  MEASURES, MEASURE_INFO, RANK_SAMPLE, SMALL_SAMPLE, buildScorecard, deadlineOf, historyLength, inWindow, isMeasure, isPeriod, jobResult, notCountedReason, rankRows,
   scoreRows, scorecardWindowAt, summarizeAll, tradeLabel,
   type MeasureSummary, type ScoreRow, type ScorecardMeasureKey, type ScorecardPeriod, type ScorecardWindow, type VendorJobFact,
 } from "@/lib/ops/vendor-scorecard";
@@ -24,6 +24,8 @@ export interface ScorecardRow { key: string; label: string; sublabel?: string; h
 export type DrillPlacement = "vendors" | "summary" | "history" | "district" | "trade" | `compare:${string}`;
 export interface ScorecardDrill {
   placement: DrillPlacement; context: string; measure: ScorecardMeasureKey; measureLabel: string; definition: string; headline: string; closeHref: string;
+  /** The jobs in this slice that do not count toward the measure, and why, so the list adds back up to the jobs total. */
+  notCounted?: string;
   rows: Array<{ workOrderId: string; number: string; problem: string; store: string; sent: string; result: string; tone: "good" | "bad" | "neutral";
     /** For "Repaired again": what this vendor did, beside the repair that followed on the same equipment. */
     repeat?: { did?: string; nextId: string; nextNumber: string; nextProblem: string; daysLater: number; tags: string[] } }>;
@@ -66,17 +68,29 @@ function formatValue(key: ScorecardMeasureKey, value: number) {
   return key === "response" ? hoursLabel(value) : key === "cost" ? money(value) : key === "jobs" || key === "invoice" ? String(value) : percent(value);
 }
 
+const jobs = (n: number) => n === 1 ? "job" : "jobs";
+const SLICE: Record<Exclude<ScorecardMeasureKey, "jobs">, (n: number) => string> = {
+  response: () => "replied",
+  onTime: n => `${jobs(n)} due so far`,
+  firstFix: n => n === 1 ? "visited job" : "visited jobs",
+  callbacks: n => n === 1 ? "equipment fix 30+ days old" : "equipment fixes 30+ days old",
+  cost: n => `${jobs(n)} with a cost`,
+  declined: n => `${jobs(n)} sent`,
+  invoice: jobs,
+};
+
 function cellFor(summary: MeasureSummary, href: string): ScorecardCell {
   const key = summary.key;
   const empty = summary.counted === 0 || summary.value === undefined;
   const value = empty || summary.tooFew ? "—" : formatValue(key, summary.value!);
+  // Each measure counts a different slice of the jobs, so every detail names its slice.
   const detail = empty ? summary.emptyReason ?? "No data yet"
-    : summary.tooFew ? `Only ${summary.counted} ${summary.counted === 1 ? "job" : "jobs"} so far · need ${SMALL_SAMPLE}`
-    : key === "jobs" ? "sent"
-    : key === "response" ? `${summary.counted} replies`
-    : key === "cost" ? `${summary.counted} jobs with cost`
+    : key === "jobs" ? `${summary.hits} done · ${summary.counted - summary.hits} not done yet`
+    : summary.tooFew ? `Only ${summary.counted} ${SLICE[key](summary.counted)} so far · need ${SMALL_SAMPLE}`
+    : key === "response" ? `${summary.counted} ${SLICE.response(summary.counted)}`
+    : key === "cost" ? `${summary.counted} ${SLICE.cost(summary.counted)}`
     : key === "invoice" ? (summary.hits ? `of ${summary.counted} jobs` : "none open")
-    : `${summary.hits} of ${summary.counted}`;
+    : `${summary.hits} of ${summary.counted} ${SLICE[key](summary.counted)}`;
   const trendLabel = summary.trend && summary.priorValue !== undefined ? `${summary.trend === "better" ? "Better" : "Worse"} than the previous period (was ${formatValue(key, summary.priorValue)})` : undefined;
   return { measure: key, value, detail, summary, href, empty, trendLabel };
 }
@@ -205,7 +219,13 @@ export async function buildVendorScorecardPage(repository: OpsRepository, sessio
     const sliceLabel = sliceKind === "trade" ? tradeLabel(sliceValue) : sliceKind === "region" ? (pool[0]?.regionName ?? "No district") : sliceKind === "history" ? periodLabel(window, period) : undefined;
     drill = {
       placement, context: [name, sliceLabel].filter(Boolean).join(" · "), measure, measureLabel: info.label, definition: info.definition,
-      headline: cell.empty ? "No jobs count toward this yet." : summary.tooFew ? `${cell.detail}. Showing the jobs so far.` : `${cell.value}${cell.detail && !["sent", "none open"].includes(cell.detail) ? ` · ${cell.detail}` : ""}`,
+      headline: cell.empty ? "No jobs count toward this yet." : summary.tooFew ? `${cell.detail}. Showing the jobs so far.` : `${cell.value}${cell.detail !== "none open" ? ` · ${cell.detail}` : ""}`,
+      notCounted: (() => {
+        const reasons = new Map<string, number>();
+        for (const fact of pool) { const reason = notCountedReason(fact, measure, now); if (reason) reasons.set(reason, (reasons.get(reason) ?? 0) + 1); }
+        const left = [...reasons.values()].reduce((a, b) => a + b, 0);
+        return left ? `Not counted: ${left} of ${pool.length} jobs — ${[...reasons.entries()].sort((a, b) => b[1] - a[1]).map(([reason, n]) => `${n} ${reason}`).join(", ")}.` : undefined;
+      })(),
       closeHref: href({}, `#${placement === "vendors" ? "scorecard-vendors" : placement.startsWith("compare:") ? `scorecard-${sliceValue}` : `scorecard-${placement}`}`),
       ...(() => {
         const size = 50, pages = Math.max(1, Math.ceil(rows.length / size));

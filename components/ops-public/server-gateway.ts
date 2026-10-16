@@ -2081,3 +2081,53 @@ export async function resolveInspectionMasterFiles(token:string) {
  const inspection=await runtime().repository.inspectionForWork(access.view.organizationId,access.view.workOrderId);
  return inspection&&inspection.workOrderId===access.view.workOrderId?masterDocuments(inspection):[];
 }
+
+/**
+ * What a vendor technician sees about the job beyond the frozen work order: when it was reported, the equipment's
+ * facts, photos the operator shared, and only this vendor's own earlier work on the same unit. Never other vendors'
+ * work, internal technicians' names, costs or internal files.
+ */
+export async function resolveServiceJobContext(token: string) {
+  const access = await resolveServiceAuthorization(token);
+  if (!access) return null;
+  const { repository } = runtime(), view = access.view, org = view.organizationId;
+  const work = await repository.getWorkOrder(org, view.workOrderId);
+  if (!work) return null;
+  const [request, asset, files] = await Promise.all([
+    work.requestId ? repository.getRequest(org, work.requestId) : null,
+    view.asset ? repository.getAsset(org, view.asset.id) : null,
+    repository.listFilesForEntity(org, "work_order", work.id, "vendor_shared"),
+  ]);
+  const today = now().slice(0, 10);
+  const warranty = asset ? (await repository.listWarrantyDirectory({ organizationId: org, storeIds: [view.store.id] }, { today, view: "active", assetId: asset.id, limit: 1 })).items[0] : undefined;
+  let history: Array<{ id: string; number: string; problem: string; date: string; did?: string }> = [];
+  if (asset) {
+    const past = await repository.listWorkOrders({ organizationId: org, storeIds: [view.store.id] }, { assetId: asset.id, vendorId: view.vendor.id, statuses: ["completed_pending_review", "resolved", "closed"], limit: 6 });
+    history = (await Promise.all(past.items.filter(row => row.id !== work.id).slice(0, 5).map(async row => {
+      // Only outcomes this vendor recorded on its own visits.
+      const outcomes = await repository.listWorkOutcomesForWorkOrder(org, row.id);
+      const own: typeof outcomes = [];
+      for (const outcome of outcomes) if (outcome.visitId && (await repository.getVisit(org, outcome.visitId))?.vendorId === view.vendor.id) own.push(outcome);
+      const latest = own.sort((a, b) => (b.outcomeRecordedAt ?? "").localeCompare(a.outcomeRecordedAt ?? ""))[0];
+      return latest ? { id: row.id, number: row.number, problem: row.problem, date: latest.outcomeRecordedAt ?? row.createdAt, did: latest.outcomeNotes?.trim() || undefined } : null;
+    }))).filter((row): row is NonNullable<typeof row> => Boolean(row));
+  }
+  return {
+    reportedAt: request?.submittedAt ?? work.createdAt,
+    reportedBy: request?.reporterName,
+    equipment: asset ? {
+      name: asset.name, tag: asset.assetTag, make: [asset.manufacturer, asset.model].filter(Boolean).join(" ") || undefined,
+      serial: asset.serialNumber, installedAt: asset.installedAt, warranty: warranty ? { provider: warranty.provider, end: warranty.end } : undefined,
+    } : undefined,
+    photos: files.filter(file => file.contentType?.startsWith("image/")).map(file => ({ id: file.id, name: file.originalName })),
+    history,
+  };
+}
+
+/** A photo the operator shared with the vendor on this job, or null. */
+export async function resolveServiceJobPhoto(token: string, fileId: string) {
+  const access = await resolveServiceAuthorization(token);
+  if (!access) return null;
+  const files = await runtime().repository.listFilesForEntity(access.view.organizationId, "work_order", access.view.workOrderId, "vendor_shared");
+  return files.find(file => file.id === fileId && file.contentType?.startsWith("image/")) ?? null;
+}

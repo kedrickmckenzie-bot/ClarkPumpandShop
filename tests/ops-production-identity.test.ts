@@ -293,7 +293,7 @@ describe("production identity and organization selection", () => {
     expect(queue.metrics?.find(row => row.id === "attention-open")?.value).toBe("88");
     expect(model.spotlight?.facts.find(row => row.label === "Approved replacement")?.value).toBe("$32,800.00");
     expect(model.equipmentIssues?.rows).toHaveLength(5);
-    expect(model.equipmentIssues?.rows[0]).toMatchObject({ id: "asset-104-beer-cave", issueCount: 6, cost: "$24,110.00" });
+    expect(model.equipmentIssues?.rows[0]).toMatchObject({ id: "asset-104-beer-cave", issueCount: 7, cost: "$24,110.00" });
     expect(boundary.snapshot).not.toHaveBeenCalled();
   });
   it("loads access-only setup pages without loading tenant source records", async () => {

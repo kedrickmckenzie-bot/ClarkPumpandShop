@@ -6,7 +6,11 @@ import { formatPublicDateTime, PublicFrame } from "./public-ui";
 import { VendorResponseForm } from "./vendor-response-form";
 import styles from "./public-workflows.module.css";
 
-export function ServiceAuthorizationPage({ token, authorization, forms=[] }: { token: string; authorization: ServiceAuthorizationView;forms?:Array<{name:string;href:string}> }) {
+export type ServiceJobContext = NonNullable<Awaited<ReturnType<typeof import("./server-gateway").resolveServiceJobContext>>>;
+
+export function ServiceAuthorizationPage({ token, authorization, forms=[], job }: { token: string; authorization: ServiceAuthorizationView;forms?:Array<{name:string;href:string}>; job?: ServiceJobContext }) {
+  const zone = authorization.store.timeZone;
+  const day = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: zone ?? undefined });
   const hasFinalResponse = authorization.serviceDecisionsClosed || authorization.status === "accepted" || authorization.status === "declined";
   return (
     <PublicFrame organizationName={authorization.organizationName} context="Work order" mode={authorization.mode}>
@@ -30,19 +34,41 @@ export function ServiceAuthorizationPage({ token, authorization, forms=[] }: { t
             </div>
 
             <p className={styles.serviceText}>{authorization.service.problem}</p>
+            {job ? <p className={styles.helper}>Reported {formatPublicDateTime(job.reportedAt, zone)}{job.reportedBy ? ` by ${job.reportedBy}` : ""}</p> : null}
             <div className={styles.requestedWork}>
               <h2 className={styles.cardTitle}>What we need you to do</h2>
               <p className={styles.serviceText}>{authorization.service.requestedWork}</p>
             </div>
-            {authorization.service.serviceNote ? <div className={styles.requestedWork}><h2 className={styles.cardTitle}>Service note</h2><p className={styles.serviceText}>{authorization.service.serviceNote}</p></div> : null}
+            {authorization.service.serviceNote ? <div className={styles.requestedWork}><h2 className={styles.cardTitle}>Notes from {authorization.organizationName}</h2><p className={styles.serviceText}>{authorization.service.serviceNote}</p></div> : null}
             <div className={styles.detailGrid} style={{ marginTop: "1.2rem" }}>
               {authorization.service.category ? <div className={styles.detail}><span className={styles.detailLabel}>Service type</span><p className={styles.detailValue}>{authorization.service.category}</p></div> : null}
-              <div className={styles.detail}><span className={styles.detailLabel}>Equipment</span><p className={styles.detailValue}>{authorization.service.asset ?? "See the job description"}</p></div>
+              {job?.equipment ? null : <div className={styles.detail}><span className={styles.detailLabel}>Equipment</span><p className={styles.detailValue}>{authorization.service.asset ?? "See the job description"}</p></div>}
               <div className={styles.detail}><span className={styles.detailLabel}>Issued</span><p className={styles.detailValue}>{formatPublicDateTime(authorization.issuedAt, authorization.store.timeZone)}</p></div>
               <div className={styles.detail}><span className={styles.detailLabel}>Response due</span><p className={styles.detailValue}>{authorization.responseDueAt ? formatPublicDateTime(authorization.responseDueAt, authorization.store.timeZone) : "No response deadline stated"}</p></div>
             </div>
             <div className={styles.callout} style={{ marginTop: "1rem" }}><strong>Your next step</strong><p>{authorization.nextStep}</p></div>
           </section>
+
+          {job?.equipment ? <section className={styles.card} aria-labelledby="service-equipment-title">
+            <h2 className={styles.cardTitle} id="service-equipment-title">Equipment</h2>
+            <p className={styles.serviceText}><strong>{job.equipment.name}</strong> · {job.equipment.tag}</p>
+            {job.equipment.make || job.equipment.serial ? <p className={styles.helper}>{[job.equipment.make, job.equipment.serial ? `Serial ${job.equipment.serial}` : undefined].filter(Boolean).join(" · ")}</p> : null}
+            {job.equipment.installedAt ? <p className={styles.helper}>Installed {day(job.equipment.installedAt)}</p> : null}
+            {job.equipment.warranty ? <div className={styles.callout} style={{ marginTop: ".8rem" }}><strong>Under warranty</strong><p>With {job.equipment.warranty.provider} until {day(`${job.equipment.warranty.end.slice(0, 10)}T12:00:00Z`)}. Check before replacing covered parts.</p></div> : null}
+            {job.history.length ? <div style={{ marginTop: "1rem" }}>
+              <h3 className={styles.detailLabel}>Your earlier work on this unit</h3>
+              <ul className={styles.stack} style={{ listStyle: "none", padding: 0, margin: ".4rem 0 0" }}>{job.history.map(item => <li key={item.id}>
+                <strong>{day(item.date)}</strong> · {item.number} · {item.problem}{item.did ? <p className={styles.helper}>{item.did}</p> : null}
+              </li>)}</ul>
+            </div> : null}
+          </section> : null}
+
+          {job?.photos.length ? <section className={styles.card} aria-labelledby="service-photos-title">
+            <h2 className={styles.cardTitle} id="service-photos-title">Photos</h2>
+            <ul style={{ display: "flex", flexWrap: "wrap", gap: ".6rem", listStyle: "none", padding: 0, margin: ".6rem 0 0" }}>{job.photos.map(photo => <li key={photo.id}>
+              <a href={`/api/ops-public/service/${encodeURIComponent(token)}/photos/${encodeURIComponent(photo.id)}`} target="_blank" rel="noreferrer"><img src={`/api/ops-public/service/${encodeURIComponent(token)}/photos/${encodeURIComponent(photo.id)}`} alt={photo.name} loading="lazy" style={{ display: "block", width: 140, height: 105, objectFit: "cover", borderRadius: 4, border: "1px solid #d9e0e8" }}/></a>
+            </li>)}</ul>
+          </section> : null}
 
           {forms.length?<section className={styles.card}><h2 className={styles.cardTitle}>Instructions & blank forms</h2><p>Download or print, then return the completed paperwork and photos.</p><ul>{forms.map(f=><li key={f.href}><a target="_blank" rel="noopener noreferrer" href={f.href}>{f.name}</a> · <a href={`${f.href}?download=1`}>Download</a></li>)}</ul></section>:null}
           {authorization.priorResponse ? (

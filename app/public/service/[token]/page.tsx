@@ -1,6 +1,6 @@
 import { PublicLinkUnavailable } from "@/components/ops-public/public-ui";
 import { ServiceAuthorizationPage } from "@/components/ops-public/service-authorization-page";
-import { getPublicOperationsGateway,resolveInspectionMasterFiles } from "@/components/ops-public/server-gateway";
+import { getPublicOperationsGateway,resolveInspectionMasterFiles,resolveServiceJobContext } from "@/components/ops-public/server-gateway";
 
 export default async function PublicServiceAuthorizationRoute({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -12,5 +12,6 @@ export default async function PublicServiceAuthorizationRoute({ params }: { para
   }
   if (!authorization) return <PublicLinkUnavailable kind="service authorization" />;
   const forms=(await resolveInspectionMasterFiles(token)).map(f=>({name:f.originalName,href:`/api/ops-public/service/${encodeURIComponent(token)}/files/${encodeURIComponent(f.id)}`}));
-  return <ServiceAuthorizationPage forms={forms} authorization={authorization} token={token} />;
+  const job = await resolveServiceJobContext(token).catch(() => null);
+  return <ServiceAuthorizationPage forms={forms} authorization={authorization} token={token} job={job ?? undefined} />;
 }

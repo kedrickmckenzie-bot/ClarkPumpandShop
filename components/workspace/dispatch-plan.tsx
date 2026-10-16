@@ -16,6 +16,7 @@ import { civilDate, mondayOf } from "@/lib/ops/dispatch-calendar";
 import type { loadDispatchBoard } from "@/lib/server/dispatch-board-page";
 import { JobSheet, Sheet } from "./dispatch-board";
 import { jobShortName } from "@/lib/ops/short-name";
+import { stuckFor } from "@/lib/ops/tech-week";
 import { DispatchMap, TECH_COLORS, type MapTech } from "./dispatch-map";
 import styles from "./dispatch-plan.module.css";
 
@@ -534,7 +535,7 @@ export function DispatchPlan(initial: Board) {
             {late ? <em className={styles.lateTag}>Late</em> : null}
           </small>
           {state.tone !== "normal" ? (
-            <span className={styles.state}>{state.label}</span>
+            <span className={styles.state}>{state.label}{state.tone === "waiting" && job.updatedAt ? ` · ${stuckFor(job.updatedAt, new Date().toISOString()).replace("since today", "today")}` : ""}</span>
           ) : null}
         </button>
         {movable ? (

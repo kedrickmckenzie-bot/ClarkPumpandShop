@@ -146,3 +146,10 @@
 .inlineForm { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin: 12px 0; }
 .inlineForm label { display: grid; gap: 4px; font-weight: 600; }
 .inlineForm input { min-height: 40px; padding: 6px 10px; font-size: 16px; }
+.about { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px 28px; margin: 14px 0; padding: 14px 0; border-top: 1px solid #e2e7ee; border-bottom: 1px solid #e2e7ee; }
+.about p { margin: 2px 0 0; }
+:global(#main-content) .aboutLabel { margin: 0 0 4px; color: #526174; font-size: 13px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+.managerNotes { margin: 0 0 14px; padding: 12px 16px; border-left: 4px solid #2457d6; border-radius: 4px; background: #eef3fd; }
+.managerNotes p { margin: 0; white-space: pre-wrap; }
+.photos { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.photos img { display: block; width: 140px; height: 105px; object-fit: cover; border: 1px solid #d9e0e8; border-radius: 4px; background: #f3f5f8; }

@@ -20,6 +20,8 @@ export interface ReportFoundProblemInput {
   /** Today in the organization's zone (YYYY-MM-DD), for the warranty check. */
   today: string;
   key: string;
+  /** Photos already in private storage, attached to the new job. */
+  files?: import("./types").StoredFile[];
 }
 
 async function sha256(value: string) {
@@ -48,10 +50,10 @@ export async function reportFoundProblem(svc: OpsCommandServices, input: ReportF
   if (input.fixNow && asset && await underWarranty(svc, input.organizationId, input.storeId, asset.id, input.today)) {
     throw new OpsDomainError("CONFLICT", "This equipment is under warranty. Send it to your manager instead of repairing it.");
   }
-  const requestHash = await sha256(JSON.stringify([techId, input.storeId, input.assetId ?? "", problem, input.fixNow]));
+  const requestHash = await sha256(JSON.stringify([techId, input.storeId, input.assetId ?? "", problem, input.fixNow, (input.files ?? []).map(file => file.sha256)]));
   return createWorkOrder(svc, {
     organizationId: input.organizationId, actor: input.actor, storeId: input.storeId, assetId: asset?.id, categoryKey: asset?.categoryKey,
-    problem, priority: "routine", foundByMembershipId: techId,
+    problem, priority: "routine", foundByMembershipId: techId, files: input.files,
     accountableParty: "Facilities coordinator", nextAction: "Choose who handles it", escalationTo: "Facilities director",
     // A manager should decide on a tech's report by the next day; fix-now jobs keep the normal deadline.
     dueAt: input.fixNow ? undefined : new Date(Date.now() + 24 * 3_600_000).toISOString(),

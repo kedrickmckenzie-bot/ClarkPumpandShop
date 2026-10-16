@@ -1,4 +1,6 @@
 import { technicianManager } from "@/lib/server/technician-manager";
+import { underWarranty } from "@/lib/ops/found-problem";
+import { formatOperationsDate, formatOperationsDateTime } from "@/lib/ops/local-time";
 import { AiDiagnoseChat } from "@/components/workspace/ai-diagnose-chat";
 import { JobPreparationFields } from "@/components/workspace/job-preparation-fields";
 import { getAiClient } from "@/lib/server/ai-provider";
@@ -93,13 +95,27 @@ export default async function InternalJob({ params, searchParams }: { params: Pr
   const contact=store?await StoreContact({repository:r,store}):null;
   const refrigerant=work.asset?await RefrigerantPanel({assetId:work.asset.id,workOrderId:id,returnTo:`/app/my-work/${encodeURIComponent(id)}`,saved:saved==="refrigerant",tag:tagFromQuery(query)}):null;
   const recent=await TechnicianHistory({repository:r,scope:await internalDispatchScope(r,s),storeId:work.storeId,assetId:work.asset?.id,excludeId:id,limit:5,title:work.asset?"Recent work on this equipment":"Recent work at this store",zone});
-  const backHref = manager ? "/app/dispatch" : "/app/my-work";
+  // A tech who opened the job from My week goes back there.
+  const fromWeek = !manager && query.from === "week";
+  const backHref = manager ? "/app/dispatch" : fromWeek ? "/app/my-week" : "/app/my-work";
   const aiHelp = Boolean(getAiClient());
 
   const fieldManager = manager ? undefined : await technicianManager(r, s.organizationId);
+  // What a tech needs before starting: who reported it, the equipment, the manager's notes and photos.
+  const today = civilDate(new Date().toISOString(), zone);
+  const [asset, warranty, finder] = await Promise.all([
+    work.asset ? r.getAsset(org, work.asset.id) : null,
+    work.asset ? underWarranty({ repository: r }, org, work.storeId, work.asset.id, today) : undefined,
+    work.foundByMembershipId ? r.getMembership(org, work.foundByMembershipId).then(m => m ? r.getUserInOrganization(org, m.userId) : null) : null,
+  ]);
+  const reported = work.request ? { by: work.request.reporterName, at: work.request.submittedAt }
+    : finder ? { by: finder.displayName, at: work.createdAt } : { at: work.createdAt };
+  const photos = files.filter(file => file.contentType?.startsWith("image/")), documents = files.filter(file => !file.contentType?.startsWith("image/"));
+  const fileHref = (fileId: string) => `/api/ops/work-orders/${encodeURIComponent(id)}/files/${encodeURIComponent(fileId)}`;
+  const managerFirst = work.internalAccountableParty.split(" ")[0];
   return <div className={styles.workspace}>
     <header className={styles.jobHeader}>
-      <Link href={backHref}>← {manager ? "Dispatch" : "My work"}</Link>
+      <Link href={backHref}>← {manager ? "Dispatch" : fromWeek ? "My week" : "My work"}</Link>
       <h1>
         {work.problem}
         {urgent ? <span className={`${styles.badge} ${styles.badgeUrgent}`}>{work.priority === "emergency" ? "Emergency" : "Urgent"}</span> : null}
@@ -123,19 +139,39 @@ export default async function InternalJob({ params, searchParams }: { params: Pr
         {work.dueAt && !(resultBlocked && !manager) ? <div><dt>Deadline</dt><dd>{dueLabel({dueAt:work.dueAt,storeZone:zone},civilDate(new Date().toISOString(),zone),organization!.timeZone,undefined,true)}</dd></div> : null}
         {work.targetCompletionAt && !(resultBlocked && !manager) ? <div><dt>Finish by</dt><dd>{dispatchTime(work.targetCompletionAt,zone,organization!.timeZone)}</dd></div> : null}
       </dl>
-      {work.asset ? <p><strong>Equipment:</strong> {work.asset.name} · {work.asset.assetTag}{work.component ? ` · ${work.component.name}` : ""}</p> : null}
-      {work.technicianNotes ? <p><strong>Notes for the tech:</strong> {work.technicianNotes}</p> : null}
-      {(mine||manager)&&!terminal?<details><summary>Notes and time estimate</summary><RecordForm action={`/api/ops/work-orders/${encodeURIComponent(id)}/preparation`} className={styles.form}><input type="hidden" name="expectedVersion" value={work.version??0}/><JobPreparationFields allowConfirmation={manager} notes={work.technicianNotes} minutes={work.estimatedMinutes} confirmationDelay={work.confirmationDelay}/>{active?<label>Taking longer: about how many more minutes?<input type="number" name="remainingMinutes" min="1" max="1440"/></label>:null}<button type="submit">Save job details</button></RecordForm></details>:null}
+      <div className={styles.about}>
+        <div>
+          <h2 className={styles.aboutLabel}>Reported</h2>
+          <p>{reported.by ? <><strong>{reported.by}</strong> · </> : null}{formatOperationsDateTime(reported.at, zone)}</p>
+        </div>
+        {asset ? <div>
+          <h2 className={styles.aboutLabel}>Equipment</h2>
+          <p><Link href={`/app/equipment/${encodeURIComponent(asset.id)}`}><strong>{asset.name}</strong></Link> · {asset.assetTag}{work.component ? ` · ${work.component.name}` : ""}</p>
+          {[asset.manufacturer, asset.model].filter(Boolean).length || asset.serialNumber ? <p className={styles.muted}>{[asset.manufacturer, asset.model].filter(Boolean).join(" ")}{asset.serialNumber ? ` · Serial ${asset.serialNumber}` : ""}</p> : null}
+          {asset.installedAt ? <p className={styles.muted}>Installed {formatOperationsDate(asset.installedAt.slice(0, 10))}</p> : null}
+          {warranty ? <p className={styles.urgent}><strong>Under warranty</strong> with {warranty.provider} until {formatOperationsDate(warranty.end)}. Check with your manager before repairing.</p> : null}
+        </div> : null}
+      </div>
+      {work.technicianNotes ? <div className={styles.managerNotes}>
+        <h2 className={styles.aboutLabel}>Notes from {manager ? "the manager" : managerFirst}</h2>
+        <p>{work.technicianNotes}</p>
+      </div> : null}
+      {manager && !terminal ? <details><summary>{work.technicianNotes ? "Change notes and time estimate" : "Add notes and time estimate"}</summary><RecordForm action={`/api/ops/work-orders/${encodeURIComponent(id)}/preparation`} className={styles.form}><input type="hidden" name="expectedVersion" value={work.version??0}/><JobPreparationFields allowConfirmation notes={work.technicianNotes} minutes={work.estimatedMinutes} confirmationDelay={work.confirmationDelay}/>{active?<label>Taking longer: about how many more minutes?<input type="number" name="remainingMinutes" min="1" max="1440"/></label>:null}<button type="submit">Save job details</button></RecordForm></details> : null}
+      {!manager && mine && active ? <details><summary>Running long?</summary><RecordForm action={`/api/ops/work-orders/${encodeURIComponent(id)}/preparation`} className={styles.form}><input type="hidden" name="expectedVersion" value={work.version??0}/><label>About how many more minutes?<input type="number" name="remainingMinutes" min="1" max="1440" required/></label><button type="submit">Let my manager know</button></RecordForm></details> : null}
       {work.authorizedScope ? <p><strong>What to do:</strong> {work.authorizedScope}</p> : null}
       {independentFollowUps.filter(f => plainNextAction(f.nextAction) !== status).map(f => <p key={f.id} className={styles.urgent}>
         Also needed: {plainNextAction(f.nextAction)} · {f.accountableParty} · {dueLabel({dueAt:f.dueAt,storeZone:zone},civilDate(new Date().toISOString(),zone),organization!.timeZone)}
       </p>)}
       {lookAndReport ? <p><strong>Look and report only.</strong> Write down what you find. Repairs need a manager&apos;s OK first.</p> : null}
-      {files.length ? <div>
-        <h2 className={styles.subHeading}>Photos and instructions</h2>
-        <ul>{files.map(file => <li key={file.id}>
-          <a href={`/api/ops/work-orders/${encodeURIComponent(id)}/files/${encodeURIComponent(file.id)}`} target="_blank" rel="noreferrer">{file.originalName}</a>
+      {photos.length ? <div>
+        <h2 className={styles.subHeading}>Photos</h2>
+        <ul className={styles.photos}>{photos.map(file => <li key={file.id}>
+          <a href={fileHref(file.id)} target="_blank" rel="noreferrer"><img src={fileHref(file.id)} alt={file.originalName} loading="lazy"/></a>
         </li>)}</ul>
+      </div> : null}
+      {documents.length ? <div>
+        <h2 className={styles.subHeading}>Files</h2>
+        <ul>{documents.map(file => <li key={file.id}><a href={fileHref(file.id)} target="_blank" rel="noreferrer">{file.originalName}</a></li>)}</ul>
       </div> : null}
       {canSchedule ? <p>
         <Link className={`${styles.btn} ${styles.btnSecondary}`} href={`/app/dispatch/schedule/${encodeURIComponent(id)}?returnTo=${encodeURIComponent(path)}`}>
