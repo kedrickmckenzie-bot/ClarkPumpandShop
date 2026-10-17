@@ -4,6 +4,12 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Vendor trends and job category fix — October 17, 2026
+
+**Category bug (fixed).** Creating a job with equipment or an equipment group but no category left it uncategorized, so it silently fell out of category reports, trends and vendor charts. `createWorkOrder` now takes the category from the chosen group, else the chosen equipment (adding equipment later already did). Mismatched picks are still refused; "choose later" still works. Demo audit: 653 of 655 outside-vendor jobs categorized and consistent with their equipment and vendor; 2 are deliberately "choose later". `tests/ops-work-order-category.test.ts`.
+
+**Trends → Vendors (replaces the "How vendors answered" panel and its late-answer finding card, at the owner's request).** Outside vendors only, last 12 months. Show: **Vendor** (click for a scrollable list of every vendor, type to narrow; "All outside vendors" clears) and **Category** (jobs without a category are left out of category views). Five charts: Outside spend and Jobs sent (faint line = same month last year; verdict compares the last 3 finished months with the same months last year), Done by the agreed date, Callbacks (repaired again within 30 days) and Cost per job (dashed line = the normal month; verdict: Steady / One bad month, back to normal / Too soon to call it a trend / Worse than normal in … / Getting worse when the last 3 finished months are all worse). The running month and months with fewer than 3 counted jobs are hollow and never decide a verdict. Every month opens its jobs with each job's result. With all vendors, an **Each vendor** table shows sparklines, 12-month figures and a short verdict per vendor and opens that vendor. Per-job rules reuse the vendor scorecard (`jobResult`), so trends and scorecards agree; a link opens the scorecard. `lib/ops/vendor-trends.ts`, `components/workspace/vendor-trends.tsx`; `tests/ops-vendor-trends.test.ts` checks verdict rules, that each month's job list matches its number (spend sums to the cent), and vendor/category subsets.
+
 ### Vendor answers panel redesign — October 17, 2026
 
 **Why.** Trends → Vendor follow-through led with jargon ("Issuance cohort", "Response coverage", "superseded"), three explanation paragraphs, and counts that opened nothing.

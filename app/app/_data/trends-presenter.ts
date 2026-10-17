@@ -2556,22 +2556,6 @@ export function buildTrendsModel(
       link: { href: `${trendHref({ asset: assetId, view: "records", detailKind: "recurring_work", sourcePage: undefined, driverBreakdown: undefined, driverValue: undefined, benchmarkStore: undefined })}#source-records`, label: "View these source records" },
     });
   }
-  if (vendorAccountability.overdueCount > 0 && insights.length < 3) {
-    insights.push({
-      id: `vendor-nonresponse:${currentStart}:${currentEnd}:${selectedVendor ?? "all"}`,
-      findingType: "vendor_follow_through",
-      eyebrow: "Vendor answers",
-      title: `${vendorAccountability.overdueCount} vendor job${vendorAccountability.overdueCount === 1 ? "" : "s"} waiting over a day for an answer`,
-      detail: `${vendorAccountability.responseCoverageLabel}. The longest has waited ${vendorAccountability.oldestOutstandingLabel}.`,
-      magnitudeLabel: `${vendorAccountability.awaitingCount} waiting for an answer`,
-      patternLabel: "Vendor jobs waiting for an answer",
-      evidenceLabel: vendorAccountability.cohortLabel,
-      sourceIds: overdueUnanswered.map((row) => row.latestIssuance.id),
-      actionLabel: "See the late jobs",
-      tone: "warning",
-      link: { href: vendorAccountability.links.late ?? trendHref({ view: "vendors" }), label: "See the late jobs" },
-    });
-  }
   const absoluteChange = currentValue - baselineValue;
   const materialChangeThreshold = moneyMetric ? 100_000 : safeMetric === "vendor_response" ? 2 : safeMetric === "pm_completion" ? 5 : 2;
   const materialPeriodChange = comparison !== "none" && currentHasData && baselineHasData && Math.abs(absoluteChange) >= materialChangeThreshold;
