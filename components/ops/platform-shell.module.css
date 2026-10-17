@@ -1109,6 +1109,8 @@
 .navChildren a {display:flex;align-items:center;min-height:44px;padding:8px 12px;border-radius:5px;font-size:15px;color:#d6e0ec!important;text-decoration:none;}
 .navChildren a:hover,.navChildren .navChildActive {background:#233247;color:#fff!important;}
 .navChildren .navChildActive {box-shadow:inset 3px 0 #2457d6;}
+/* Review count: a small amber pill so it reads as a count, not part of the label. */
+.navCount {display:inline-grid;place-items:center;min-width:24px;height:24px;margin-left:auto;padding:0 7px;border-radius:999px;background:#f59e0b;color:#1f2937;font-size:13px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;}
 .navSection button:focus-visible,.navChildren a:focus-visible {outline:3px solid #88a9ff;outline-offset:2px;}
 
 /* Printing a page or report prints only the page, not the workspace frame. */

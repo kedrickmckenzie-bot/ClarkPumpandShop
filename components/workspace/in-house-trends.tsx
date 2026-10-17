@@ -121,7 +121,7 @@ export default async function InHouseTrends({ session, query }: { session: Opera
         <h2 id="workload-title">Workload</h2>
         <div className={styles.scroll}>
           <table className={styles.table}>
-            <thead><tr><th>Dates</th><th className={styles.num}>Repairs done in-house</th><th className={styles.num}>Repairs done by vendors</th><th className={styles.num}>Team hours on site</th></tr></thead>
+            <thead><tr><th>Dates</th><th className={styles.num}>Repairs done in-house</th><th className={styles.num}>Repairs done by vendors</th><th className={styles.num}>In-house hours on site</th></tr></thead>
             <tbody>{periods.map(({ range }) => {
               const done = ctx.jobs.filter((job) => !job.pm && completedIn(job, range));
               const visits = teamVisits(ctx, range);
@@ -130,7 +130,7 @@ export default async function InHouseTrends({ session, query }: { session: Opera
                   <td data-label="Dates">{rangeLabel(range)}</td>
                   <td data-label="Repairs done in-house" className={styles.num}><Link href={link({ show: `done:in_house:${range.from}:${range.to}` })}>{done.filter((job) => job.provider === "in_house").length}</Link></td>
                   <td data-label="Repairs done by vendors" className={styles.num}><Link href={link({ show: `done:vendor:${range.from}:${range.to}` })}>{done.filter((job) => job.provider === "vendor").length}</Link></td>
-                  <td data-label="Team hours on site" className={styles.num}><Link href={link({ show: `hours:${range.from}:${range.to}` })}>{hours(visits.reduce((sum, visit) => sum + (visit.observedDurationSeconds ?? 0), 0))}</Link><small>{visits.length} visits</small></td>
+                  <td data-label="In-house hours on site" className={styles.num}><Link href={link({ show: `hours:${range.from}:${range.to}` })}>{hours(visits.reduce((sum, visit) => sum + (visit.observedDurationSeconds ?? 0), 0))}</Link><small>{visits.length} visits</small></td>
                 </tr>
               );
             })}</tbody>
@@ -144,8 +144,8 @@ export default async function InHouseTrends({ session, query }: { session: Opera
         <div className={styles.scroll}>
           <table className={`${styles.table} ${styles.quality}`}>
             <thead>
-              <tr><th rowSpan={2}>Equipment type</th><th colSpan={4} className={styles.group}>In-house</th><th colSpan={4} className={styles.group}>Outside vendors</th></tr>
-              <tr>{["in_house", "vendor"].flatMap((side) => [<th key={`${side}-d`} className={styles.num}>Repairs</th>, <th key={`${side}-f`} className={styles.num}>Fixed first visit</th>, <th key={`${side}-b`} className={styles.num}>Repaired again within 30 days</th>, <th key={`${side}-t`} className={styles.num}>Typical time to fix</th>])}</tr>
+              <tr><th rowSpan={2}>Equipment type</th><th colSpan={4} className={`${styles.group} ${styles.inHouseGroup}`}><i className={styles.inHouseSwatch} aria-hidden="true"/>In-house</th><th colSpan={4} className={`${styles.group} ${styles.vendorGroup}`}><i className={styles.vendorSwatch} aria-hidden="true"/>Outside vendors</th></tr>
+              <tr>{["in_house", "vendor"].flatMap((side) => [<th key={`${side}-d`} className={`${styles.num} ${styles.sideStart} ${sideClass(side)}`}>Repairs</th>, <th key={`${side}-f`} className={`${styles.num} ${sideClass(side)}`}>Fixed first visit</th>, <th key={`${side}-b`} className={`${styles.num} ${sideClass(side)}`}>Repaired again within 30 days</th>, <th key={`${side}-t`} className={`${styles.num} ${sideClass(side)}`}>Typical time to fix</th>])}</tr>
             </thead>
             <tbody>{[undefined, ...categories].map((category) => {
               const row = quality(category);
@@ -155,10 +155,10 @@ export default async function InHouseTrends({ session, query }: { session: Opera
                   {(["in_house", "vendor"] as const).flatMap((side) => {
                     const href = link({ show: `quality:${side}:${category ?? "all"}` }), q = row[side];
                     return [
-                      <td key={`${side}-d`} data-label={`${side === "vendor" ? "Vendors" : "In-house"} repairs`} className={styles.num}><Link href={href}>{q.completed}</Link></td>,
-                      <td key={`${side}-f`} data-label="Fixed first visit" className={styles.num}>{pct(q.firstVisitFix)}{q.firstVisitCounted && q.firstVisitCounted < q.completed ? <small>of {q.firstVisitCounted} with visits</small> : null}</td>,
-                      <td key={`${side}-b`} data-label="Repaired again within 30 days" className={styles.num}>{pct(q.brokeAgain)}{q.brokeAgainCounted && q.brokeAgainCounted < q.completed ? <small>of {q.brokeAgainCounted} on equipment</small> : null}</td>,
-                      <td key={`${side}-t`} data-label="Typical time to fix" className={styles.num}>{days(q.typicalDays)}</td>,
+                      <td key={`${side}-d`} data-label={`${side === "vendor" ? "Vendors" : "In-house"} repairs`} className={`${styles.num} ${styles.sideStart} ${sideClass(side)}`}><Link href={href}>{q.completed}</Link></td>,
+                      <td key={`${side}-f`} data-label="Fixed first visit" className={`${styles.num} ${sideClass(side)}`}>{pct(q.firstVisitFix)}{q.firstVisitCounted && q.firstVisitCounted < q.completed ? <small>of {q.firstVisitCounted} with visits</small> : null}</td>,
+                      <td key={`${side}-b`} data-label="Repaired again within 30 days" className={`${styles.num} ${sideClass(side)}`}>{pct(q.brokeAgain)}{q.brokeAgainCounted && q.brokeAgainCounted < q.completed ? <small>of {q.brokeAgainCounted} on equipment</small> : null}</td>,
+                      <td key={`${side}-t`} data-label="Typical time to fix" className={`${styles.num} ${sideClass(side)}`}>{days(q.typicalDays)}</td>,
                     ];
                   })}
                 </tr>
@@ -200,7 +200,7 @@ function Records({ ctx, show, categoryName, window, closeHref, page, pageHref }:
     const covered = new Map<string, JobFact[]>();
     const jobById = new Map(ctx.jobs.map((job) => [job.id, job]));
     for (const row of ctx.fixture.siteVisitWorkOrders.filter((link) => link.organizationId === ctx.organizationId)) { const job = jobById.get(row.workOrderId); if (job) covered.set(row.visitId, [...(covered.get(row.visitId) ?? []), job]); }
-    title = `Team visits · ${rangeLabel(range)} · ${hours(visits.reduce((sum, visit) => sum + (visit.observedDurationSeconds ?? 0), 0))}`;
+    title = `In-house visits · ${rangeLabel(range)} · ${hours(visits.reduce((sum, visit) => sum + (visit.observedDurationSeconds ?? 0), 0))}`;
     head = ["Checked in", "Store", "Technician", "On site", "Work orders"];
     rows = [...visits].reverse().map((visit) => ({ key: visit.id, cells: [formatOperationsDate(visit.checkedInAt, "America/New_York"), ctx.storeLabel(visit.storeId), ctx.personName(visit.internalMembershipId), visit.observedDurationSeconds ? hours(visit.observedDurationSeconds) : "Not checked out", (covered.get(visit.id) ?? []).map((job) => <Link key={job.id} href={`/app/work-orders/${encodeURIComponent(job.id)}`}>{job.number} </Link>)] }));
   } else if (kind === "quality" && (a === "in_house" || a === "vendor") && b) {
@@ -229,3 +229,6 @@ function Records({ ctx, show, categoryName, window, closeHref, page, pageHref }:
     </section>
   );
 }
+
+/** Tints each side of the repair-quality table so in-house and vendor columns read as two blocks. */
+function sideClass(side: "in_house" | "vendor") { return side === "vendor" ? styles.vendorCol : styles.inHouseCol; }
