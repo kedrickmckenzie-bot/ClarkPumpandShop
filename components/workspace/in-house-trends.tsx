@@ -145,7 +145,7 @@ export default async function InHouseTrends({ session, query }: { session: Opera
           <table className={`${styles.table} ${styles.quality}`}>
             <thead>
               <tr><th rowSpan={2}>Equipment type</th><th colSpan={4} className={`${styles.group} ${styles.inHouseGroup}`}><i className={styles.inHouseSwatch} aria-hidden="true"/>In-house</th><th colSpan={4} className={`${styles.group} ${styles.vendorGroup}`}><i className={styles.vendorSwatch} aria-hidden="true"/>Outside vendors</th></tr>
-              <tr>{["in_house", "vendor"].flatMap((side) => [<th key={`${side}-d`} className={`${styles.num} ${styles.sideStart} ${sideClass(side)}`}>Repairs</th>, <th key={`${side}-f`} className={`${styles.num} ${sideClass(side)}`}>Fixed first visit</th>, <th key={`${side}-b`} className={`${styles.num} ${sideClass(side)}`}>Repaired again within 30 days</th>, <th key={`${side}-t`} className={`${styles.num} ${sideClass(side)}`}>Typical time to fix</th>])}</tr>
+              <tr>{(["in_house", "vendor"] as const).flatMap((side) => [<th key={`${side}-d`} className={`${styles.num} ${styles.sideStart} ${sideClass(side)}`}>Repairs</th>, <th key={`${side}-f`} className={`${styles.num} ${sideClass(side)}`}>Fixed first visit</th>, <th key={`${side}-b`} className={`${styles.num} ${sideClass(side)}`}>Repaired again within 30 days</th>, <th key={`${side}-t`} className={`${styles.num} ${sideClass(side)}`}>Typical time to fix</th>])}</tr>
             </thead>
             <tbody>{[undefined, ...categories].map((category) => {
               const row = quality(category);
