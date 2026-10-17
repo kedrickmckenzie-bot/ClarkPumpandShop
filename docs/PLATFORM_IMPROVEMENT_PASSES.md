@@ -4,6 +4,18 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Bug hunt: demo dates and missing store addresses — October 17, 2026
+
+**Found and fixed.**
+- **"Reported tomorrow" on the Overview.** The showcase anchored demo dates at 18:00 UTC on the seed day, so a seed before 18:00 UTC put reports, visits and about 220 history events ahead of the real time. A full timestamp now anchors at the latest 18:00 UTC not after it. Two stray records (one billing review item, upcoming fuel-tank inspections created a week ahead) now sit in the past. Hosted data is untouched (insert-only rules stand; only new seeds change).
+- **"undefined" in store addresses on PostgreSQL.** The PostgreSQL snapshot's column-name converter skipped `address_1`/`address_2`, so pages reading the shared snapshot (equipment setup and others) lost the street line. The converter now handles digits; the equipment-setup label also leaves out any missing part.
+
+**Checked, no problems.** Browser crawl of about 1,400 page loads across all seven roles: no server errors, page errors, broken pages or "undefined/NaN/Invalid Date" text after the fixes.
+
+**Noted, not built (needs owner decision).** Photos a manager or store adds to a job are stored as internal, so the outside vendor's link only shows the vendor's own uploads. A "share with vendor" switch would fix this.
+
+**Validation.** `tests/ops-demo-dates.test.ts` (no seeded past event after now at 02:00, 17:59 and 20:00 UTC); full checks before push.
+
 ### Ask: questions answered from the company's records — October 17, 2026
 
 **Decisions (with the user).** Name: **Ask**. Separate from search (search finds things and stays instant and free; Ask answers questions). An **Ask** button sits in the top bar beside search; it opens a small floating window bottom-right that stays open while you click through to the records behind an answer, minimizes to an "Ask" tab, has **Back to where you asked**, and clears on close. Full screen on phones. Owners, facilities and regional managers and finance only; hidden when AI is not connected.

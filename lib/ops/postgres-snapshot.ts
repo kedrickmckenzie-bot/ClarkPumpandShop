@@ -5,7 +5,7 @@ import type { IsoDateTime, OpsFixture, OpsId } from "./types";
 type Row = Record<string, unknown>;
 
 function camelKey(key: string) {
-  return key.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
+  return key.replace(/_([a-z0-9])/g, (_, letter: string) => letter.toUpperCase());
 }
 
 function valueForFixture(value: unknown): unknown {
