@@ -4,6 +4,12 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Savings out of the menu; calmer demo operating reports — October 17, 2026
+
+**Decisions (with the user).** The platform cannot honestly determine savings (that needs knowing what would have happened otherwise), so **Savings** leaves the Spend & planning menu; the page and its records stay in place, unlinked. A monthly "what we caught" summary was considered and rejected: it rewards problems and makes a calm month look like no value. The value story is control and visibility, shown live in demos.
+
+**Demo data.** Store reports were marked "partly operating" for almost any problem (a drip, a dim light), so 12 of 15 stores showed under Needs attention. A report now starts partly operating only when it stops selling something (cooler, freezer, walk-in, beer cave, fuel, dispenser) and was reported as urgent or emergency. Needs attention now shows 8 stores: 5 with deliberate cold-storage or fuel stories and 3 with only an overdue compliance check. Fresh seeds only; existing hosted rows are not changed.
+
 ### Stores: "Needs attention" tile and filter — October 16, 2026
 
 **Decision (with the user).** No separate store status board; it would repeat Reported operating problems, Review and the Stores list. Instead the Stores page's all-history "Recorded work cost" tile (Spend & planning covers money; each store still shows its cost) becomes **Needs attention**: the number of stores with an unresolved can't-operate or partly-operating report, an open urgent or emergency job past its next-step deadline, or compliance past due and not passed. The tile says which ("10 partly operating · 5 with urgent jobs late · 5 with compliance overdue"; the other three tiles, including Stores in scope, stay) and tapping it filters the list to those stores, most serious first, each showing its reason; "Show all stores" and the filter chip clear it. Page layout and the other tiles are unchanged.

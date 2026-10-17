@@ -1231,7 +1231,8 @@ function buildFixture(options: BuildOptions = {}): OpsFixture {
     const revenueFunctionImpact = /fuel|dispenser|canopy/.test(problem) ? "fuel" as const
       : /coffee|foodservice/.test(problem) ? "foodservice" as const
         : coldProduct ? "refrigerated_merchandise" as const : undefined;
-    const partial = coldProduct || potentialSafety || customerFacing;
+    // Only problems that stop selling something leave a store partly operating; a drip or a dim light does not.
+    const partial = /fuel|dispenser|beer cave|walk-in|freezer|cooler/.test(problem) && ["urgent", "emergency"].includes(request.priority);
     const initialAt = request.submittedAt;
     const initial: RequestImpactAssessment = {
       id: `impact-${request.id}-initial`, organizationId: request.organizationId, requestId: request.id, storeId: request.storeId,
