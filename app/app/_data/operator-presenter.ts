@@ -115,7 +115,7 @@ export type OperatorProgramRoute = "spend" | "equipment" | "pm" | "lifecycle";
 export type OperatorDetailRoute = "request" | "work-order" | "visit" | "store" | "vendor" | "equipment" | "invoice";
 export type OperatorSearchParameters = Record<string, string | string[] | undefined>;
 
-interface ScopedFixture {
+export interface ScopedFixture {
   organizationId: string;
   includeCompanywide: boolean;
   stores: Store[];
@@ -494,7 +494,7 @@ function workStatusTone(status: WorkOrder["status"]): Tone {
 }
 
 
-function scopeFixture(fixture: OpsFixture, session: OperatorSession): ScopedFixture {
+export function scopeFixture(fixture: OpsFixture, session: OperatorSession): ScopedFixture {
   const organizationId = session.organizationId;
   const organizationStores = fixture.stores.filter((store) => store.organizationId === organizationId);
   let stores = organizationStores;
@@ -618,7 +618,7 @@ function assignmentsForWork(fixture: OpsFixture, workOrderId: string) {
   return index.byWork.get(workOrderId) ?? [];
 }
 
-function assignmentForWork(fixture: OpsFixture, organizationId: string, workOrderId: string) {
+export function assignmentForWork(fixture: OpsFixture, organizationId: string, workOrderId: string) {
   return assignmentsForWork(fixture, workOrderId)
     .filter((assignment) => assignment.organizationId === organizationId)
     .sort((a, b) => Number(!["pending","issued","opened","accepted"].includes(a.status)) - Number(!["pending","issued","opened","accepted"].includes(b.status)) || b.assignedAt.localeCompare(a.assignedAt) || b.id.localeCompare(a.id))[0];
