@@ -1321,6 +1321,18 @@ describe("enterprise trends presenter", () => {
     const closed = buildTrendsModel(fixture, session(), { metric: "vendor_response", period: "24", view: "vendors" });
     expect(Number(closed.vendorAccountability.responseMix.find((item) => item.label === "Closed without response")?.value)).toBeGreaterThan(0);
     expect(closed.vendorAccountability.methodology).toMatch(/remain in historical coverage.*removed from the currently outstanding count/i);
+    // Every count opens the matching jobs.
+    const closedLink = closed.vendorAccountability.links.closed!;
+    const closedJobs = buildTrendsModel(fixture, session(), queryFromHref(closedLink), { includeExportRows: true });
+    expect(closedJobs.exportRows?.some((row) => row.sourceId === issuance.assignmentId)).toBe(true);
+    const sent = buildTrendsModel(fixture, session(), queryFromHref(closed.vendorAccountability.links.sent!), { includeExportRows: true });
+    expect(sent.exportRows).toHaveLength(closed.vendorAccountability.sentCount);
+    for (const item of closed.vendorAccountability.responseMix) {
+      const jobs = buildTrendsModel(fixture, session(), queryFromHref(closed.vendorAccountability.links[item.key]!), { includeExportRows: true });
+      expect(jobs.exportRows ?? []).toHaveLength(Number(item.value));
+    }
+    const late = buildTrendsModel(fixture, session(), queryFromHref(closed.vendorAccountability.links.late!), { includeExportRows: true });
+    expect(late.exportRows ?? []).toHaveLength(closed.vendorAccountability.overdueCount);
   });
 
   it("keeps planning history independent from the visible chart window and exports machine-precise evidence", () => {

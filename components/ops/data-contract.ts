@@ -293,15 +293,24 @@ export interface TrendInsightViewModel {
 
 export interface TrendVendorAccountabilityViewModel {
   title: string;
+  /** "Jobs first sent May 1, 2026 – Oct 16, 2026". */
   description: string;
   cohortLabel: string;
   responseCoverageLabel: string;
+  sentCount: number;
   respondedCount: number;
+  answeredPercentLabel?: string;
   awaitingCount: number;
   overdueCount: number;
   oldestOutstandingLabel: string;
-  responseMix: Array<{ label: string; value: string; description: string }>;
+  /** The job that has waited longest for a vendor answer. */
+  longestWait?: { label: string; jobNumber: string; href: string };
+  responseMix: Array<{ key: "accepted" | "proposed_date" | "question" | "declined" | "waiting" | "closed"; label: string; value: string; description: string }>;
+  /** Records behind each count: sent, answered, accepted, proposed_date, question, declined, waiting, late, closed. */
+  links: Partial<Record<string, string>>;
   outstandingLink: SupportingLink;
+  /** One short line explaining how jobs are counted. */
+  note: string;
   methodology: string;
 }
 

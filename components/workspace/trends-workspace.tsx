@@ -128,13 +128,30 @@ function ExecutiveResults({ model }: { model: TrendAnalysisPageViewModel }) {
   );
 }
 
+const ANSWER_COLOR: Record<string, string> = { accepted: "accepted", proposed_date: "newDate", question: "question", declined: "declined", waiting: "waiting" };
+
 function VendorAccountability({ model }: { model: TrendAnalysisPageViewModel }) {
-  const vendor = model.vendorAccountability;
+  const vendor = model.vendorAccountability, links = vendor.links;
+  const parts = vendor.responseMix.filter((item) => item.key !== "closed");
+  const closed = vendor.responseMix.find((item) => item.key === "closed");
+  const total = parts.reduce((sum, item) => sum + Number(item.value), 0);
   return <section className={styles.vendorPanel} aria-labelledby="vendor-accountability-title">
-    <header><div><p>Vendor follow-through</p><h2 id="vendor-accountability-title">{vendor.title}</h2><span>{vendor.description}</span></div><Link href={vendor.outstandingLink.href}>{vendor.outstandingLink.label}<ArrowRight size={16} aria-hidden="true" /></Link></header>
-    <div className={styles.vendorSummary}><span><small>Issuance cohort</small><strong>{vendor.cohortLabel}</strong></span><span><small>Response coverage</small><strong>{vendor.responseCoverageLabel}</strong></span><span><small>Awaiting response</small><strong>{vendor.awaitingCount}</strong></span><span><small>Overdue</small><strong>{vendor.overdueCount}</strong></span><span><small>Oldest outstanding</small><strong>{vendor.oldestOutstandingLabel}</strong></span></div>
-    <div className={styles.responseMix}>{vendor.responseMix.map((item) => <span key={item.label}><small>{item.label}</small><strong>{item.value}</strong><p>{item.description}</p></span>)}</div>
-    <footer><Info size={16} aria-hidden="true" />{vendor.methodology}</footer>
+    <header><div><h2 id="vendor-accountability-title">{vendor.title}</h2><span>{vendor.description}</span></div></header>
+    <div className={styles.vendorSummary}>
+      <div><small>Jobs sent</small><Link href={links.sent ?? "#"}>{vendor.sentCount}</Link></div>
+      <div><small>Answered</small><Link href={links.answered ?? "#"}>{vendor.respondedCount}</Link>{vendor.answeredPercentLabel ? <span>{vendor.answeredPercentLabel} of jobs sent</span> : null}</div>
+      <div><small>Waiting for an answer</small><Link href={links.waiting ?? vendor.outstandingLink.href}>{vendor.awaitingCount}</Link>{vendor.overdueCount ? <Link className={styles.lateLink} href={links.late ?? "#"}>{vendor.overdueCount} late</Link> : <span>None late</span>}</div>
+      <div><small>Longest wait</small>{vendor.longestWait ? <><Link href={vendor.longestWait.href}>{vendor.longestWait.label}</Link><span>{vendor.longestWait.jobNumber}</span></> : <strong>None waiting</strong>}</div>
+    </div>
+    {total ? <div className={styles.answerMix}>
+      <div className={styles.answerBar} role="img" aria-label={parts.map((item) => `${item.label} ${item.value}`).join(", ")}>
+        {parts.filter((item) => Number(item.value) > 0).map((item) => <span key={item.key} className={styles[ANSWER_COLOR[item.key]!]} style={{ flexGrow: Number(item.value) }} title={`${item.label}: ${item.value}`} />)}
+      </div>
+      <ul>{parts.map((item) => <li key={item.key}><i className={styles[ANSWER_COLOR[item.key]!]} aria-hidden="true" /><span>{item.label}</span>{Number(item.value) ? <Link href={links[item.key] ?? "#"}>{item.value}</Link> : <b>0</b>}</li>)}
+        {closed && Number(closed.value) ? <li><i className={styles.closedSwatch} aria-hidden="true" /><span>Closed without an answer</span><Link href={links.closed ?? "#"}>{closed.value}</Link></li> : null}
+      </ul>
+    </div> : null}
+    <footer><Info size={16} aria-hidden="true" />{vendor.note}</footer>
   </section>;
 }
 

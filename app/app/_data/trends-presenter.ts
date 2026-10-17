@@ -207,6 +207,15 @@ const metricCopy: Record<TrendMetricId, { label: string; definition: string }> =
   },
 };
 
+/** Which vendor-answer group a click opens: every job sent, an answer kind, or jobs still waiting. */
+const VENDOR_ANSWER_FILTERS = ["sent", "answered", "accepted", "proposed_date", "question", "declined", "waiting", "late", "closed"] as const;
+type VendorAnswerFilter = typeof VENDOR_ANSWER_FILTERS[number];
+const VENDOR_ANSWER_HEADING: Record<VendorAnswerFilter, string> = {
+  sent: "Jobs sent to vendors", answered: "Jobs the vendor answered", accepted: "Jobs the vendor accepted", proposed_date: "Jobs where the vendor proposed a new date",
+  question: "Jobs where the vendor asked a question", declined: "Jobs the vendor declined", waiting: "Jobs waiting for a vendor answer", late: "Jobs waiting more than 24 hours for an answer", closed: "Jobs closed without a vendor answer",
+};
+const VENDOR_ANSWER_WORD: Record<string, string> = { accepted: "Accepted", proposed_date: "Proposed a new date", question: "Asked a question", declined: "Declined" };
+
 function first(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -849,6 +858,8 @@ export function buildTrendsModel(
     ? requestedSourceDirection
     : sourceSort === "record" || sourceSort === "store" || sourceSort === "service" ? "asc" : "desc";
   const detailKindValue = first(query.detailKind);
+  const vendorAnswerValue = first(query.vendorAnswer);
+  const vendorAnswer: VendorAnswerFilter = (VENDOR_ANSWER_FILTERS as readonly string[]).includes(vendorAnswerValue ?? "") ? vendorAnswerValue as VendorAnswerFilter : "waiting";
   const requestedViewValue = first(query.view);
   const detailMonthValue = first(query.detailMonth);
   const hasValidDetailMonthShape = Boolean(detailMonthValue && /^\d{4}-(0[1-9]|1[0-2])$/.test(detailMonthValue));
@@ -1104,27 +1115,36 @@ export function buildTrendsModel(
     ? Math.max(...unansweredIssuances.map((row) => Math.max(0, (asOfMillis - Date.parse(row.issuedAt)) / 3_600_000)))
     : 0;
   const responseMixCount = (kind: OpsFixture["vendorResponses"][number]["response"]) => answeredIssuances.filter((row) => row.response?.response === kind).length;
+  const longestWaiting = [...unansweredIssuances].sort((left, right) => left.issuedAt.localeCompare(right.issuedAt) || left.assignment.id.localeCompare(right.assignment.id))[0];
+  const waitLabel = (hours: number) => hours < 48 ? `${Math.round(hours)} hours` : `${Math.round(hours / 24)} days`;
+  const answeredPercent = currentIssuanceCohort.length ? Math.round((answeredIssuances.length / currentIssuanceCohort.length) * 100) : undefined;
   const vendorAccountability: TrendAnalysisPageViewModel["vendorAccountability"] = {
-    title: "Vendor response follow-through",
-    description: "Response times cover answered requests. The counts show requests first sent during this period that are still assigned to the same vendor. A decline counts as a response, but does not mean the vendor accepted the work.",
-    cohortLabel: `${currentIssuanceCohort.length} current vendor requests first sent ${dateLabel(currentStart)}–${dateLabel(currentEnd)}`,
-    responseCoverageLabel: currentIssuanceCohort.length ? `${Math.round((answeredIssuances.length / currentIssuanceCohort.length) * 100)}% · ${answeredIssuances.length} of ${currentIssuanceCohort.length} answered` : "No requests were sent during this period.",
+    title: "How vendors answered your jobs",
+    description: `Jobs first sent ${dateLabel(currentStart)} – ${dateLabel(currentEnd)}`,
+    cohortLabel: `${currentIssuanceCohort.length} jobs sent ${dateLabel(currentStart)} – ${dateLabel(currentEnd)}`,
+    responseCoverageLabel: currentIssuanceCohort.length ? `${answeredPercent}% · ${answeredIssuances.length} of ${currentIssuanceCohort.length} answered` : "No jobs were sent to vendors in these dates.",
+    sentCount: currentIssuanceCohort.length,
     respondedCount: answeredIssuances.length,
+    answeredPercentLabel: answeredPercent === undefined ? undefined : `${answeredPercent}%`,
     awaitingCount: unansweredIssuances.length,
     overdueCount: overdueUnanswered.length,
-    oldestOutstandingLabel: unansweredIssuances.length ? oldestOutstandingHours < 48 ? `${Math.round(oldestOutstandingHours)} hours` : `${Math.round(oldestOutstandingHours / 24)} days` : "None outstanding",
+    oldestOutstandingLabel: unansweredIssuances.length ? waitLabel(oldestOutstandingHours) : "None waiting",
+    longestWait: longestWaiting ? { label: waitLabel(Math.max(0, (asOfMillis - Date.parse(longestWaiting.issuedAt)) / 3_600_000)), jobNumber: longestWaiting.work.number, href: `/app/work-orders/${encodeURIComponent(longestWaiting.work.id)}?view=service` } : undefined,
     responseMix: [
-      { label: "Accepted", value: String(responseMixCount("accepted")), description: "Vendor accepted the authorization." },
-      { label: "Declined", value: String(responseMixCount("declined")), description: "A response was received, but service was not accepted." },
-      { label: "Proposed a date", value: String(responseMixCount("proposed_date")), description: "Scheduling was proposed and still needs its own confirmation state." },
-      { label: "Asked a question", value: String(responseMixCount("question")), description: "The vendor responded with an information request." },
-      { label: "Closed without response", value: String(closedWithoutResponse.length), description: "The issued assignment was cancelled or superseded without a recorded vendor response; it remains in historical coverage but is not currently outstanding." },
+      { key: "accepted", label: "Accepted", value: String(responseMixCount("accepted")), description: "Vendor accepted the job." },
+      { key: "proposed_date", label: "New date", value: String(responseMixCount("proposed_date")), description: "Vendor proposed a different date." },
+      { key: "question", label: "Question", value: String(responseMixCount("question")), description: "Vendor asked a question first." },
+      { key: "declined", label: "Declined", value: String(responseMixCount("declined")), description: "Vendor answered but turned the job down." },
+      { key: "waiting", label: "Waiting", value: String(unansweredIssuances.length), description: "No answer yet." },
+      { key: "closed", label: "Closed without response", value: String(closedWithoutResponse.length), description: "The job was cancelled or moved before the vendor answered. Not counted as waiting." },
     ],
+    links: {},
     outstandingLink: {
       href: "",
-      label: "Open exact outstanding assignments",
+      label: "See jobs waiting",
     },
-    methodology: `One denominator row per outside-vendor assignment, using its first issuance date. Later issuance revisions do not add requests. Cancelled or superseded assignments remain in historical coverage, but are removed from the currently outstanding count. Overdue means an effective assignment has remained unanswered for more than ${responseDueHours} hours. Median response time remains grouped by response date and includes accepted, declined, proposed-date, and question responses.`,
+    note: "Each job counts once, from the day it was first sent. Late means no answer after 24 hours. A decline counts as an answer.",
+    methodology: `Each outside-vendor job counts once, from the day it was first sent; re-sending it does not add a job. Jobs cancelled or moved before an answer remain in historical coverage as closed without response, but are removed from the currently outstanding count. Late means no answer more than ${responseDueHours} hours after it was sent. A decline counts as an answer.`,
   };
   const selectedPeriodName = `Selected ${periodMonths} months`;
   const compareLabel = comparison === "previous_year"
@@ -1167,17 +1187,32 @@ export function buildTrendsModel(
     sourceSort,
     sourceDirection,
     view: activeView,
+    // Keep the chosen vendor-answer group while paging or sorting its jobs.
+    vendorAnswer: detailKind === "vendor_outstanding" && vendorAnswer !== "waiting" ? vendorAnswer : undefined,
     ...(options.preserveEvidence ? evidenceQuery : {}),
     ...values,
   });
-  vendorAccountability.outstandingLink.href = `${trendHref({ view: "records", detailKind: "vendor_outstanding", detailMonth: undefined, driverBreakdown: undefined, driverValue: undefined, benchmarkStore: undefined, sourcePage: undefined })}#source-records`;
-  const outstandingRecords: TrendSourceRecord[] = unansweredIssuances.map((row) => ({
-    ...row.scopeProbe, id: row.assignment.id, sourceKind: "source_record", units: "count", value: 1,
-    date: row.issuedAt, localDate: row.localIssuedDate, periodKey: row.localIssuedDate.slice(0, 7), displayDate: dateLabel(row.localIssuedDate),
-    displayValue: "Awaiting response", sourceIds: [row.assignment.id, row.latestIssuance.id],
-    detail: `${row.work.problem} · Unanswered effective assignment · First issued ${row.localIssuedDate}`,
-    providerAttribution: "response_assignment", providerAttributionLabel: "Vendor assignment awaiting its first response",
-  }));
+  const vendorAnswerHref = (answer: VendorAnswerFilter) => `${trendHref({ view: "records", detailKind: "vendor_outstanding", vendorAnswer: answer === "waiting" ? undefined : answer, detailMonth: undefined, driverBreakdown: undefined, driverValue: undefined, benchmarkStore: undefined, sourcePage: undefined })}#source-records`;
+  vendorAccountability.outstandingLink.href = vendorAnswerHref("waiting");
+  vendorAccountability.links = Object.fromEntries(VENDOR_ANSWER_FILTERS.map((answer) => [answer, vendorAnswerHref(answer)]));
+  const vendorAnswerRows = vendorAnswer === "sent" ? currentIssuanceCohort
+    : vendorAnswer === "answered" ? answeredIssuances
+      : vendorAnswer === "waiting" ? unansweredIssuances
+        : vendorAnswer === "late" ? overdueUnanswered
+          : vendorAnswer === "closed" ? closedWithoutResponse
+            : answeredIssuances.filter((row) => row.response?.response === vendorAnswer);
+  const outstandingRecords: TrendSourceRecord[] = vendorAnswerRows.map((row) => {
+    const answer = row.response ? `${VENDOR_ANSWER_WORD[row.response.response] ?? "Answered"} ${dateLabel(localDateKey(row.response.respondedAt, organizationTimeZone))}`
+      : ["cancelled", "superseded"].includes(row.assignment.status) ? "Closed without response"
+        : `Waiting ${waitLabel(Math.max(0, (asOfMillis - Date.parse(row.issuedAt)) / 3_600_000))}`;
+    return {
+      ...row.scopeProbe, id: row.assignment.id, sourceKind: "source_record", units: "count", value: 1,
+      date: row.issuedAt, localDate: row.localIssuedDate, periodKey: row.localIssuedDate.slice(0, 7), displayDate: dateLabel(row.localIssuedDate),
+      displayValue: answer, sourceIds: [row.assignment.id, row.latestIssuance.id],
+      detail: `${row.work.problem} · Sent ${dateLabel(row.localIssuedDate)}`,
+      providerAttribution: "response_assignment", providerAttributionLabel: "Vendor's answer to this job",
+    };
+  });
 
 
   const series = currentMonths.map((key, index) => {
@@ -2140,7 +2175,7 @@ export function buildTrendsModel(
   const detailDriverLabel = detailDriverBreakdown && detailDriverValue
     ? excludedDriverKeys ? `All other ${driverDimensionLabel(detailDriverBreakdown)}` : detailRecords[0] ? driverIdentity(detailRecords[0], detailDriverBreakdown).label : detailDriverValue === unclassifiedDriverKey ? "Unclassified" : "Selected segment"
     : undefined;
-  const detailPeriodLabel = detailKind === "vendor_outstanding" ? `Outstanding assignments first issued ${dateLabel(currentStart)}–${dateLabel(currentEnd)}` : (detailKind === "current" || detailKind === "recurring_work")
+  const detailPeriodLabel = detailKind === "vendor_outstanding" ? `sent ${dateLabel(currentStart)}–${dateLabel(currentEnd)}` : (detailKind === "current" || detailKind === "recurring_work")
     ? `${detailDriverLabel ? `${detailDriverLabel} · ` : ""}${selectedPeriodName} · ${dateLabel(currentStart)}–${dateLabel(currentEnd)}`
     : detailKind === "comparison" && baselineStart && baselineEnd
       ? `${compareLabel} · ${dateLabel(baselineStart)}–${dateLabel(baselineEnd)}`
@@ -2183,7 +2218,7 @@ export function buildTrendsModel(
     store: "Store",
     service: "Work type / detail",
     date: "Date",
-    value: detailKind === "vendor_outstanding" ? "Response" : safeMetric === "linked_invoice" ? "Linked amount" : safeMetric === "recorded_cost" ? "Cost" : "Result",
+    value: detailKind === "vendor_outstanding" ? "Vendor answer" : safeMetric === "linked_invoice" ? "Linked amount" : safeMetric === "recorded_cost" ? "Cost" : "Result",
   };
   const sourceSortLinks: TrendAnalysisPageViewModel["sourceSortLinks"] = (Object.keys(sourceColumnLabels) as TrendSourceSortId[]).map((id) => {
     const defaultDirection: TrendSortDirection = id === "record" || id === "store" || id === "service" ? "asc" : "desc";
@@ -2419,7 +2454,7 @@ export function buildTrendsModel(
     { id: "overview", label: "Overview", description: "Result, findings, and monthly pattern" },
     { id: "drivers", label: "Change drivers", description: `What changed by ${breakdownLabels[breakdown]}` },
     { id: "stores", label: "Compare stores", description: "Equipment-matched company peers" },
-    { id: "vendors", label: "Vendor follow-through", description: "Response speed, coverage, and nonresponse" },
+    { id: "vendors", label: "Vendor follow-through", description: "How fast vendors answer, and jobs still waiting" },
     { id: "planning", label: "Plan upcoming work", description: "Open estimates, PM and replacements" },
     { id: "records", label: "Source records", description: "Exact records behind each number" },
   ];
@@ -2525,16 +2560,16 @@ export function buildTrendsModel(
     insights.push({
       id: `vendor-nonresponse:${currentStart}:${currentEnd}:${selectedVendor ?? "all"}`,
       findingType: "vendor_follow_through",
-      eyebrow: "Vendor follow-through",
-      title: `${vendorAccountability.overdueCount} overdue unanswered request${vendorAccountability.overdueCount === 1 ? "" : "s"}`,
-      detail: `${vendorAccountability.responseCoverageLabel}. The oldest outstanding request is ${vendorAccountability.oldestOutstandingLabel} old. Response coverage and median speed use different, explicitly labeled time bases.`,
-      magnitudeLabel: `${vendorAccountability.awaitingCount} awaiting response`,
-      patternLabel: "Vendor requests still awaiting a response",
+      eyebrow: "Vendor answers",
+      title: `${vendorAccountability.overdueCount} vendor job${vendorAccountability.overdueCount === 1 ? "" : "s"} waiting over a day for an answer`,
+      detail: `${vendorAccountability.responseCoverageLabel}. The longest has waited ${vendorAccountability.oldestOutstandingLabel}.`,
+      magnitudeLabel: `${vendorAccountability.awaitingCount} waiting for an answer`,
+      patternLabel: "Vendor jobs waiting for an answer",
       evidenceLabel: vendorAccountability.cohortLabel,
       sourceIds: overdueUnanswered.map((row) => row.latestIssuance.id),
-      actionLabel: "Review missed promises",
+      actionLabel: "See the late jobs",
       tone: "warning",
-      link: { href: trendHref({ view: "vendors" }), label: "Open vendor follow-through" },
+      link: { href: vendorAccountability.links.late ?? trendHref({ view: "vendors" }), label: "See the late jobs" },
     });
   }
   const absoluteChange = currentValue - baselineValue;
@@ -2892,12 +2927,12 @@ export function buildTrendsModel(
         { key: "store", label: "Store" },
         { key: "service", label: "Work type / detail" },
         { key: "date", label: "Date" },
-        { key: "value", label: detailKind === "vendor_outstanding" ? "Response" : safeMetric === "linked_invoice" ? "Linked amount" : safeMetric === "recorded_cost" ? "Cost" : "Result", align: "end" },
+        { key: "value", label: detailKind === "vendor_outstanding" ? "Vendor answer" : safeMetric === "linked_invoice" ? "Linked amount" : safeMetric === "recorded_cost" ? "Cost" : "Result", align: "end" },
       ],
       rows: sourceRows,
     },
-    sourceMeasureLabel: detailKind === "vendor_outstanding" ? "Vendor response evidence" : undefined,
-    sourceHeading: detailKind === "vendor_outstanding" ? "Still awaiting a response" : detailKind === "benchmark" ? "Inputs behind this comparison" : "Records behind this number",
+    sourceMeasureLabel: detailKind === "vendor_outstanding" ? VENDOR_ANSWER_HEADING[vendorAnswer] : undefined,
+    sourceHeading: detailKind === "vendor_outstanding" ? "Vendor answers" : detailKind === "benchmark" ? "Inputs behind this comparison" : "Records behind this number",
     invoiceReview: safeMetric === "linked_invoice" && ["facilities", "executive", "finance"].includes(session.role) && fixture.scopeGrants.some((grant) => grant.organizationId === session.organizationId && grant.membershipId === session.membershipId && grant.scopeKind === "organization" && grant.scopeId === session.organizationId)
       ? { message: "Charges awaiting matching or a corrected review are excluded from this total.", href: "/app/invoices/accounting", label: "Review accounting invoices" } : undefined,
     sourceDescription: detailKind === "benchmark"

@@ -4,6 +4,14 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Vendor answers panel redesign — October 17, 2026
+
+**Why.** Trends → Vendor follow-through led with jargon ("Issuance cohort", "Response coverage", "superseded"), three explanation paragraphs, and counts that opened nothing.
+
+**Now.** **How vendors answered your jobs** · jobs first sent in the chosen dates. Four numbers: **Jobs sent**, **Answered** (with % of jobs sent), **Waiting for an answer** (with an amber "N late" chip), **Longest wait** (opens that job). One colored bar shows Accepted / New date / Question / Declined / Waiting with counts; "Closed without an answer" appears only when it is not zero. One short footnote replaces the paragraphs. Every count opens exactly its jobs through `detailKind=vendor_outstanding&vendorAnswer=<sent|answered|accepted|proposed_date|question|declined|waiting|late|closed>`; the filter is kept while paging/sorting. The late-answer finding card uses the same plain words and opens the late jobs. Counting rules are unchanged (first send date, re-sends not counted, cancelled/moved jobs kept as history but not waiting).
+
+**Validation.** `tests/ops-trends-presenter.test.ts` checks each count's link opens that exact number of jobs (sent, every answer kind, late, closed); browser check on desktop and phone (no sideways scroll), Declined drill opens its 2 jobs.
+
 ### Bug hunt, photo sharing with vendors, trends polish — October 17, 2026
 
 **Found and fixed.**
