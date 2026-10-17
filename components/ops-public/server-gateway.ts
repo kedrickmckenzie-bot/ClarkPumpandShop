@@ -2096,7 +2096,7 @@ export async function resolveServiceJobContext(token: string) {
   const [request, asset, files] = await Promise.all([
     work.requestId ? repository.getRequest(org, work.requestId) : null,
     view.asset ? repository.getAsset(org, view.asset.id) : null,
-    repository.listFilesForEntity(org, "work_order", work.id, "vendor_shared"),
+    sharedJobPhotos(org, work.id, work.requestId),
   ]);
   const today = now().slice(0, 10);
   const warranty = asset ? (await repository.listWarrantyDirectory({ organizationId: org, storeIds: [view.store.id] }, { today, view: "active", assetId: asset.id, limit: 1 })).items[0] : undefined;
@@ -2128,6 +2128,17 @@ export async function resolveServiceJobContext(token: string) {
 export async function resolveServiceJobPhoto(token: string, fileId: string) {
   const access = await resolveServiceAuthorization(token);
   if (!access) return null;
-  const files = await runtime().repository.listFilesForEntity(access.view.organizationId, "work_order", access.view.workOrderId, "vendor_shared");
-  return files.find(file => file.id === fileId && file.contentType?.startsWith("image/")) ?? null;
+  const work = await runtime().repository.getWorkOrder(access.view.organizationId, access.view.workOrderId);
+  if (!work) return null;
+  return (await sharedJobPhotos(access.view.organizationId, work.id, work.requestId)).find(file => file.id === fileId) ?? null;
+}
+
+/** Photos the operator shared with the vendor: the job's own and the store's original report photos. */
+async function sharedJobPhotos(organizationId: string, workOrderId: string, requestId?: string) {
+  const { repository } = runtime();
+  const [own, reported] = await Promise.all([
+    repository.listFilesForEntity(organizationId, "work_order", workOrderId, "vendor_shared"),
+    requestId ? repository.listFilesForEntity(organizationId, "request", requestId, "vendor_shared") : [],
+  ]);
+  return [...reported, ...own].filter(file => file.contentType?.startsWith("image/"));
 }

@@ -8,7 +8,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const work = await repository.getWorkOrder(session.organizationId, id);
     if (!work) throw new OpsDomainError("NOT_FOUND", "Work order not found");
     await assertStoreInSessionScope(session, work.storeId);
-    const files = await repository.listFilesForEntity(session.organizationId, "work_order", id);
+    // The job's own files plus the photos from the store's original report.
+    const files = [...await repository.listFilesForEntity(session.organizationId, "work_order", id), ...work.requestId ? await repository.listFilesForEntity(session.organizationId, "request", work.requestId) : []];
     return quoteFileResponse(files.find(file => file.id === fileId) ?? null, request);
   } catch (error) { return opsApiError(error); }
 }

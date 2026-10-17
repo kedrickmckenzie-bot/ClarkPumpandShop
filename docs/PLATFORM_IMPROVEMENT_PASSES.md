@@ -4,7 +4,7 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
-### Bug hunt: demo dates and missing store addresses — October 17, 2026
+### Bug hunt, photo sharing with vendors, trends polish — October 17, 2026
 
 **Found and fixed.**
 - **"Reported tomorrow" on the Overview.** The showcase anchored demo dates at 18:00 UTC on the seed day, so a seed before 18:00 UTC put reports, visits and about 220 history events ahead of the real time. A full timestamp now anchors at the latest 18:00 UTC not after it. Two stray records (one billing review item, upcoming fuel-tank inspections created a week ahead) now sit in the past. Hosted data is untouched (insert-only rules stand; only new seeds change).
@@ -12,9 +12,11 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 **Checked, no problems.** Browser crawl of about 1,400 page loads across all seven roles: no server errors, page errors, broken pages or "undefined/NaN/Invalid Date" text after the fixes.
 
-**Noted, not built (needs owner decision).** Photos a manager or store adds to a job are stored as internal, so the outside vendor's link only shows the vendor's own uploads. A "share with vendor" switch would fix this.
+**Share photos with the vendor (approved and built).** On an outside-vendor job, **Files & photos** lists the job's files and the store's report photos. Each photo shows **Team only** or **Vendor can see** with one button: **Show to vendor** / **Hide from vendor** (facilities, regional, store managers, owners). Photos start as team only; nothing is shared until someone chooses to. The vendor's secure link shows only shared photos. Each change updates the file link and writes an audit event (`work_order.photo_shared_with_vendor` / `work_order.photo_unshared_with_vendor`) in the same transaction; fixture and SQL repositories both expose `listEntityFileVisibility`.
 
-**Validation.** `tests/ops-demo-dates.test.ts` (no seeded past event after now at 02:00, 17:59 and 20:00 UTC); full checks before push.
+**Also changed on request.** Trends → In-house vs vendors: "Team hours on site" is now **In-house hours on site** (it only ever counted in-house technician check-in to check-out). The repair-quality table now tints and divides the in-house and vendor column groups. The sidebar **Review** count is an amber pill, hidden at zero.
+
+**Validation.** `tests/ops-demo-dates.test.ts` (no seeded past event after now at 02:00, 17:59 and 20:00 UTC); `tests/ops-service-job-context.test.ts` (photo hidden until shared, report photos included, repeat share is a no-op, unshare hides it, audit events written, other org refused); full checks before push.
 
 ### Ask: questions answered from the company's records — October 17, 2026
 

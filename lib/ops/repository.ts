@@ -456,6 +456,8 @@ export interface OpsRepository extends TaskRepository {
   getException(organizationId: OpsId, exceptionId: OpsId): Promise<OpsException | null>;
   getIdempotencyKey(organizationId: OpsId, key: string): Promise<IdempotencyKey | null>;
   listFilesForEntity(organizationId: OpsId, entityType: string, entityId: OpsId, visibility?: "vendor_shared"): Promise<StoredFile[]>;
+  /** Who can see each file on a record: "internal" (your team only) or "vendor_shared" (shown on the vendor's job link). */
+  listEntityFileVisibility(organizationId: OpsId, entityType: string, entityId: OpsId): Promise<Array<{ fileId: OpsId; visibility: "internal" | "vendor_shared" | "public_receipt" }>>;
   getStoredFileById(organizationId:OpsId,id:OpsId):Promise<StoredFile|null>;
   getStoredFileByStorageKey(organizationId: OpsId, storageKey: string): Promise<StoredFile | null>;
   getLatestServiceAssignment(organizationId: OpsId, workOrderId: OpsId): Promise<WorkOrderAssignment | null>;

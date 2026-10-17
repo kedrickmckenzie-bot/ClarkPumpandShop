@@ -951,6 +951,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
     const ids = new Set(this.fixture.entityFiles.filter((row) => row.organizationId === organizationId && row.entityType === entityType && row.entityId === entityId && (!visibility || row.visibility === visibility)).map((row) => row.fileId));
     return clone(this.fixture.files.filter((row) => row.organizationId === organizationId && row.status === "available" && ids.has(row.id)));
   }
+  async listEntityFileVisibility(organizationId: OpsId, entityType: string, entityId: OpsId) { return this.fixture.entityFiles.filter((row) => row.organizationId === organizationId && row.entityType === entityType && row.entityId === entityId).map((row) => ({ fileId: row.fileId, visibility: row.visibility })); }
   async getStoredFileById(organizationId:OpsId,id:OpsId) { return clone(this.fixture.files.find(f=>f.organizationId===organizationId&&f.id===id)??null); }
   async getStoredFileByStorageKey(organizationId: OpsId, storageKey: string): Promise<StoredFile | null> { return clone(this.fixture.files.find((row) => row.organizationId === organizationId && row.storageKey === storageKey) ?? null); }
   async getLatestServiceAssignment(organizationId: OpsId, workOrderId: OpsId) { return clone(this.fixture.assignments.filter(row => row.organizationId === organizationId && row.workOrderId === workOrderId && !["cancelled", "declined", "superseded"].includes(row.status)).sort((a,b)=>b.assignedAt.localeCompare(a.assignedAt)||b.id.localeCompare(a.id))[0] ?? null); }

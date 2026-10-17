@@ -3835,6 +3835,31 @@ export async function attachPublicEvidence(svc: OpsCommandServices, input: Attac
   return { fileId, linkId, organizationId: input.organizationId, entityType: input.entityType, entityId: input.entityId, createdAt: now };
 }
 
+/** Shows or hides one photo on the outside vendor's job link. Only the job's own photos and the store's report photos can be shared. */
+export async function setJobPhotoSharing(svc: OpsCommandServices, input: { organizationId: OpsId; workOrderId: OpsId; fileId: OpsId; shared: boolean; actor: ActorContext }) {
+  const { repository, clock, ids } = services(svc);
+  assertActorOrganization(input.actor, input.organizationId);
+  const work = await repository.getWorkOrder(input.organizationId, input.workOrderId);
+  if (!work) throw new OpsDomainError("NOT_FOUND", "Job not found.");
+  const sources: Array<{ entityType: "work_order" | "request"; entityId: OpsId }> = [{ entityType: "work_order", entityId: work.id }, ...(work.requestId ? [{ entityType: "request" as const, entityId: work.requestId }] : [])];
+  for (const source of sources) {
+    const link = (await repository.listEntityFileVisibility(input.organizationId, source.entityType, source.entityId)).find((row) => row.fileId === input.fileId);
+    if (!link) continue;
+    const file = (await repository.listFilesForEntity(input.organizationId, source.entityType, source.entityId)).find((row) => row.id === input.fileId);
+    if (!file?.contentType.startsWith("image/")) throw new OpsDomainError("VALIDATION", "Only photos can be shared with the vendor.");
+    if (link.visibility === "public_receipt") throw new OpsDomainError("CONFLICT", "This file can't be shared.");
+    const from = link.visibility, to = input.shared ? "vendor_shared" : "internal";
+    if (from === to) return { fileId: input.fileId, shared: input.shared, changed: false };
+    const now = clock.now();
+    await repository.atomicWrite([
+      { sql: "UPDATE ops_entity_files SET visibility = ? WHERE organization_id = ? AND entity_type = ? AND entity_id = ? AND file_id = ? AND visibility = ?", params: [to, input.organizationId, source.entityType, source.entityId, input.fileId, from] },
+      ...auditAndOutbox({ organizationId: input.organizationId, aggregateType: "work_order", aggregateId: work.id, eventType: input.shared ? "work_order.photo_shared_with_vendor" : "work_order.photo_unshared_with_vendor", actor: input.actor, occurredAt: now, payload: { fileId: input.fileId, source: source.entityType, from, to }, ids }),
+    ]);
+    return { fileId: input.fileId, shared: input.shared, changed: true };
+  }
+  throw new OpsDomainError("NOT_FOUND", "Photo not found on this job.");
+}
+
 export interface IssueVisitCheckoutTokenInput {
   organizationId: OpsId;
   visitId: OpsId;
