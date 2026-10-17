@@ -759,28 +759,34 @@ export async function createWorkOrder(svc: OpsCommandServices, input: CreateWork
     sourceReviewTasks = await repository.listWorkflowTasksForRequest(input.organizationId, request.id);
   }
   if (input.componentId && !input.assetId) throw new OpsDomainError("VALIDATION", "A component cannot be selected without its asset");
+  // A job's category always follows what was picked: the chosen group's category, else the chosen equipment's.
+  // Reports, trends and vendor charts group jobs by category, so a job on known equipment must never be left uncategorized.
+  input = { ...input };
   if (input.taxonomyNodeId) {
     const selected = await repository.getTaxonomyNode(input.organizationId, input.taxonomyNodeId);
     if (!selected || !selected.active) throw new OpsDomainError("VALIDATION", "Taxonomy selection is not active in this organization");
-    if (input.categoryKey) {
-      const nodes = await repository.listTaxonomyNodes(input.organizationId);
-      const byId = new Map(nodes.map((node) => [node.id, node]));
-      let root = selected;
-      const visited = new Set<OpsId>();
-      while (root.parentNodeId) {
-        if (visited.has(root.id)) throw new OpsDomainError("VALIDATION", "Taxonomy hierarchy contains a cycle");
-        visited.add(root.id);
-        const parent = byId.get(root.parentNodeId);
-        if (!parent) throw new OpsDomainError("VALIDATION", "Taxonomy selection has an invalid parent path");
-        root = parent;
-      }
-      if (root.canonicalKey !== input.categoryKey) throw new OpsDomainError("VALIDATION", "Taxonomy selection must belong to the selected category");
+    const nodes = await repository.listTaxonomyNodes(input.organizationId);
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+    let root = selected;
+    const visited = new Set<OpsId>();
+    while (root.parentNodeId) {
+      if (visited.has(root.id)) throw new OpsDomainError("VALIDATION", "Taxonomy hierarchy contains a cycle");
+      visited.add(root.id);
+      const parent = byId.get(root.parentNodeId);
+      if (!parent) throw new OpsDomainError("VALIDATION", "Taxonomy selection has an invalid parent path");
+      root = parent;
     }
+    if (input.categoryKey && root.canonicalKey !== input.categoryKey) throw new OpsDomainError("VALIDATION", "Taxonomy selection must belong to the selected category");
+    if (!input.categoryKey && root.canonicalKey) input.categoryKey = root.canonicalKey;
   }
   if (input.assetId) {
     const asset = await repository.getAsset(input.organizationId, input.assetId);
     if (!asset || asset.storeId !== input.storeId) throw new OpsDomainError("VALIDATION", "Asset must belong to the selected store and organization");
     if (input.categoryKey && asset.categoryKey !== input.categoryKey) throw new OpsDomainError("VALIDATION", "Asset must belong to the selected category");
+    if (!input.categoryKey && asset.categoryKey) {
+      input.categoryKey = asset.categoryKey;
+      input.taxonomyNodeId ??= asset.taxonomyNodeId;
+    }
     if (input.componentId) {
       const component = await repository.getComponent(input.organizationId, input.componentId);
       if (!component || component.assetId !== asset.id) throw new OpsDomainError("VALIDATION", "Component must belong to the selected asset and organization");
