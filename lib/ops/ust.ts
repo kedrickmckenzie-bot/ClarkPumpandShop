@@ -114,7 +114,7 @@ export function addUstDemo(f: OpsFixture): OpsFixture {
   const inspection = (scheduleId: string, store: string, due: number, status: "pending" | "passed" | "action_needed", note?: string) => {
     const id = `ust-demo-inspection-${scheduleId.slice("ust-demo-schedule-".length)}-${day(due)}`;
     if (f.inspections!.some((row) => row.id === id)) return;
-    f.inspections!.push({ id, organizationId: org, scheduleId, storeId: store, dueDate: day(due), status, version: 0, createdAt: at(due - 7), completedAt: status === "pending" ? undefined : at(due - 1), resultNote: note, masterDocumentsJson: "[]" });
+    f.inspections!.push({ id, organizationId: org, scheduleId, storeId: store, dueDate: day(due), status, version: 0, createdAt: at(Math.min(due - 7, -1)), completedAt: status === "pending" ? undefined : at(due - 1), resultNote: note, masterDocumentsJson: "[]" });
   };
   for (const store of stores) {
     const number = Number(store.storeNumber);

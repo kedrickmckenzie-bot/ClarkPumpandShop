@@ -1545,7 +1545,7 @@ function buildFixture(options: BuildOptions = {}): OpsFixture {
     invoiceLines.push({ id: lineId, organizationId: organization.id, invoiceId, lineNumber: 1, category: "labor", description: `Quarterly refrigeration preventive service · ${period.toLocaleUpperCase("en-US")}`, quantityThousandths: 1_000, unitAmount: amount, lineAmount: amount, contractRateCardLineId: "rate-summit-pm", createdAt });
     invoiceLineAllocations.push({ id: `allocation-${lineId}`, organizationId: organization.id, invoiceLineId: lineId, workOrderId: workOrder.id, workItemId: pmWorkItems.find((item) => item.occurrenceId === occurrence.id)?.id, siteVisitWorkOrderId: visit ? `site-visit-work-${visit.id}-${workOrder.id}` : undefined, assetId: pm107Asset.id, storeId: pm107Store.id, tradeKey: "refrigeration", amount, method: "manual", confirmedByMembershipId: "membership-northline-finance", confirmedAt: createdAt });
   });
-  serviceDiscrepancies.push({ id: "service-discrepancy-pm-107-observed-visits", organizationId: organization.id, workOrderId: "wo-pm-107-2026-q3", invoiceId: "invoice-summit-107-pm-2026-q3", discrepancyType: "evidence", status: "open", factsJson: JSON.stringify({ reconciliationKind: "pm_billed_vs_observed", programId: pm107Plan.programId, storeId: pm107Store.id, periodLabel: "Q4 2025 through Q3 2026", billedServiceUnits: 4, billedInvoiceIds: pm107InvoiceIds, invoicedAmountMinor: 170_000, observedVisitCount: pm107ObservedVisitIds.length, observedVisitIds: pm107ObservedVisitIds, missingOccurrenceIds: pm107MissingOccurrenceIds, reviewAmountMinor: pm107MissingOccurrenceIds.length * 42_500, determination: "review_only", note: "No platform visit evidence found does not prove service was not performed." }), createdAt: at(8, 26, 9) });
+  serviceDiscrepancies.push({ id: "service-discrepancy-pm-107-observed-visits", organizationId: organization.id, workOrderId: "wo-pm-107-2026-q3", invoiceId: "invoice-summit-107-pm-2026-q3", discrepancyType: "evidence", status: "open", factsJson: JSON.stringify({ reconciliationKind: "pm_billed_vs_observed", programId: pm107Plan.programId, storeId: pm107Store.id, periodLabel: "Q4 2025 through Q3 2026", billedServiceUnits: 4, billedInvoiceIds: pm107InvoiceIds, invoicedAmountMinor: 170_000, observedVisitCount: pm107ObservedVisitIds.length, observedVisitIds: pm107ObservedVisitIds, missingOccurrenceIds: pm107MissingOccurrenceIds, reviewAmountMinor: pm107MissingOccurrenceIds.length * 42_500, determination: "review_only", note: "No platform visit evidence found does not prove service was not performed." }), createdAt: at(8, 25, 9) });
 
   exceptions.push(
     { id: "exception-northline-112-overdue-pm", organizationId: organization.id, kind: "overdue_pm", storeId: "store-northline-112", severity: "attention", status: "open", summary: "Quarterly refrigeration inspection is outside its completion window", detectedAt: NORTHLINE_AS_OF },
@@ -2147,8 +2147,11 @@ export function buildNorthlinePresentationFixture(anchorDate?: string, options: 
   const fixture = clone(options.operatingHistory ? operatingHistoryFixture() : presentationFixture);
   const dispatch = (f: OpsFixture) => addDispatchDemo(f, { centralTeam: options.operatingHistory });
   if (!anchorDate) return dispatch(fixture);
-  const anchor = Date.parse(`${anchorDate.slice(0, 10)}T18:00:00.000Z`);
+  let anchor = Date.parse(`${anchorDate.slice(0, 10)}T18:00:00.000Z`);
   if (!Number.isFinite(anchor)) throw new Error("Invalid demo anchor date");
+  // A full timestamp means "now": anchor at the latest 18:00 UTC not after it, so no seeded history lands in the future.
+  const instant = anchorDate.length > 10 ? Date.parse(anchorDate) : NaN;
+  if (Number.isFinite(instant) && instant < anchor) anchor -= 86_400_000;
   const offset = anchor - Date.parse(NORTHLINE_AS_OF);
   function shift(value: unknown): unknown {
     if (typeof value === "string") {
