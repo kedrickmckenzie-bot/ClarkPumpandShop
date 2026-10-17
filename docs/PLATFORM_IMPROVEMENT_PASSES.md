@@ -4,6 +4,16 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Ask: questions answered from the company's records — October 17, 2026
+
+**Decisions (with the user).** Name: **Ask**. Separate from search (search finds things and stays instant and free; Ask answers questions). An **Ask** button sits in the top bar beside search; it opens a small floating window bottom-right that stays open while you click through to the records behind an answer, minimizes to an "Ask" tab, has **Back to where you asked**, and clears on close. Full screen on phones. Owners, facilities and regional managers and finance only; hidden when AI is not connected.
+
+**How it reasons.** The AI never reads the database or does arithmetic. It may only call six lookups that read the person's scoped records (same store/region limits as every page): recorded spending (grouped by store, category, vendor, region, month or equipment, with the previous period), jobs (open, late, done), repeat repairs (same equipment within N days of a finished job), equipment history, cost on equipment under warranty when the job was opened, and stores needing attention. Each lookup returns exact facts plus /app links to the records behind every number; any link in the answer that no lookup returned is removed. Unmatched store/vendor/equipment names are reported back instead of guessed. The prompt forbids estimating numbers or calling anything "saved". Nothing is stored.
+
+**Built.** `lib/ops/ask-lookups.ts`, `lib/server/ask.ts`, `POST /api/ops/ask`, `toolChat` on the AI client (manual lookup loop, adaptive thinking on the smart model), `components/workspace/ask-widget.tsx`. Two earlier helpers are now exported from the operator presenter (scoping and current assignment). Commit 32b66e3, pushed by an automatic step under the previous batch's message, already contained the first half of `ask-lookups.ts`; it was unused until this batch.
+
+**Validation.** `tests/ops-ask-lookups.test.ts` (spending equals cost lines, links on every row, region scope, unmatched names) and `tests/ops-ask.test.ts` (a stand-in AI: only lookups run, unknown lookups refused, invented links stripped). Browser on a fresh PostgreSQL demo with a canned answer (no real AI call): open, starter question, answer with links, click a link (window stays), minimize to tab, back to where you asked (conversation kept), close; same on a 390 px phone; no Ask button for technicians or store managers. The real AI has not been called for Ask yet.
+
 ### Savings out of the menu; calmer demo operating reports — October 17, 2026
 
 **Decisions (with the user).** The platform cannot honestly determine savings (that needs knowing what would have happened otherwise), so **Savings** leaves the Spend & planning menu; the page and its records stay in place, unlinked. A monthly "what we caught" summary was considered and rejected: it rewards problems and makes a calm month look like no value. The value story is control and visibility, shown live in demos.

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { Suspense, useState, useSyncExternalStore } from "react";
+import { AskWidget } from "@/components/workspace/ask-widget";
 import { WorkspaceSearch } from "./workspace-search";
 import Image from "next/image";
 import { RevealHashTarget } from "@/components/workspace/reveal-hash-target";
@@ -110,6 +111,8 @@ const createActions: Array<{
 
 interface PlatformShellProps {
   reviewCount?:number;
+  /** Show the Ask button: AI is connected and the person may ask about the company's records. */
+  askEnabled?: boolean;
   session: OperatorSession;
   children: React.ReactNode;
 }
@@ -259,7 +262,7 @@ function CreateMenu({ session, edition }: { session: OperatorSession; edition: D
   );
 }
 
-export function PlatformShell({ session, children, reviewCount }: PlatformShellProps) {
+export function PlatformShell({ session, children, reviewCount, askEnabled = false }: PlatformShellProps) {
   const sidebarCollapsed = useSyncExternalStore(subscribeSidebar, sidebarSnapshot, expandedSidebarOnServer);
   const pathname = usePathname();
   const edition = session.demoEdition ?? DEFAULT_DEMO_EDITION;
@@ -312,6 +315,7 @@ export function PlatformShell({ session, children, reviewCount }: PlatformShellP
 
             <WorkspaceSearch placeholder={edition === "accountability" ? "Search work orders, visits, stores, or vendors" : "Search a store, work order, vendor, or equipment"} />
 
+            {askEnabled ? <Suspense fallback={null}><AskWidget /></Suspense> : null}
             {/* Company, demo package and your role are shown once, in the sidebar. */}
             <CreateMenu session={session} edition={edition} />
           </header>

@@ -77,6 +77,7 @@ Models (cheapest that passed the tricky-case tests in `tests/ai-eval.test.ts`):
 
 - `OPS_AI_FAST_MODEL` — checkout chat and repair notes. Default `claude-haiku-4-5`.
 - `OPS_AI_MODEL` — troubleshooting. Default `claude-sonnet-5-5`.
+- The **Ask** window (owners, managers, finance) uses `OPS_AI_MODEL` with a lookup loop; it appears only when `OPS_AI_PROVIDER=anthropic` and the key are set. A question usually takes 2–4 model calls.
 - `OPS_AI_WEB_SEARCH=off` turns off internet look-ups (on by default; at most two searches
   per question, only when the records and manuals don't cover a model-specific code, part or spec).
 

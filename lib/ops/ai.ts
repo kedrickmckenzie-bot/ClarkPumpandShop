@@ -24,6 +24,17 @@ export interface AiClient {
    * Providers without web access leave it out, and features work without it.
    */
   webSearch?(request: { system: string; prompt: string; maxSearches: number }): Promise<{ text: string; sources: { title: string; url: string }[] }>;
+  /**
+   * Optional: answer a conversation using only the given lookups. The model chooses lookups and their inputs;
+   * runTool executes them on the server and returns JSON text. Returns the final answer text.
+   */
+  toolChat?(request: {
+    system: string;
+    messages: { role: "user" | "assistant"; content: string }[];
+    tools: { name: string; description: string; input_schema: Record<string, unknown> }[];
+    runTool(name: string, input: Record<string, unknown>): Promise<string>;
+    maxRounds?: number;
+  }): Promise<string>;
 }
 
 /** Raised when the AI could not give a usable answer; callers show a plain message and let the person continue by hand. */

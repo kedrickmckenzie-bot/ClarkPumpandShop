@@ -45,6 +45,40 @@ export function getAiClient(): AiClient | undefined {
         throw new AiUnavailableError("The AI couldn't fill this in. Please fill the form in yourself.");
       return response.parsed_output;
     },
+    // A manual lookup loop: the model asks for lookups, the server runs them, and the results go back until it answers.
+    async toolChat({ system, messages, tools, runTool, maxRounds = 6 }) {
+      const history: Anthropic.MessageParam[] = messages.map(message => ({ role: message.role, content: message.content }));
+      try {
+        for (let round = 0; round < maxRounds; round++) {
+          const response = await client.messages.create({
+            model, max_tokens: 4000, system, messages: history, tools: tools as Anthropic.Tool[],
+            ...(model.startsWith("claude-haiku") ? {} : { thinking: { type: "adaptive" as const }, output_config: { effort: "low" as const } }),
+          });
+          if (response.stop_reason === "refusal") throw new AiUnavailableError("Ask couldn't answer that one.");
+          history.push({ role: "assistant", content: response.content });
+          const calls = response.content.filter((block): block is Anthropic.ToolUseBlock => block.type === "tool_use");
+          if (response.stop_reason !== "tool_use" || !calls.length) {
+            const text = response.content.flatMap(block => block.type === "text" ? [block.text] : []).join("").trim();
+            if (!text) throw new AiUnavailableError("Ask didn't come back with an answer. Try asking another way.");
+            return text;
+          }
+          const results: Anthropic.ToolResultBlockParam[] = [];
+          for (const call of calls) {
+            let content: string, isError = false;
+            try { content = await runTool(call.name, (call.input ?? {}) as Record<string, unknown>); }
+            catch (error) { content = error instanceof Error ? error.message : "That lookup failed."; isError = true; }
+            results.push({ type: "tool_result", tool_use_id: call.id, content, ...(isError ? { is_error: true } : {}) });
+          }
+          history.push({ role: "user", content: results });
+        }
+      } catch (error) {
+        if (error instanceof AiUnavailableError) throw error;
+        if (error instanceof Anthropic.RateLimitError) throw new AiUnavailableError("Ask is busy right now. Try again in a minute.");
+        if (error instanceof Anthropic.APIError) throw new AiUnavailableError("Ask couldn't answer just now. Try again.");
+        throw error;
+      }
+      throw new AiUnavailableError("That question needed too many lookups. Try asking something more specific.");
+    },
     // On unless OPS_AI_WEB_SEARCH=off. Searches are capped per question and the results are labeled as web sources.
     ...(process.env.OPS_AI_WEB_SEARCH === "off" ? {} : {
       async webSearch({ system, prompt, maxSearches }: { system: string; prompt: string; maxSearches: number }) {
