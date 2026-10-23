@@ -201,9 +201,9 @@ describe("embedded work-order verification surface", () => {
     expect(model.history).toEqual([]);
   });
 
-  it("keeps evidence readable but removes decision forms for a review-only executive", () => {
+  it("keeps evidence readable but removes decision forms for a review-only finance reviewer", () => {
     const fixture = verificationFixture();
-    const model = buildWorkOrderVerificationModel(fixture, session("executive"), workOrderId);
+    const model = buildWorkOrderVerificationModel(fixture, session("finance"), workOrderId);
     const markup = renderToStaticMarkup(createElement(WorkOrderVerificationPanel, { model }));
 
     expect(model.available).toBe(true);

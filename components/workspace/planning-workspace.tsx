@@ -2,6 +2,7 @@ import { StoreJump } from "@/components/ops/store-jump";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { WorkReviewButton } from "./work-review";
+import { PmBoard } from "./pm-board";
 import { workReviewTarget } from "@/lib/ops/navigation-trail";
 import {
   AlertCircle,
@@ -285,7 +286,10 @@ export function PlanningWorkspace({
   return (
     <div className={styles.workspace}>
       <WorkspaceHeader model={model} kind={kind} />
-      {model.state.kind !== "ready" ? <StatePanel state={model.state} /> : <>
+      {model.state.kind !== "ready" ? <StatePanel state={model.state} /> : model.pmBoard ? <>
+        <PmBoard model={model} board={model.pmBoard} />
+        {programManagement}
+      </> : <>
         {pmEvidence ? null : <BasisBanner kind={kind} />}
         <Filters model={model} />
         {kind === "pm" && model.clearFiltersHref ? <Link href={model.clearFiltersHref}>Clear filters</Link> : null}

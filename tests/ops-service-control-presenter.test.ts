@@ -108,7 +108,7 @@ describe("enterprise service-control presenter contracts", () => {
     expect(regional).toMatchObject({ available: true, permitted: true, canPrepareWorkOrder: true, canCreateWorkOrder: false });
     expect(storeManager).toMatchObject({ available: true, permitted: true, canPrepareWorkOrder: false, canCreateWorkOrder: false });
     expect(storeManager.createWorkOrderHref).toBeUndefined();
-    expect(executive).toMatchObject({ available: true, permitted: false, canPrepareWorkOrder: false, canCreateWorkOrder: false });
+    expect(executive).toMatchObject({ available: true, permitted: true, canPrepareWorkOrder: true, canCreateWorkOrder: false });
 
     request.status = "under_review";
     const initialImpact = fixture.requestImpactAssessments.find((assessment) => assessment.requestId === request.id)!;
@@ -175,7 +175,7 @@ describe("enterprise service-control presenter contracts", () => {
 
     expect(buildWorkOrderControlModel(fixture, operatorSession("regional"), work.id).permitted).toBe(true);
     expect(buildWorkOrderControlModel(fixture, operatorSession("store_manager"), work.id).permitted).toBe(false);
-    expect(buildWorkOrderControlModel(fixture, operatorSession("executive"), work.id).permitted).toBe(false);
+    expect(buildWorkOrderControlModel(fixture, operatorSession("executive"), work.id).permitted).toBe(true);
     expect(buildWorkOrderControlModel(fixture, operatorSession("finance"), work.id).permitted).toBe(false);
 
     const closedWork = fixture.workOrders.find((candidate) => candidate.status === "closed")!;
@@ -463,7 +463,7 @@ describe("enterprise service-control presenter contracts", () => {
     });
     expect(exception.detail.page.primaryAction?.href).toBe(`/app/visits/${NORTHLINE_DEMO_HANDLES.unmatchedVisitId}`);
     expect(exception.detail.sections.map((section) => section.id)).toEqual(["source-evidence", "timeline"]);
-    expect(buildAttentionItemModel(fixture, operatorSession("executive"), "exception-northline-107-no-wo").control.permitted).toBe(false);
+    expect(buildAttentionItemModel(fixture, operatorSession("finance"), "exception-northline-107-no-wo").control.permitted).toBe(false);
 
     const followUpId = "follow-up-recent-aug-102-hvac";
     const sourceFollowUp = fixture.followUps.find((candidate) => candidate.id === followUpId)!;
@@ -501,7 +501,7 @@ describe("enterprise service-control presenter contracts", () => {
         link: { href: `/app/visits/${sourceFollowUp.sourceVisitId}`, label: "Open visit" },
       }),
     ]));
-    expect(buildAttentionItemModel(fixture, operatorSession("executive"), followUpId).control.permitted).toBe(false);
+    expect(buildAttentionItemModel(fixture, operatorSession("finance"), followUpId).control.permitted).toBe(false);
   });
 
   it("keeps visit and note history on open and closed work-order records", () => {

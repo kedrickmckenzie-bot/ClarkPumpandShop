@@ -99,7 +99,7 @@ describe("embedded work-order Workflow Task surface", () => {
 
   it("keeps task evidence visible while withholding mutation forms from review-only roles", () => {
     const fixture = buildNorthlinePresentationFixture();
-    const model = buildWorkflowTaskWorkspaceModel(fixture, session("executive"), "wo-northline-112");
+    const model = buildWorkflowTaskWorkspaceModel(fixture, session("finance"), "wo-northline-112");
     const markup = renderToStaticMarkup(createElement(WorkflowTaskPanel, { model }));
 
     expect(markup).toContain("Verify operating condition after technician checkout");

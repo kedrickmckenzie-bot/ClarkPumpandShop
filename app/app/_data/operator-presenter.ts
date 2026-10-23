@@ -1,3 +1,4 @@
+import { compactStoreLabel } from "@/lib/product/store-label";
 import type { TodoCounts } from "./dashboard-presenter";
 import { applicableOutcomeVerification, applicableVisitWorkOutcomes, latestRecordedWorkOutcome, normalizeWorkOutcomes } from "@/lib/ops/work-order-outcome";
 import { problemTitle } from "@/lib/product/problem-title";
@@ -3578,7 +3579,7 @@ export function buildProgramModel(
       const linkedWork = workByAsset.get(asset.id) ?? [];
       return { id: asset.id, label: asset.name, href: asset.status === "out_of_service" ? hrefWithQuery(`/app/equipment/${asset.id}`, { section: "service-history" }) : `/app/equipment/${asset.id}`, cells: [
         { key: "asset", value: asset.name, secondary: asset.assetTag },
-        { key: "store", value: storeLabel(store), link: store ? { href: `/app/stores/${store.id}`, label: "Open store" } : undefined },
+        { key: "store", value: compactStoreLabel(storeLabel(store), session.organizationName), link: store ? { href: `/app/stores/${store.id}`, label: "Open store" } : undefined },
         { key: "category", value: sentence(asset.categoryKey), secondary: assetHierarchyPath(asset).slice(1).join(" › ") || "No deeper grouping" },
         { key: "identity", value: asset.model ?? "Model not entered", secondary: asset.serialNumber ? `S/N ${asset.serialNumber}` : "Serial not entered" },
         { key: "work", value: String(linkedWork.length) },

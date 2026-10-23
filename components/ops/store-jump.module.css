@@ -1,4 +1,5 @@
-.jump { min-width: 220px; max-width: 320px; flex: 0 1 280px; }
+/* Width only: in a column layout a flex-basis would become height. */
+.jump { width: 280px; min-width: 220px; max-width: 100%; flex: 0 1 auto; }
 .chosen { display: inline-flex; align-items: center; gap: 10px; min-height: 40px; padding: 4px 6px 4px 12px; border: 1px solid #93b4ef; border-radius: 6px; background: #eff5ff; }
 .chosen > span { display: grid; line-height: 1.2; }
 .chosen small { color: #4b5a70; font-size: 12px; font-weight: 700; }

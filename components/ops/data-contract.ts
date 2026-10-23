@@ -667,6 +667,33 @@ export interface ProgramPageViewModel extends DashboardPageViewModel {
   resultSummary?: string;
   search?: ListPageViewModel["search"];
   pagination?: ListPageViewModel["pagination"];
+  /** The PM page: one list of maintenance with who is doing it, who is slipping, and the done-vs-missed comparison. */
+  pmBoard?: PmBoardViewModel;
+}
+
+export interface PmBoardRowViewModel {
+  id: string;
+  title: string;
+  equipment?: string;
+  storeLabel: string;
+  storeHref: string;
+  dueLabel: string;
+  /** "5 days late", "Due in 3 days", "Needs a date". */
+  timingLabel?: string;
+  late: boolean;
+  who?: string;
+  statusLabel: string;
+  tone: Tone;
+  href: string;
+  action: { label: string; href: string; primary: boolean };
+}
+export interface PmSlipRowViewModel { id: string; label: string; rateLabel: string; detail: string; missed: number; href: string }
+export interface PmBoardViewModel {
+  rows: PmBoardRowViewModel[];
+  listTitle: string;
+  emptyLabel: string;
+  slipping: { periodLabel: string; stores: PmSlipRowViewModel[]; vendors: PmSlipRowViewModel[]; allStoresHref: string };
+  comparison: BreakdownViewModel;
 }
 
 export interface OperatorPageModels {

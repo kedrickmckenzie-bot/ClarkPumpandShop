@@ -8,7 +8,7 @@ export async function pmScheduleQueryRegression(repository: OpsRepository, fixtu
   const organizationId = fixture.organizations[0].id, store = fixture.stores[0];
   const base = { asOf: fixture.asOf, limit: 7 };
   const queries: PmScheduleQuery[] = [base, ...PM_SCHEDULE_STATES.map(status => ({ ...base, status })),
-    { ...base, status: "follow-up" }, { ...base, window: "closed" }, { ...base, view: "attention" }, { ...base, view: "upcoming" },
+    { ...base, status: "follow-up" }, { ...base, window: "closed" }, { ...base, view: "attention" }, { ...base, view: "upcoming" }, { ...base, view: "now" }, { ...base, view: "week" }, { ...base, breakdown: true }, { ...base, status: "completed", breakdown: true }, { ...base, status: "missed", offset: 7 }, { ...base, view: "recent" }, { ...base, view: "recent", assignee: "in_house" }, { ...base, view: "recent", assignee: "none" }, { ...base, view: "recent", assignee: `vendor:${fixture.vendors[0].id}` },
     { ...base, program: fixture.maintenancePrograms[0].id }, { ...base, occurrence: fixture.pmOccurrences[0].id },
     { ...base, store: store.id }, { ...base, region: store.regionId }, { ...base, store: "missing" }, { ...base, offset: 14 }, { ...base, offset: 100000 }];
   for (const query of queries) expect(await repository.listPmSchedule({ organizationId }, query), `${repository.kind}: ${JSON.stringify(query)}`).toEqual(pmScheduleFromFixture(fixture, { organizationId }, query));

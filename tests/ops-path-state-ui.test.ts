@@ -74,10 +74,10 @@ describe("operator bid and service path states", () => {
 
   it("shows role denial separately from a workflow lock", () => {
     const fixture = buildNorthlinePresentationFixture();
-    const serviceModel = buildVendorIssuanceModel(fixture, session("executive"), "wo-northline-105-price-check");
+    const serviceModel = buildVendorIssuanceModel(fixture, session("finance"), "wo-northline-105-price-check");
     const bidModel = buildEstimateComparisonModel(
       fixture,
-      session("executive"),
+      session("finance"),
       NORTHLINE_DEMO_HANDLES.publicServiceWorkOrderId,
     );
     const serviceMarkup = renderToStaticMarkup(createElement(VendorIssuancePanel, { model: serviceModel }));

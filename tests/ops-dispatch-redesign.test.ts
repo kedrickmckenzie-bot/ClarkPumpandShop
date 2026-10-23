@@ -51,8 +51,8 @@ describe("Dispatch redesign boundaries and user choices",()=>{
     expect(board.queue.items.length).toBeLessThanOrEqual(25);
     const html=renderToStaticMarkup(await renderDispatchBoard({week:"2026-10-05",q:"Synthetic dispatch"}));expect(html).toContain("Synthetic dispatch job 199");expect(html).toContain("time unknown");expect(performance.now()-started).toBeLessThan(5000);
   });
-  it("keeps owner and read-only boards free of editing actions",async()=>{
-    session={...session,role:"executive",membershipId:"membership-northline-executive",userId:"user-northline-executive",permissions:["ops:read"]};
+  it("keeps read-only boards free of editing actions",async()=>{
+    session={...session,role:"finance",membershipId:"membership-northline-finance",userId:"user-northline-finance",permissions:["ops:read"]};
     const html=renderToStaticMarkup(await renderDispatchBoard({}));expect(html).not.toContain('draggable="true"');expect(html).not.toContain(">Schedule</button>");
     expect(html).not.toContain('data-can-drag="true"');
   });

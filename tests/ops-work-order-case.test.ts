@@ -235,7 +235,7 @@ describe("vendor response continuation", () => {
     })).rejects.toThrow(/not found/i);
     await expect(resolveVendorResponse(services, {
       organizationId: "org-northline-demo", vendorResponseId: "resp-acc-1", decision: "reply_to_question", message: "No lift is needed.",
-      actor: { organizationId: "org-northline-demo", actorType: "user", actorId: "membership-northline-executive", actorName: "Executive" },
+      actor: { organizationId: "org-northline-demo", actorType: "user", actorId: "membership-northline-finance", actorName: "Finance" },
     })).rejects.toThrow(/Facilities or regional authority/);
   });
 

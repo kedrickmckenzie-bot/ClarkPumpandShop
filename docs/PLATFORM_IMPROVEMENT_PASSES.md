@@ -4,6 +4,16 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### PM page redesign, equipment store box — October 23, 2026
+
+**PM page (owner-approved design).** Four clickable numbers: Overdue, Due this week, Needs a date, and Done in the last 90 days (done ÷ maintenance due in the last 90 days; skipped and canceled left out; each opens its exact rows). One list with tabs Needs attention (default: due, overdue, no date) / Coming up / Done / Missed (newest first). Each row shows maintenance and machine, store, due date with "N days late" in red, who is doing it (vendor or in-house, from the latest active assignment), and one button: Schedule, Create job, Assign or Open. "Who's slipping" shows the worst stores and vendors/teams for the last 90 days; every row opens its exact maintenance (`view=recent` with `store` or `assignee`). One comparison stays at the bottom: repairs per machine when maintenance is done vs. missed. The Visits column, the Dates filter and the repair-spending trend left the PM page (the cost evidence page remains). Phone: numbers 2×2, rows as cards, tables stacked. Query additions (`now`, `week`, `recent` views, `assignee` filter, breakdown) are identical in fixture, D1 and PostgreSQL (parity regression extended).
+
+**Equipment page.** The "Jump to a store" box left a ~250 px empty band in column layouts (its flex-basis became a height); it now only sets width. The equipment list Store column no longer repeats the company name.
+
+**Tests.** Older tests that used the owner as the read-only example now use Finance; owner expectations match the hands-on owner.
+
+**Validation.** Typecheck, lint on changed files, PM/dashboard parity (fixture, D1, PostgreSQL), and the owner-related tests passed; browser check of PM (desk, phone, vendor drill) and Equipment. Full checks run after push.
+
 ### Hands-on owner, store-manager Review, PM in plain words — October 23, 2026
 
 **Hands-on owner (owner's direction).** The owner role was view-only: no action capabilities, no Work menu, and 69 of 111 action routes refused it. Now the owner can do everything Facilities can, on screen and on the server: the owner's role policy mirrors Facilities (including setup and administration); `roleAllowed` in `lib/server/ops-request-context.ts` lets the owner through every route that allows Facilities (one rule instead of 69 edits); domain role checks that listed facilities/regional/field managers now include the owner; screen checks that named Facilities now include the owner. The owner gets Work → Review: Mine (approvals at the owner's level, items assigned to the owner) and My stores (the whole company; the owner can help with everything not waiting on a vendor or needing someone on site). The owner's Overview keeps its spending-first layout; its "to do" line now counts Mine and opens it. The demo reset stays limited to the top Facilities admin.

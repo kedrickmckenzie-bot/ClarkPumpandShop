@@ -716,8 +716,8 @@ describe("work-recording presenter policy", () => {
     });
     expect(buildWorkOrderRecordingModel(fixture, operatorSession("executive"), workOrderId)).toMatchObject({
       available: true,
-      canClassify: false,
-      canRecordCost: false,
+      canClassify: true,
+      canRecordCost: true,
     });
 
     const outsideStoreScope = buildWorkOrderRecordingModel(fixture, operatorSession("store_manager"), "wo-recent-aug-102-hvac");

@@ -1,7 +1,8 @@
 import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
-import type { OperatorSession, PaginationViewModel, ProgramPageViewModel, TableRowViewModel, Tone } from "@/components/ops/data-contract";
+import type { OperatorSession, PaginationViewModel, PmBoardRowViewModel, PmSlipRowViewModel, ProgramPageViewModel, TableRowViewModel, Tone } from "@/components/ops/data-contract";
+import { roleCanOpenOperatorHref } from "@/components/ops/role-policy";
 import type { OpsRepository } from "@/lib/ops/repository";
-import { PM_SCHEDULE_STATES, pmScheduleScope, validatePmScheduleQuery, type PmScheduleQuery, type PmScheduleState } from "@/lib/ops/pm-schedule-query";
+import { PM_RECENT_DAYS, pmScheduleScope, validatePmScheduleQuery, type PmScheduleQuery, type PmScheduleState } from "@/lib/ops/pm-schedule-query";
 import { pmAnalysisPeriod, type PmAnalysisPage, type PmAnalysisQuery } from "@/lib/ops/pm-analysis-query";
 import { formatOperationsDate } from "@/lib/ops/local-time";
 import { compactStoreLabel } from "@/lib/product/store-label";
@@ -13,7 +14,7 @@ const labels: Record<PmScheduleState | "follow-up", string> = { scheduled: "Upco
 const tone = (status: string): Tone => status === "completed" ? "positive" : status === "missed" ? "critical" : ["due", "overdue", "unscheduled", "follow-up"].includes(status) ? "warning" : "neutral";
 export function pmHref(query: Query, changes: Record<string, string | undefined> = {}) {
   const values = new URLSearchParams();
-  for (const key of ["store", "region", "program", "window", "view", "status", "occurrence", "evidence", "cohort", "month", "enrollments", "enrollmentPage", "page", "setup", "setupFilter", "setupPage", "programPage", "asset", "reviewSource", "pmReview", "reviewMissing", "reviewPage"]) { const value = first(query[key]); if (value) values.set(key, value); }
+  for (const key of ["store", "region", "program", "window", "view", "status", "assignee", "occurrence", "evidence", "cohort", "month", "enrollments", "enrollmentPage", "page", "setup", "setupFilter", "setupPage", "programPage", "asset", "reviewSource", "pmReview", "reviewMissing", "reviewPage"]) { const value = first(query[key]); if (value) values.set(key, value); }
   for (const [key, value] of Object.entries(changes)) { if (value) values.set(key, value); else values.delete(key); }
   return `/app/pm${values.size ? `?${values}` : ""}`;
 }
@@ -25,8 +26,8 @@ function pagination(total: number, page: number, query: Query): PaginationViewMo
 }
 export function parsePmScheduleQuery(params: Query, asOf: string): PmScheduleQuery {
   const status = first(params.status), window = first(params.window), requestedView = first(params.view);
-  const query: PmScheduleQuery = { asOf, store: first(params.store), region: first(params.region), program: first(params.program), occurrence: first(params.occurrence),
-    status: status as PmScheduleQuery["status"], window: window as PmScheduleQuery["window"], view: (requestedView ?? (status || params.occurrence || window ? "all" : "attention")) as PmScheduleQuery["view"], limit: SIZE, offset: (pageNumber(params) - 1) * SIZE };
+  const query: PmScheduleQuery = { asOf, store: first(params.store), region: first(params.region), program: first(params.program), occurrence: first(params.occurrence), assignee: first(params.assignee),
+    status: status as PmScheduleQuery["status"], window: window as PmScheduleQuery["window"], view: (requestedView ?? (status || params.occurrence || window ? "all" : "now")) as PmScheduleQuery["view"], limit: SIZE, offset: (pageNumber(params) - 1) * SIZE };
   validatePmScheduleQuery(query); return query;
 }
 /** Other jobs (mostly repairs) per machine over the 12 months. */
@@ -44,8 +45,7 @@ function analysisContext(result: PmAnalysisPage, params: Query, asOf: string) {
     periodLabel, method, costMethod,
     breakdown: { id: "pm-effectiveness-cohorts", title: "Repairs when maintenance is done vs. missed", description: `Last 12 months. Machines grouped by whether their last maintenance was done or missed. A pattern, not proof.`, totalLabel: `${stats.completedEquipment + stats.missedEquipment} machines`,
       segments: (["completed", "missed"] as const).map(cohort => { const equipment = cohort === "completed" ? stats.completedEquipment : stats.missedEquipment, work = cohort === "completed" ? stats.completedWork : stats.missedWork; return { id: cohort, label: `Maintenance ${cohort === "completed" ? "done" : "missed"} · ${equipment} machines${equipment > 0 && equipment < 10 ? " · too few to compare" : ""}`, value: perMachine(work, equipment), formattedValue: perMachineLabel(work, equipment), tone: cohort === "completed" ? "positive" as const : "warning" as const, link: { href: source("reactive-work", { cohort }), label: "Review work records" } }; }),
-      sourceLink: { href: source("cohort-equipment", { cohort: "all" }), label: "See the machines" } },
-    trend: { id: "pm-reactive-cost", title: "Repair spending on maintained equipment", description: `Last 12 months, by month. Cost of jobs that weren't the maintenance itself. Months with no cost records aren't counted as $0.`, points: result.items.map(row => ({ id: row.id, label: row.id, value: row.amountMinor, formattedValue: money(row.amountMinor), link: { href: source("reactive-cost", { month: row.id, cohort: undefined }), label: "See the costs" } })), sourceLink: { href: source("reactive-cost", { cohort: undefined }), label: "Review all cost lines" } },
+      sourceLink: { href: source("cohort-equipment", { cohort: "all" }), label: "See the machines" } }
   };
 }
 
@@ -82,26 +82,77 @@ export async function buildPmScheduleModel(repository: OpsRepository, session: O
       table: { id: "pm-reactive-evidence", caption: title, rows, columns: equipment ? [{ key: "asset", label: "Machine / store" }, { key: "window", label: "Last maintenance due" }, { key: "status", label: "Done?" }, { key: "work", label: "Repairs in 12 months" }] : [{ key: "work", label: "Job" }, { key: "asset", label: "Machine / store" }, { key: "date", label: cost ? "Service date" : "Opened" }, ...(cost ? [{ key: "cost", label: "Recorded cost (USD)" }] : [])] },
       resultSummary: `${analysis.items.length ? (page - 1) * SIZE + 1 : 0}–${analysis.items.length ? (page - 1) * SIZE + analysis.items.length : 0} of ${analysis.totalCount}`, pagination: pagination(analysis.totalCount, page, params) };
   }
-  const result = await repository.listPmSchedule(session, query), summary = result.summary;
-  const cohortHref = (changes: Record<string, string | undefined>) => pmHref(params, { page: undefined, occurrence: undefined, ...changes });
-  const rows: TableRowViewModel[] = result.items.map(row => {
+  const result = await repository.listPmSchedule(session, { ...query, breakdown: true }), summary = result.summary;
+  const listHref = (changes: Record<string, string | undefined>) => pmHref(params, { page: undefined, occurrence: undefined, view: undefined, status: undefined, window: undefined, assignee: undefined, ...changes });
+  const storeLabel = (number: string, name: string) => compactStoreLabel(`Store ${number} · ${name}`, session.organizationName);
+  const DAY = 86_400_000;
+  const days = (ms: number) => Math.max(1, Math.round(ms / DAY));
+  const timing = (status: PmScheduleState, dueAt: string) => {
+    const gap = Date.parse(dueAt) - Date.parse(asOf);
+    if (status === "unscheduled") return "Needs a date";
+    if (status === "overdue" || status === "missed") return `${days(-gap)} day${days(-gap) === 1 ? "" : "s"} late`;
+    if (status === "due" || status === "scheduled") return gap < DAY ? "Due today" : `Due in ${days(gap)} day${days(gap) === 1 ? "" : "s"}`;
+    return undefined;
+  };
+  const open = (status: PmScheduleState) => ["scheduled", "due", "overdue", "unscheduled"].includes(status);
+  const boardRows: PmBoardRowViewModel[] = result.items.map(row => {
     const href = `/app/pm/occurrences/${encodeURIComponent(row.id)}?${new URLSearchParams({ returnTo: pmHref(params) })}`;
-    return { id: row.id, label: row.planName, href, cells: [
-      { key: "plan", value: row.planName, secondary: row.assetName ?? "Store maintenance" },
-      { key: "store", value: compactStoreLabel(`Store ${row.storeNumber} · ${row.storeName}`, session.organizationName), link: { href: `/app/stores/${encodeURIComponent(row.storeId)}`, label: "Open store" } },
-      { key: "window", value: date(row.dueAt, row.timeZone), secondary: `Can be done ${date(row.windowStartsAt, row.timeZone)} – ${date(row.windowEndsAt, row.timeZone)}` },
-      { key: "work", value: row.workNumber ?? (row.hasWorkReference ? "Unavailable" : row.importedHistory ? "Imported history" : "No work order"), link: row.workId ? { href: `/app/work-orders/${encodeURIComponent(row.workId)}`, label: "Open work order" } : undefined },
-      { key: "visit", value: row.visitCount ? `${row.visitCount} visit${row.visitCount === 1 ? "" : "s"}` : row.importedHistory ? "Imported history" : "None recorded", link: { href: `${href}#visit-evidence`, label: "See visits" } },
-      { key: "status", value: labels[row.status], secondary: row.followUpCount ? `${row.followUpCount} open follow-up${row.followUpCount === 1 ? "" : "s"}` : undefined, tone: tone(row.status) },
-    ] };
+    const workHref = row.workId ? `/app/work-orders/${encodeURIComponent(row.workId)}` : undefined;
+    const createHref = `/app/work-orders/new?pmOccurrence=${encodeURIComponent(row.id)}`;
+    // One next step per row: give it a date, get a job made, get someone on the job, or just open it.
+    const action = !open(row.status) ? { label: "Open", href, primary: false }
+      : row.status === "unscheduled" ? { label: "Schedule", href, primary: true }
+      : !row.hasWorkReference && ["due", "overdue"].includes(row.status) && roleCanOpenOperatorHref(session.role, createHref) ? { label: "Create job", href: createHref, primary: true }
+      : workHref && !row.assigneeName && ["due", "overdue"].includes(row.status) ? { label: "Assign", href: workHref, primary: true }
+      : { label: "Open", href: workHref ?? href, primary: false };
+    return { id: row.id, title: row.planName, equipment: row.assetName, storeLabel: storeLabel(row.storeNumber, row.storeName), storeHref: `/app/stores/${encodeURIComponent(row.storeId)}`,
+      dueLabel: date(row.dueAt, row.timeZone), timingLabel: timing(row.status, row.dueAt), late: row.status === "overdue" || row.status === "missed",
+      who: row.assigneeName ?? (row.importedHistory ? "Imported history" : open(row.status) ? undefined : row.workNumber ? undefined : "—"),
+      statusLabel: labels[row.status], tone: tone(row.status), href, action };
   });
-  const statusMetrics = [...PM_SCHEDULE_STATES, "follow-up" as const].map(state => ({ id: state, label: state === "completed" ? "Done" : labels[state], selected: query.status === state, value: String(state === "follow-up" ? summary.followUp : summary.states[state]), supportingText: "", tone: tone(state), link: { href: cohortHref({ status: state, view: "all" }), label: `Review ${labels[state].toLowerCase()}` } }));
-  return { state: { kind: "ready" }, page: { title: "Preventive maintenance", description: "Review due work and upcoming maintenance.", scopeLabel: selectedScope, periodLabel: query.window ? "Due date passed · skipped and canceled left out" : "All scheduled maintenance", updatedLabel: `As of ${date(asOf)}` },
-    metrics: [{id:"pm-completion-rate",label:"Maintenance done",value:summary.closedEligible ? `${Math.round(summary.closedCompleted/summary.closedEligible*100)}%` : "Nothing due yet",supportingText:`${summary.closedCompleted} of ${summary.closedEligible} done, of maintenance already past its due date`,tone:"neutral",link:{href:cohortHref({window:"closed",status:undefined,view:"all"}),label:"See what was counted"}}, ...statusMetrics], priorityActions: [], sourceDescription: "Earliest due first.", clearFiltersHref: query.store || query.region || query.program || query.status || query.occurrence || query.window ? "/app/pm" : undefined,
-    filters: [{ id: "view", label: "Show", options: [{ value: "attention", label: `Needs attention (${summary.attention})`, selected: query.view === "attention", href: cohortHref({ view: "attention", status: undefined }) }, { value: "upcoming", label: `Upcoming & due (${summary.upcoming})`, selected: query.view === "upcoming", href: cohortHref({ view: "upcoming", status: undefined }) }, { value: "all", label: `All (${summary.all})`, selected: query.view === "all" && !query.status, href: cohortHref({ view: "all", status: undefined }) }] },
-      { id: "window", label: "Dates", options: [{ value: "all", label: "All", selected: !query.window, href: cohortHref({ window: undefined }) }, { value: "closed", label: "Due date passed", selected: Boolean(query.window), href: cohortHref({ window: "closed", view: "all", status: undefined }) }] }],
-    breakdowns: [{ id: "pm-compliance", title: "Maintenance done", totalLabel: summary.closedEligible ? `${Math.round(summary.closedCompleted / summary.closedEligible * 100)}%` : "Nothing due yet", description: `${summary.closedCompleted} of ${summary.closedEligible} done, of maintenance already past its due date. Done late still counts as done. Skipped or canceled maintenance is left out.`,
-      segments: [{ id: "completed", label: "Done", value: summary.closedCompleted, formattedValue: String(summary.closedCompleted), link: { href: cohortHref({ window: "closed", status: "completed", view: "all" }), label: "See what was done" } }, { id: "missed", label: "Missed", value: summary.closedEligible - summary.closedCompleted, formattedValue: String(summary.closedEligible - summary.closedCompleted), link: { href: cohortHref({ window: "closed", status: "missed", view: "all" }), label: "See what was missed" } }], sourceLink: { href: cohortHref({ window: "closed", status: undefined, view: "all" }), label: `See all ${summary.closedEligible}` } }, context.breakdown], trends: [context.trend],
-    table: { id: "pm-occurrences", caption: query.status ? labels[query.status] : query.view === "attention" ? "Maintenance needing attention" : "Maintenance schedule", rows, columns: [{ key: "plan", label: "Plan / equipment" }, { key: "store", label: "Store" }, { key: "window", label: "Due" }, { key: "work", label: "Job" }, { key: "visit", label: "Visits" }, { key: "status", label: "Status" }] },
+  const rows: TableRowViewModel[] = boardRows.map(row => ({ id: row.id, label: row.title, href: row.href, cells: [
+    { key: "plan", value: row.title, secondary: row.equipment ?? "Store maintenance" },
+    { key: "store", value: row.storeLabel, link: { href: row.storeHref, label: "Open store" } },
+    { key: "window", value: row.dueLabel, secondary: row.timingLabel },
+    { key: "who", value: row.who ?? "Not assigned" },
+    { key: "status", value: row.statusLabel, tone: row.tone },
+  ] }));
+  const pct = (done: number, total: number) => total ? `${Math.round(done / total * 100)}%` : "—";
+  const recentView = query.view === "recent";
+  const metrics = [
+    { id: "overdue", label: "Overdue", value: String(summary.states.overdue), supportingText: "Past the due date, still not done", tone: summary.states.overdue ? "critical" as const : "neutral" as const, selected: query.status === "overdue", link: { href: listHref({ status: "overdue", view: "all" }), label: "See overdue" } },
+    { id: "week", label: "Due this week", value: String(summary.dueThisWeek), supportingText: "Due in the next 7 days", tone: "neutral" as const, selected: query.view === "week", link: { href: listHref({ view: "week" }), label: "See this week" } },
+    { id: "unscheduled", label: "Needs a date", value: String(summary.states.unscheduled), supportingText: "Nobody has set a date yet", tone: summary.states.unscheduled ? "warning" as const : "neutral" as const, selected: query.status === "unscheduled", link: { href: listHref({ status: "unscheduled", view: "all" }), label: "See what needs a date" } },
+    { id: "completed", label: `Done · last ${PM_RECENT_DAYS} days`, value: pct(summary.recentCompleted, summary.recentEligible), supportingText: summary.recentEligible ? `${summary.recentCompleted} of ${summary.recentEligible} that came due` : "Nothing came due", tone: "neutral" as const, selected: recentView || query.status === "completed", link: { href: listHref({ view: "recent" }), label: "See what was counted" } },
+  ];
+  const nowCount = summary.states.due + summary.states.overdue + summary.states.unscheduled;
+  const tabs = [
+    { value: "now", label: `Needs attention (${nowCount})`, selected: query.view === "now" && !query.status && !query.assignee, href: listHref({ view: "now" }) },
+    { value: "scheduled", label: `Coming up (${summary.states.scheduled})`, selected: query.status === "scheduled", href: listHref({ status: "scheduled", view: "all" }) },
+    { value: "completed", label: `Done (${summary.states.completed})`, selected: query.status === "completed", href: listHref({ status: "completed", view: "all" }) },
+    { value: "missed", label: `Missed (${summary.states.missed})`, selected: query.status === "missed", href: listHref({ status: "missed", view: "all" }) },
+  ];
+  const assigneeLabel = query.assignee ? result.breakdown?.vendors.find(row => row.key === query.assignee)?.label ?? "Selected" : undefined;
+  const listTitle = query.assignee ? `${assigneeLabel} · last ${PM_RECENT_DAYS} days` : recentView ? `Came due · last ${PM_RECENT_DAYS} days`
+    : query.view === "week" ? "Due this week" : query.status ? (query.status === "unscheduled" ? "Needs a date" : query.status === "completed" ? "Done" : labels[query.status])
+    : query.view === "now" ? "Needs attention" : "All maintenance";
+  const slip = (row: { key: string; label: string; eligible: number; completed: number }, changes: Record<string, string>): PmSlipRowViewModel => ({
+    id: row.key, label: row.label, rateLabel: pct(row.completed, row.eligible), detail: `${row.completed} of ${row.eligible}`, missed: row.eligible - row.completed, href: listHref({ view: "recent", ...changes }) });
+  const breakdown = result.breakdown ?? { stores: [], vendors: [] };
+  return { state: { kind: "ready" }, page: { title: "Preventive maintenance", description: "What's due, who's doing it, and who's falling behind.", scopeLabel: selectedScope, updatedLabel: `As of ${date(asOf)}` },
+    metrics, priorityActions: [], sourceDescription: query.status === "completed" || query.status === "missed" || recentView ? "Newest first." : "Soonest first.",
+    clearFiltersHref: query.store || query.region || query.program || query.occurrence || query.assignee ? "/app/pm" : undefined,
+    filters: [{ id: "view", label: "Show", options: tabs }],
+    breakdowns: [], trends: [],
+    table: { id: "pm-occurrences", caption: listTitle, rows, columns: [{ key: "plan", label: "Maintenance" }, { key: "store", label: "Store" }, { key: "window", label: "Due" }, { key: "who", label: "Who's doing it" }, { key: "status", label: "Status" }] },
+    pmBoard: {
+      rows: boardRows, listTitle,
+      emptyLabel: query.view === "now" && !query.status ? "Nothing needs attention. Everything due has a date and is on track." : "Nothing here.",
+      slipping: { periodLabel: `Maintenance due in the last ${PM_RECENT_DAYS} days`,
+        stores: breakdown.stores.filter(row => !query.store || row.key === query.store).slice(0, 5).map(row => slip(row, { store: row.key })),
+        vendors: breakdown.vendors.slice(0, 6).map(row => slip(row, { assignee: row.key })),
+        allStoresHref: listHref({ view: "recent" }) },
+      comparison: context.breakdown,
+    },
     resultSummary: `${rows.length ? (page - 1) * SIZE + 1 : 0}–${rows.length ? (page - 1) * SIZE + rows.length : 0} of ${result.totalCount}`, pagination: pagination(result.totalCount, page, params) };
 }
