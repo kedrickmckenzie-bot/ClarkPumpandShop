@@ -45,18 +45,71 @@ it("suggests a few-word job name and prefers the manager's name", () => {
   expect(jobShortName({ assetName: "Walk-in cooler", problem: "Fan is loud" })).toBe("Walk-in cooler");
 });
 
-it("shows each Review section with one clear decision button", () => {
-  const row = (id: string, title: string) => ({ id, sourceKind: "workflow_task" as const, workOrderId: `wo-${id}`, storeId: "s", title, reason: "", owner: "Facilities", priority: "high" as const, lane: "team" as const, linkHref: `/app/work-orders/wo-${id}`, storeLabel: "Store 114 · North Market", workNumber: `CPS-${id}`, problem: `Problem ${id}`, sourceCount: 1, group: "work_vendor" as const });
-  const html = renderToStaticMarkup(createElement(ReviewDecide, {
-    asOf: "2026-10-05T12:00:00.000Z", canRoute: true, allOpenCount: 40,
+it("shows Mine as only your items, and My stores as help, on-site by store and waiting", () => {
+  const row = (id: string, title: string, stage: "new" | "stuck" | "done", bucket: "mine" | "help" | "onsite" | "waiting", extra: Record<string, unknown> = {}) => ({ id, sourceKind: "workflow_task" as const, workOrderId: `wo-${id}`, storeId: "s", title, reason: "", owner: "Facilities", priority: "high" as const, lane: "team" as const, linkHref: `/app/work-orders/wo-${id}`, storeLabel: "Store 114 · North Market", workNumber: `CPS-${id}`, problem: `Problem ${id}`, sourceCount: 1, group: "work_vendor" as const, stage, bucket, waitingOn: "Store manager", waitingSince: "2026-10-01T12:00:00.000Z", ...extra });
+  const base = {
+    asOf: "2026-10-05T12:00:00.000Z", canRoute: true, sent: [], showOnsite: false, showAllHelp: false,
     sections: [
-      { stage: "new", rows: [row("1", "Review issue")], totalCount: 1 },
-      { stage: "stuck", rows: [], totalCount: 0 },
-      { stage: "done", rows: [row("3", "Verify repair")], totalCount: 12 },
+      { stage: "new" as const, rows: [row("1", "Review issue", "new", "mine")], totalCount: 1 },
+      { stage: "stuck" as const, rows: [], totalCount: 0 },
+      { stage: "done" as const, rows: [row("3", "Verify repair", "done", "mine")], totalCount: 1 },
     ],
-  }));
-  for (const text of ["New · needs a decision (1)", "Nothing is stuck.", "Done · needs a check (12)", "Problem 1", "Urgent", "Check it", "Show all 12", "See everything open (40)"]) expect(html).toContain(text);
-  expect(html).toContain("stage=done");
+    help: [row("5", "Approve quote", "new", "help", { taskType: "approve_quote" })],
+    onsiteByStore: [{ storeId: "s", storeLabel: "Store 114 · North Market", rows: [row("7", "Verify repair", "done", "onsite")], oldest: "2026-10-01T12:00:00.000Z" }],
+    waiting: [row("9", "Vendor to respond", "new", "waiting")],
+    counts: { mine: 2, help: 1, onsite: 1, waiting: 1, stores: 3 },
+  };
+  const mine = renderToStaticMarkup(createElement(ReviewDecide, { ...base, view: "mine" }));
+  for (const text of ["Mine <b>2</b>", "My stores <b>3</b>", "New · needs a decision (1)", "Done · needs a check (1)", "Problem 1", "Urgent", "Check it"]) expect(mine).toContain(text);
+  expect(mine).not.toContain("Stuck (0)");
+  expect(mine).not.toContain("Problem 5");
+  const stores = renderToStaticMarkup(createElement(ReviewDecide, { ...base, view: "stores" }));
+  for (const text of ["You can help (1)", "Problem 5", "Review quote", "Store manager", "On-site work (1)", "Show on-site work (1)", "Waiting on others (1)"]) expect(stores).toContain(text);
+  // On-site work is counted and summarized by store, but its jobs stay hidden until asked for.
+  expect(stores).not.toContain("Problem 7");
+  expect(renderToStaticMarkup(createElement(ReviewDecide, { ...base, view: "stores", showOnsite: true }))).toContain("Problem 7");
+  const caughtUp = renderToStaticMarkup(createElement(ReviewDecide, { ...base, view: "mine", sections: [], counts: { ...base.counts, mine: 0 } }));
+  expect(caughtUp).toContain("caught up");
+  expect(caughtUp).toContain("See 1 item you can help with");
+});
+
+it("sorts Review items by who can act: yours, help from anywhere, on site, or waiting", async () => {
+  const { reviewBucket } = await import("@/lib/ops/review-buckets");
+  expect(reviewBucket({ lane: "mine", taskType: "verify_repair" }, "regional_manager")).toBe("mine");
+  expect(reviewBucket({ lane: "waiting", taskType: "review_issue", assignee: { assigneeType: "role", assigneeRole: "facilities_admin" } }, "regional_manager")).toBe("help");
+  expect(reviewBucket({ lane: "waiting", taskType: "verify_repair", assignee: { assigneeType: "role", assigneeRole: "store_manager" } }, "regional_manager")).toBe("onsite");
+  expect(reviewBucket({ lane: "waiting", taskType: "approve_quote", assignee: { assigneeType: "role", assigneeRole: "store_manager" } }, "regional_manager")).toBe("help");
+  // An approval above your limit stays with the higher level.
+  expect(reviewBucket({ lane: "waiting", taskType: "approve_quote", assignee: { assigneeType: "role", assigneeRole: "facilities_admin" } }, "regional_manager")).toBe("waiting");
+  expect(reviewBucket({ lane: "waiting", taskType: "approve_quote", assignee: { assigneeType: "role", assigneeRole: "regional_manager" } }, "facilities_admin")).toBe("help");
+  expect(reviewBucket({ lane: "waiting", taskType: "schedule_return_visit", assignee: { assigneeType: "vendor" } }, "facilities_admin")).toBe("waiting");
+  expect(reviewBucket({ lane: "team", taskType: "schedule_return_visit", assignee: { assigneeType: "user" } }, "facilities_admin")).toBe("help");
+  expect(reviewBucket({ lane: "upcoming" }, "facilities_admin")).toBe("waiting");
+  // Reviewing inspection paperwork is office work, even though the job's task is a repair check.
+  expect(reviewBucket({ lane: "waiting", taskType: "verify_repair", assignee: { assigneeType: "role", assigneeRole: "facilities_admin" }, inspectionReview: true }, "regional_manager")).toBe("help");
+});
+
+it("puts every open Review item in exactly one place, and Mine matches the to-do count", async () => {
+  const { createOpsFixtureRepository } = await import("@/lib/ops/fixture-repository");
+  const { loadReviewDecide, reviewMineCount } = await import("@/lib/server/review-decide");
+  const fixture = buildNorthlinePresentationFixture(), org = fixture.organizations[0].id, repository = createOpsFixtureRepository(fixture);
+  for (const [role, membershipId, regionIds] of [["facilities", "membership-northline-facilities", undefined], ["regional", "membership-northline-regional-1", [fixture.regions[0].id]]] as const) {
+    const session = { organizationId: org, organizationName: fixture.organizations[0].name, role, membershipId, regionIds, demoEdition: "complete" } as never;
+    const review = await loadReviewDecide(repository, session, fixture.asOf);
+    const all = await repository.listAttention({ organizationId: org, regionIds }, { role: role === "facilities" ? "facilities_admin" : "regional_manager", membershipId, canOpenWarranty: true, canOpenRequest: true }, { asOf: fixture.asOf, stage: "decide", limit: 100 });
+    expect(review.counts.mine + review.counts.stores).toBe(all.totalCount);
+    expect(review.allOpenCount).toBe(all.totalCount);
+    const counted = await reviewMineCount(repository, session, fixture.asOf);
+    expect(counted.mine).toBe(review.counts.mine);
+    expect(counted.stores).toBe(review.counts.stores);
+    // Nothing in My stores is assigned to you, and on-site work is never in "You can help".
+    for (const row of review.help) expect(row.lane).not.toBe("mine");
+    for (const group of review.onsiteByStore) for (const row of group.rows) {
+      expect(["verify_repair", "confirm_store_access", "record_service_outcome"]).toContain(row.taskType);
+      expect(row.linkHref.startsWith("/app/compliance/")).toBe(false);
+      if (row.workOrderId) expect(await repository.inspectionForWork(org, row.workOrderId)).toBeNull();
+    }
+  }
 });
 
 it("keeps Needs your action, its breakdown and Review's sections in agreement", async () => {

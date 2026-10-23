@@ -28,11 +28,12 @@ export interface DashboardPresentationData {
 
 export interface TodoCounts { total: number; newCount: number; stuck: number; done: number; mine: number }
 
-/** One to-do number everywhere: the same count as Review and the sidebar, with its parts and your share. */
+/** The to-do number is only what needs you (Review's "Mine"); everything else open in your stores is the second line. */
 function todoMetric(todo: TodoCounts | undefined, review: DashboardPresentationData["review"]): MetricViewModel {
   if (!todo) return { id: "open-exceptions", label: "Assigned to you", value: String(review.mineCount), supportingText: "Your next decisions and follow-ups", tone: review.mineCount ? "warning" : "positive", link: { href: "/app/action-center?lane=mine", label: "Open your items" } };
-  const parts = [`${todo.newCount} new`, `${todo.stuck} stuck`, `${todo.done} to check`, `${todo.mine} yours`];
-  return { id: "open-exceptions", label: "To do", value: String(todo.total), supportingText: parts.join(" · "), tone: todo.total ? "warning" : "positive", link: { href: "/app/action-center", label: "Open Review" } };
+  const others = todo.total - todo.mine;
+  return { id: "open-exceptions", label: "To do", value: String(todo.mine), supportingText: others ? `${others} more open in your stores` : "Nothing else open in your stores", tone: todo.mine ? "warning" : "positive", link: { href: "/app/action-center?view=mine", label: "Open your list" },
+    ...(others ? { secondaryLink: { href: "/app/action-center?view=stores", label: `${others} more open in your stores` } } : {}) };
 }
 
 function money(amountMinor: number) { return cachedNumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(amountMinor / 100); }

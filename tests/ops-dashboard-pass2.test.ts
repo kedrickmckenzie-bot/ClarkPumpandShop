@@ -29,7 +29,7 @@ it("keeps the full review count while sending only the seven visible home rows",
   const model = buildDashboardModel(fixture, viewer);
   const sourceRows = fixtureRows(viewer, "/app/action-center");
   expect(sourceRows.length).toBeGreaterThan(7);
-  // The To do tile is Review's three sections (New + Stuck + Done), the same count as the sidebar.
+  // The To do tile is Review's "Mine": only what needs you, the same count as the sidebar.
   expect(model.metrics.find(metric => metric.id === "open-exceptions")?.value).toBe(String(todoCount(viewer)));
   expect(model.priorityActions).toHaveLength(7);
   expect(model.priorityActions.map(row => row.id)).toEqual(sourceRows.slice(0, 7).map(row => row.id));
@@ -46,10 +46,10 @@ async function queryRows(viewer: OperatorSession, href: string) {
   }
   return rows;
 }
-/** Review's to-do count (New + Stuck + Done), counted both as one stage and as its three sections. */
+/** Review's to-do count: the "Mine" part of New + Stuck + Done, counted as one stage and as its three sections. */
 function todoCount(viewer: OperatorSession) {
   const scope = { organizationId: viewer.organizationId, storeIds: viewer.storeIds, regionIds: viewer.regionIds }, access = attentionAccess(viewer);
-  const count = (stage: "decide" | "new" | "stuck" | "done") => attentionFromFixture(fixture, scope, access, { asOf: fixture.asOf, stage, limit: 1 }).totalCount;
+  const count = (stage: "decide" | "new" | "stuck" | "done") => attentionFromFixture(fixture, scope, access, { asOf: fixture.asOf, stage, lane: "mine", limit: 1 }).totalCount;
   expect(count("new") + count("stuck") + count("done")).toBe(count("decide"));
   return count("decide");
 }
@@ -136,7 +136,7 @@ describe("Pass 2 dashboard source contracts", () => {
     // The Overview keeps one "To do" tile; the item list lives only in Review.
     expect(html).not.toContain('id="attention-heading"');
     expect(html).toContain("To do");
-    expect(html).toContain('href="/app/action-center"');
+    expect(html).toContain('href="/app/action-center?view=mine"');
     expect(html).toContain("Open work orders");
     expect(html).toContain("Where maintenance dollars go");
     for (const breakdown of model.breakdowns.filter(row => row.id.startsWith("recorded-cost-by-"))) {

@@ -25,6 +25,7 @@ export default async function OperatorLayout({ children }: { children: React.Rea
     if (error instanceof OperatorAccessError) redirect(`/access?reason=${error.reason}`);
     throw error;
   });
-  const reviewCount=["facilities","regional","executive"].includes(session.role)?(await (await getServerOpsRepository()).listAttention(session,attentionAccess(session),{asOf:new Date().toISOString(),stage:"decide",limit:1})).totalCount:undefined;
+  // The sidebar Review count is only what needs you (Review's "Mine"); the rest of your stores is one tab away.
+  const reviewCount=["facilities","regional"].includes(session.role)?(await (await getServerOpsRepository()).listAttention(session,attentionAccess(session),{asOf:new Date().toISOString(),stage:"decide",lane:"mine",limit:1})).totalCount:session.role==="executive"?(await (await getServerOpsRepository()).listAttention(session,attentionAccess(session),{asOf:new Date().toISOString(),stage:"decide",limit:1})).totalCount:undefined;
   return <WorkReviewProvider key={JSON.stringify([session.organizationId, session.membershipId, session.role, session.storeIds, session.regionIds, session.demoEdition])}><PlatformShell session={session} reviewCount={reviewCount} askEnabled={(ASK_ROLES as readonly string[]).includes(session.role) && Boolean(getAiClient()?.toolChat)}>{children}</PlatformShell></WorkReviewProvider>;
 }

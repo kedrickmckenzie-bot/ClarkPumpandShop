@@ -69,6 +69,8 @@ export interface MetricViewModel {
   tone?: Tone;
   trendLabel?: string;
   link: SupportingLink;
+  /** A second, smaller link on the tile (e.g. "12 more open in your stores"). */
+  secondaryLink?: SupportingLink;
 }
 
 export interface SegmentViewModel {

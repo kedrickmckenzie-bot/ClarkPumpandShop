@@ -4,6 +4,19 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Review: Mine and My stores — October 23, 2026
+
+**Why (owner's direction).** Senior people should see a clean list of what only they need to do, without being buried in routine tasks; then, when that list is done, see what they are allowed to help with across their stores. On-site work must stay visible to managers (to spot a growing pile or a store that needs a visit) but out of the way by default.
+
+**Now.** Work → Review (facilities and regional managers) has two tabs.
+- **Mine**: only items assigned to you or your role (the existing "assigned to me" lane), as New / Stuck / Done. Problems sent by techs lead it for whoever decides who handles them. Empty: "You're caught up" with a button to what you can help with.
+- **My stores**: everything else open in your stores, with three counts at the top. **You can help**: someone else's item that your role may do from anywhere, each showing who it waits on and since when; approvals above your limit (store $0–999, regional $1,000–4,999, facilities $5,000–24,999, owner above) stay with that level. **On-site work** (checking a repair, store access, recording a visit): counted and summarized by store ("Store 110 · 1 item · oldest Oct 13") with **Show on-site work** to list it grouped by store; reviewing inspection findings is office work, not on-site. **Waiting on others** (vendors, higher approvals, upcoming): folded.
+- Overview **To do** now counts only Mine, opens Mine, and has a second link "N more open in your stores". The sidebar Review count is Mine.
+- Rules live in `lib/ops/review-buckets.ts`, applied to the same rows the fixture and SQL queues already return, so both stay identical; Mine is exactly the "assigned to me" lane so every count agrees.
+- Demo: two store reports for regional review (Store 107 ice machine, Store 109 restroom sink), insert-only (`review-demo-` prefix in the backfill list), so a regional manager's Mine has real work.
+
+**Validation.** `tests/ops-review-decide.test.ts` (bucket rules incl. approval limits and inspection reviews; every open item lands in exactly one place; Mine equals the to-do and sidebar count; rendering of both tabs, the on-site toggle and the caught-up state); dashboard and identity tests updated to the Mine count; browser check as facilities and regional on desktop and phone.
+
 ### Vendor trends and job category fix — October 17, 2026
 
 **Category bug (fixed).** Creating a job with equipment or an equipment group but no category left it uncategorized, so it silently fell out of category reports, trends and vendor charts. `createWorkOrder` now takes the category from the chosen group, else the chosen equipment (adding equipment later already did). Mismatched picks are still refused; "choose later" still works. Demo audit: 653 of 655 outside-vendor jobs categorized and consistent with their equipment and vendor; 2 are deliberately "choose later". `tests/ops-work-order-category.test.ts`.

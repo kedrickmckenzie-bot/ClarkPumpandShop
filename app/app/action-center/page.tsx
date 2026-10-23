@@ -21,7 +21,8 @@ export default async function ActionCenterPage({ searchParams }: { searchParams:
     if (["facilities", "regional"].includes(session.role)) {
       const asOf = new Date().toISOString(), store = first(params.store);
       const decide = await loadReviewDecide(await getServerOpsRepository(), session, asOf, store);
-      return <ReviewDecide {...decide} asOf={asOf} canRoute={roleCan(session, "assign_internal_work")} storeQuery={store}/>;
+      const view = first(params.view) === "stores" ? "stores" : "mine";
+      return <ReviewDecide {...decide} view={view} showOnsite={first(params.onsite) === "1"} showAllHelp={first(params.helpAll) === "1"} asOf={asOf} canRoute={roleCan(session, "assign_internal_work")} storeQuery={store}/>;
     }
   }
   let model;

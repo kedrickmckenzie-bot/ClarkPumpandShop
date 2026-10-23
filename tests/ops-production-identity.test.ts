@@ -281,13 +281,12 @@ describe("production identity and organization selection", () => {
   it("loads the actual manager home without requesting a tenant snapshot", async () => {
     const model = await loadDashboardModel();
     const queue=await loadListModel("action-center",{});
-    // One to-do number: Review's New + Stuck + Done, the same count the sidebar shows, with your share inside it.
+    // The to-do number is only what needs you (Review's Mine); the rest of your stores is a second link.
     const todo = model.metrics.find(row => row.id === "open-exceptions")!;
     expect(todo.label).toBe("To do");
-    const parts = todo.supportingText!.match(/^(\d+) new · (\d+) stuck · (\d+) to check · (\d+) yours$/)!;
-    expect(Number(parts[1]) + Number(parts[2]) + Number(parts[3])).toBe(Number(todo.value));
-    expect(Number(parts[4])).toBeLessThanOrEqual(Number(todo.value));
-    expect(todo.link?.href).toBe("/app/action-center");
+    expect(todo.link?.href).toBe("/app/action-center?view=mine");
+    const others = todo.supportingText!.match(/^(\d+) more open in your stores$/);
+    if (others) expect(todo.secondaryLink?.href).toBe("/app/action-center?view=stores");
     expect(model.metrics.find(row => row.id === "open-work")?.link?.href).toBe("/app/work-orders?status=open");
     // All open items still includes the one inspection whose results await review.
     expect(queue.metrics?.find(row => row.id === "attention-open")?.value).toBe("88");
