@@ -24,7 +24,7 @@ export async function loadWorkPrices(workOrderId: string, options: { peers?: boo
   return { session, work, asset, groupName: fixture.replacementProfiles.find(row=>row.organizationId===session.organizationId && row.id===asset?.replacementProfileId)?.name, stores, page, history, spend, fromDate, toDate, hasCosts: costs.length > 0, costs: costs.sort((a,b)=>b.serviceDate.localeCompare(a.serviceDate)||b.id.localeCompare(a.id)),
     vendors: fixture.vendors.filter(row => row.organizationId === session.organizationId && row.status !== "inactive"),
     workById: new Map(fixture.workOrders.filter(row => row.organizationId === session.organizationId).map(row => [row.id, row])),
-    canRecord: ["facilities", "regional"].includes(session.role) && !["closed", "cancelled"].includes(work.status),
-    canPlan: session.role === "facilities" && session.storeIds === undefined && session.regionIds === undefined,
+    canRecord: ["facilities", "regional", "executive"].includes(session.role) && !["closed", "cancelled"].includes(work.status),
+    canPlan: (session.role === "facilities" || session.role === "executive") && session.storeIds === undefined && session.regionIds === undefined,
   };
 }

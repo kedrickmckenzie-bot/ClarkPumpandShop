@@ -25,7 +25,7 @@ export async function applyImport(svc: OpsCommandServices, input: { organization
   if (actor.organizationId !== org || actor.actorType !== "user" || !actor.actorId) throw new OpsDomainError("FORBIDDEN", "Company setup access required");
   const member = await repository.getMembership(org, actor.actorId);
   const grants = await repository.listScopeGrantsForMembership(org, actor.actorId);
-  if (member?.status !== "active" || member.role !== "facilities_admin" || !grants.some(g => g.scopeKind === "organization" && g.scopeId === org)) throw new OpsDomainError("FORBIDDEN", "Companywide facilities access required");
+  if (member?.status !== "active" || !["facilities_admin", "executive"].includes(member.role) || !grants.some(g => g.scopeKind === "organization" && g.scopeId === org)) throw new OpsDomainError("FORBIDDEN", "Companywide facilities access required");
   const digest = await evidenceDigest(`${input.entity}:${input.text}`), key = `import:${digest}`;
   if (await repository.getIdempotencyKey(org, key)) return { imported: parseCsv(input.text).length - 1, replayed: true };
   const references = await importReferences(repository, org, input.text);

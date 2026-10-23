@@ -442,7 +442,7 @@ export async function loadDashboardModel() {
 
 /** The one to-do number: Review's New + Stuck + Done (the sidebar's count), its parts, and how many are yours. */
 async function loadTodoCounts(repository: OpsRepository, scope: OrganizationScope, session: OperatorSession, asOf: string): Promise<TodoCounts | undefined> {
-  if (!["facilities", "regional"].includes(session.role)) return undefined;
+  if (!["facilities", "regional", "executive", "store_manager"].includes(session.role)) return undefined;
   const access = attentionAccess(session);
   const [fresh, stuck, done, mine] = await Promise.all([
     repository.listAttention(scope, access, { asOf, stage: "new", limit: 1 }),

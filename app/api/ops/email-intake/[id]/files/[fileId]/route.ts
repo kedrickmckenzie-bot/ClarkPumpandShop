@@ -11,7 +11,7 @@ export async function GET(request: Request,{params}:{params:Promise<{id:string;f
       const work = await repository.getWorkOrder(session.organizationId,email.workOrderId);
       if (!work) throw new OpsDomainError("NOT_FOUND","Work order not found");
       await assertStoreInSessionScope(session,work.storeId);
-    } else if (session.role !== "facilities" || session.storeIds !== undefined || session.regionIds !== undefined) throw new OpsDomainError("FORBIDDEN","Companywide inbox access is required.");
+    } else if ((session.role !== "facilities" && session.role !== "executive") || session.storeIds !== undefined || session.regionIds !== undefined) throw new OpsDomainError("FORBIDDEN","Companywide inbox access is required.");
     return quoteFileResponse((await repository.listFilesForEntity(session.organizationId,"inbound_email",id)).find(file => file.id === fileId) ?? null, request);
   } catch (error) { return opsApiError(error); }
 }

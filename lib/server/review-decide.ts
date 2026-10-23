@@ -80,7 +80,8 @@ export async function loadReviewDecide(repository: OpsRepository, session: Opera
       ...row, stage, storeLabel: shortStore(row.storeLabel),
       problem: work?.problem ?? request?.problem, reportedAt: work?.createdAt ?? request?.submittedAt, stuckSince,
       foundBy: work?.foundByMembershipId ? await nameOf(work.foundByMembershipId) ?? "a technician" : undefined,
-      bucket: reviewBucket({ lane: row.lane, taskType: row.taskType, assignee, inspectionReview: Boolean(inspection) || row.linkHref.startsWith("/app/compliance/") }, access.role),
+      // A store manager acts only on their own items; everything else at their store is shown as who it waits on.
+      bucket: access.role === "store_manager" && row.lane !== "mine" ? "waiting" : reviewBucket({ lane: row.lane, taskType: row.taskType, assignee, inspectionReview: Boolean(inspection) || row.linkHref.startsWith("/app/compliance/") }, access.role),
       waitingOn: waitingOn(row.owner, assignee),
       waitingSince: task?.createdAt ?? work?.createdAt ?? request?.submittedAt,
     };

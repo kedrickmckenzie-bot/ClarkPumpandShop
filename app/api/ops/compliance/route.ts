@@ -11,10 +11,10 @@ export async function POST(request:Request) {
  try {
   const {session,repository,actor}=await getOpsRequestContext(["facilities","regional","store_manager"],undefined,request);
   const form=await request.formData(),action=formText(form,"action"),org=session.organizationId,svc={repository};
-  const manage=["facilities","regional"].includes(session.role);
+  const manage=["facilities","regional","executive"].includes(session.role);
   if(action!=="result"&&!manage)throw new OpsDomainError("FORBIDDEN","Schedule management is restricted to facilities and regional managers.");
   if(action==="cycle") {
-   if(session.role!=="facilities"||session.storeIds!==undefined||session.regionIds!==undefined)throw new OpsDomainError("FORBIDDEN","Companywide facilities access is required.");
+   if((session.role!=="facilities"&&session.role!=="executive")||session.storeIds!==undefined||session.regionIds!==undefined)throw new OpsDomainError("FORBIDDEN","Companywide facilities access is required.");
    const result=await runInspectionCycle(svc,org);return relativeRedirect303(`/app/compliance?notice=${encodeURIComponent(`${result.created} dates created; ${result.prepared} inspections prepared; ${result.reminders} reminders queued; ${result.failed} need review.${result.errors.length?` ${result.errors.join("; ")}`:""} No email sent by this action.`)}`);
   }
   if(action==="create") {

@@ -4,6 +4,16 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Hands-on owner, store-manager Review, PM in plain words — October 23, 2026
+
+**Hands-on owner (owner's direction).** The owner role was view-only: no action capabilities, no Work menu, and 69 of 111 action routes refused it. Now the owner can do everything Facilities can, on screen and on the server: the owner's role policy mirrors Facilities (including setup and administration); `roleAllowed` in `lib/server/ops-request-context.ts` lets the owner through every route that allows Facilities (one rule instead of 69 edits); domain role checks that listed facilities/regional/field managers now include the owner; screen checks that named Facilities now include the owner. The owner gets Work → Review: Mine (approvals at the owner's level, items assigned to the owner) and My stores (the whole company; the owner can help with everything not waiting on a vendor or needing someone on site). The owner's Overview keeps its spending-first layout; its "to do" line now counts Mine and opens it. The demo reset stays limited to the top Facilities admin.
+
+**Store-manager Review.** Store managers now have Review in their menu: **Mine** (their own to-dos, e.g. confirming a repair) and **My store** ("Open at your store": everything else open there, with who it waits on and since when, view-only with an Open button). They do not get "You can help". Their Overview leads with the To do tile (Mine); the sidebar count is Mine.
+
+**PM page wording.** "Closed windows completed" → "Maintenance done" (92 of 99 done, of maintenance already past its due date; done late counts as done). "Other work by latest PM result" → "Repairs when maintenance is done vs. missed", shown as repairs per machine a year. "Other work cost" → "Repair spending on maintained equipment". Record pages, filters and columns use the same words. The calculations are unchanged.
+
+**Validation.** `tests/ops-review-decide.test.ts` adds owner/store-manager Review counts (Mine + rest = all open; Mine equals the to-do count), store managers never get "You can help", and `roleAllowed`; `tests/ops-role-experience.test.ts` updated for the owner's and store manager's new access. Browser: owner sees Work, Review, Create work order and Setup; an owner save passes the permission check; store manager sees Mine and My store.
+
 ### Review: Mine and My stores — October 23, 2026
 
 **Why (owner's direction).** Senior people should see a clean list of what only they need to do, without being buried in routine tasks; then, when that list is done, see what they are allowed to help with across their stores. On-site work must stay visible to managers (to spot a growing pile or a store that needs a visit) but out of the way by default.

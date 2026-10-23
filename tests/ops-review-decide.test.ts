@@ -173,3 +173,35 @@ it("counts every action past the first page, and keeps overdue confirmations to 
     expect(await yourActionBreakdown(sqlRepository, scope, access, fixture.asOf)).toEqual(breakdown);
   } finally { db.close(); }
 }, 120_000);
+
+it("lets the owner act wherever Facilities can, and keeps other roles to their own lists", async () => {
+  const { roleAllowed } = await import("@/lib/server/ops-request-context");
+  expect(roleAllowed(["facilities", "regional"], "executive")).toBe(true);
+  expect(roleAllowed(["regional"], "executive")).toBe(false);
+  expect(roleAllowed(["facilities"], "regional")).toBe(false);
+  expect(roleAllowed(["facilities", "regional"], "store_manager")).toBe(false);
+});
+
+it("gives the owner and a store manager their own Review: Mine, then the rest by who it waits on", async () => {
+  const { createOpsFixtureRepository } = await import("@/lib/ops/fixture-repository");
+  const { loadReviewDecide, reviewMineCount } = await import("@/lib/server/review-decide");
+  const fixture = buildNorthlinePresentationFixture(), org = fixture.organizations[0].id, repository = createOpsFixtureRepository(fixture);
+  const base = { organizationId: org, organizationName: fixture.organizations[0].name, demoEdition: "complete" };
+  const owner = { ...base, role: "executive", membershipId: "membership-northline-executive" } as never;
+  const store = { ...base, role: "store_manager", membershipId: "membership-northline-store-104", storeIds: ["store-northline-104"] } as never;
+  for (const session of [owner, store]) {
+    const review = await loadReviewDecide(repository, session, fixture.asOf);
+    expect(review.counts.mine + review.counts.stores).toBe(review.allOpenCount);
+    const counted = await reviewMineCount(repository, session, fixture.asOf);
+    expect(counted).toEqual({ mine: review.counts.mine, stores: review.counts.stores });
+  }
+  // A store manager does not pick up other people's work: everything not theirs is shown as waiting on someone.
+  const storeReview = await loadReviewDecide(repository, store, fixture.asOf);
+  expect(storeReview.help).toEqual([]);
+  expect(storeReview.onsiteByStore).toEqual([]);
+  expect(storeReview.counts.waiting).toBe(storeReview.counts.stores);
+  const html = renderToStaticMarkup(createElement(ReviewDecide, { ...storeReview, view: "stores", storeView: true, asOf: fixture.asOf, canRoute: false, showOnsite: false, showAllHelp: false }));
+  expect(html).toContain("My store");
+  expect(html).toContain("Open at your store");
+  expect(html).not.toContain("You can help");
+});

@@ -80,7 +80,7 @@ export async function loadWorkOrderReplacementIntelligenceModel(workOrderId: str
   const existingProfile = existing ? fixture.replacementProfiles.find((row) => row.organizationId === session.organizationId && row.id === existing.profileId) : undefined;
   const benchmark = existing ? fixture.replacementBenchmarks.find((row) => row.organizationId === session.organizationId && row.sourceEstimateProposalId === proposal?.id) : undefined;
   return {
-    workOrderId: workOrder.id, permitted: roleCan(session, "manage_lifecycle"), canPublishGroup: session.role === "facilities", action: `/api/ops/work-orders/${encodeURIComponent(workOrder.id)}/replacement`, assetName: asset?.name,
+    workOrderId: workOrder.id, permitted: roleCan(session, "manage_lifecycle"), canPublishGroup: session.role === "facilities" || session.role === "executive", action: `/api/ops/work-orders/${encodeURIComponent(workOrder.id)}/replacement`, assetName: asset?.name,
     selectedQuote: proposal && vendor ? { vendorName: vendor.name, amountLabel: money(proposal.amount.amountMinor, proposal.amount.currency), amountInput: (proposal.amount.amountMinor / 100).toFixed(2), currency: proposal.amount.currency, scope: proposal.scope, submittedLabel: `Submitted ${date(proposal.submittedAt)}` } : undefined,
     profiles: asset ? fixture.replacementProfiles.filter((row) => row.organizationId === session.organizationId && row.active && row.categoryKey === asset.categoryKey).map((row) => profileView(fixture, row, asset)) : [],
     selectedProfileId: asset?.replacementProfileId,
@@ -127,7 +127,7 @@ export async function loadReplacementProfileManagerModel(): Promise<ReplacementP
   const staleProfiles = profileModels.filter((profile) => profile.freshness === "stale" && profile.peerCount > 0).map((profile) => ({ id: profile.id, name: profile.name, effectiveLabel: profile.benchmarkEffectiveLabel, peerCount: profile.peerCount }));
   return {
     permitted: roleCan(session, "manage_lifecycle"),
-    canManageGroups: session.role === "facilities",
+    canManageGroups: session.role === "facilities" || session.role === "executive",
     action: "/api/ops/replacement-profiles",
     profiles: profileModels,
     categories: fixture.taxonomyNodes.filter((row) => row.organizationId === session.organizationId && row.nodeKind === "category" && row.active).map((row) => ({ id: row.canonicalKey ?? row.id, label: row.name, taxonomyNodeId: row.id })),

@@ -18,7 +18,7 @@ export default async function LifecyclePage({searchParams}:{searchParams:Promise
  if(q.decision){const record=await loadLifecycleRecordStack(q.decision,raw);if(!record)notFound();const session=await loadOperatorSession(),repo=await getServerOpsRepository(),plans=await repo.listCapitalPlanHistory(session.organizationId,q.decision);return <LifecycleRecordStack {...record} plans={plans}/>;}
  const session=await loadOperatorSession(),repo=await getServerOpsRepository();
  if(!roleCanAccessProgramRoute(session.role,"lifecycle"))notFound();
- const view=q.view==="capital"?"capital":q.view==="history"?"history":"review",edit=["facilities","regional"].includes(session.role);
+ const view=q.view==="capital"?"capital":q.view==="history"?"history":"review",edit=["facilities","regional","executive"].includes(session.role);
  const start=validMonth(q.start??"")?q.start!:new Date().toISOString().slice(0,7),months=[3,6,12,24].includes(Number(q.months))?Number(q.months):12,currency=/^[A-Z]{3}$/.test(q.currency??"")?q.currency!:"USD",offset=Math.min(100000,Math.max(0,Math.floor(Number(q.offset)||0)));
  const common={storeId:q.store,regionId:q.region,category:q.category,search:q.q?.slice(0,160),offset};
  const month=q.month&&(validTarget(q.month)||["undated","overdue"].includes(q.month))?q.month:undefined;

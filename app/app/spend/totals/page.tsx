@@ -28,7 +28,7 @@ export default async function SpendTotalsPage({ searchParams }: { searchParams: 
   const query = await searchParams;
   const session = await loadOperatorSession();
   if (!["facilities", "finance", "executive"].includes(session.role)) notFound();
-  const edit = session.role === "facilities" || session.role === "finance";
+  const edit = session.role === "facilities" || session.role === "finance" || session.role === "executive";
   const repository = await getServerOpsRepository();
   const [entries, fixture] = await Promise.all([repository.listSpendTotals(session.organizationId), getRequestOpsFixtureSnapshot(session.organizationId)]);
   const now = new Date().toISOString();

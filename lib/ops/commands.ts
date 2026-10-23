@@ -3141,8 +3141,8 @@ export interface ReassignWorkOrderInternalAccountabilityInput {
   actor: ActorContext;
 }
 
-const internalAccountabilityActorRoles = new Set(["facilities_admin", "regional_manager", "field_manager"]);
-const internalAccountabilityOwnerRoles = new Set(["facilities_admin", "regional_manager", "field_manager"]);
+const internalAccountabilityActorRoles = new Set(["executive", "facilities_admin", "regional_manager", "field_manager"]);
+const internalAccountabilityOwnerRoles = new Set(["executive", "facilities_admin", "regional_manager", "field_manager"]);
 
 /**
  * Reassigns the durable internal owner without pretending that the current
@@ -3318,7 +3318,7 @@ export async function updateWorkOrderControl(svc: OpsCommandServices, input: Upd
   let manuallyConfirmedFollowUpIds: string[] = [];
   if (input.manualCompletion) {
     const membership = input.actor.actorType === "user" && input.actor.actorId ? await repository.getMembership(input.organizationId, input.actor.actorId) : undefined;
-    if (!membership || membership.status !== "active" || !["facilities_admin", "regional_manager", "field_manager"].includes(membership.role)) throw new OpsDomainError("FORBIDDEN", "Facilities or regional management must confirm completion");
+    if (!membership || membership.status !== "active" || !["executive", "facilities_admin", "regional_manager", "field_manager"].includes(membership.role)) throw new OpsDomainError("FORBIDDEN", "Facilities or regional management must confirm completion");
     if (input.status !== "closed" || input.expectedVersion === undefined || !["phone", "email", "in_person"].includes(input.manualCompletion.source)) throw new OpsDomainError("VALIDATION", "Confirm how completion was checked");
     required(input.manualCompletion.confirmedBy, "Person who confirmed the result");
     const [detail, tasks, outcomes, currentPolicy, assignment] = await Promise.all([repository.getWorkOrderDetail({ organizationId: input.organizationId }, workOrder.id), repository.listWorkflowTasksForWorkOrder(input.organizationId, workOrder.id),repository.listWorkOutcomesForWorkOrder(input.organizationId, workOrder.id),repository.getActiveWorkflowPolicy(input.organizationId),repository.getActiveAssignment(input.organizationId,workOrder.id)]);

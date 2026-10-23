@@ -1251,7 +1251,7 @@ export function buildAccountabilityDashboardModel(
 /** Compatibility fixture adapter for reports/tests; the live home loader uses repository queries. */
 /** The Overview "To do" counts: the same new + stuck + to-check population as Review. */
 export function todoCountsFromFixture(fixture: OpsFixture, session: OperatorSession): TodoCounts | undefined {
-  if (!["facilities", "regional"].includes(session.role)) return undefined;
+  if (!["facilities", "regional", "executive", "store_manager"].includes(session.role)) return undefined;
   const scope = { organizationId: session.organizationId, storeIds: session.storeIds, regionIds: session.regionIds };
   const access = attentionAccess(session);
   const count = (query: Partial<AttentionQuery>) => attentionFromFixture(fixture, scope, access, { asOf: fixture.asOf, limit: 1, ...query }).totalCount;

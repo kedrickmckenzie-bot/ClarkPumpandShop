@@ -22,6 +22,8 @@ interface Props {
   view: View; sections: DecideSection[]; sent: SentRow[]; help: ReviewItem[]; onsiteByStore: StoreGroup[]; waiting: ReviewItem[];
   counts: { mine: number; help: number; onsite: number; waiting: number; stores: number };
   asOf: string; canRoute: boolean; storeQuery?: string; showOnsite: boolean; showAllHelp: boolean;
+  /** A store manager sees their own to-dos and what is open at their store, not other stores' work to pick up. */
+  storeView?: boolean;
 }
 
 function Actions({ row, canRoute }: { row: ReviewItem; canRoute: boolean }) {
@@ -39,7 +41,7 @@ function Actions({ row, canRoute }: { row: ReviewItem; canRoute: boolean }) {
 }
 
 /** One job: the problem in bold, what it needs, then where and how long. */
-function Row({ row, asOf, canRoute, showStage, showWho }: { row: ReviewItem; asOf: string; canRoute: boolean; showStage?: boolean; showWho?: boolean }) {
+function Row({ row, asOf, canRoute, showStage, showWho, viewOnly }: { row: ReviewItem; asOf: string; canRoute: boolean; showStage?: boolean; showWho?: boolean; viewOnly?: boolean }) {
   const due = row.dueAt ? plainDue(row.dueAt, asOf) : undefined;
   const urgent = row.priority === "critical" || row.priority === "high";
   const decision = row.stage === "new" ? decisionButton[row.taskType ?? ""] : undefined;
@@ -60,7 +62,7 @@ function Row({ row, asOf, canRoute, showStage, showWho }: { row: ReviewItem; asO
         {due ? <> · <span className={due.late ? styles.late : undefined}>{due.text}</span></> : null}
       </p>
     </div>
-    <Actions row={row} canRoute={canRoute}/>
+    {viewOnly ? <div className={styles.actions}><Link className={styles.btn} href={row.linkHref}>Open</Link></div> : <Actions row={row} canRoute={canRoute}/>}
   </li>;
 }
 
@@ -102,15 +104,15 @@ export function ReviewDecide(props: Props) {
     <header className={styles.header}>
       <div>
         <h1>Review</h1>
-        <p>{view === "mine" ? "What needs you." : "Everything open in your stores."}</p>
+        <p>{view === "mine" ? "What needs you." : props.storeView ? "Everything open at your store, and who it's waiting on." : "Everything open in your stores."}</p>
       </div>
-      <StoreJump />
+      {props.storeView ? null : <StoreJump />}
     </header>
     <nav className={styles.tabs} aria-label="Review views">
       <Link href={link({ view: "mine" })} aria-current={view === "mine" ? "page" : undefined}>Mine <b>{mineTotal}</b></Link>
-      <Link href={link({ view: "stores" })} aria-current={view === "stores" ? "page" : undefined}>My stores <b>{counts.stores}</b></Link>
+      <Link href={link({ view: "stores" })} aria-current={view === "stores" ? "page" : undefined}>{props.storeView ? "My store" : "My stores"} <b>{counts.stores}</b></Link>
     </nav>
-    {view === "mine" ? <Mine {...props}/> : <Stores {...props} link={link}/>}
+    {view === "mine" ? <Mine {...props}/> : props.storeView ? <StoreStatus {...props}/> : <Stores {...props} link={link}/>}
     <p className={styles.footer}><Link href={link({ lane: "all" })}>Search or filter every open item →</Link></p>
   </div>;
 }
@@ -120,7 +122,8 @@ function Mine({ sections, sent, counts, asOf, canRoute, storeQuery }: Props) {
   if (!counts.mine) return <section className={`${styles.section} ${styles.caughtUp}`}>
     <h2>You&apos;re caught up</h2>
     <p>Nothing needs you right now.</p>
-    {counts.help ? <Link className={`${styles.btn} ${styles.btnPrimary}`} href={link}>See {counts.help} {counts.help === 1 ? "item" : "items"} you can help with</Link> : null}
+    {counts.help ? <Link className={`${styles.btn} ${styles.btnPrimary}`} href={link}>See {counts.help} {counts.help === 1 ? "item" : "items"} you can help with</Link>
+      : counts.stores ? <Link className={styles.btn} href={link}>See what&apos;s open ({counts.stores})</Link> : null}
   </section>;
   return <>
     <SentByTechs rows={sent} asOf={asOf} canRoute={canRoute}/>
@@ -174,4 +177,16 @@ function Stores({ help, onsiteByStore, waiting, counts, asOf, canRoute, showOnsi
       </details>
     </section>
   </>;
+}
+
+/** A store manager's view of their store: every open item and who it is waiting on, newest decisions first. */
+function StoreStatus({ waiting, counts, asOf, canRoute }: Props) {
+  return <section className={styles.section} aria-label="Open at your store">
+    <div className={styles.sectionHead}>
+      <h2>Open at your store ({counts.stores})</h2>
+      <p>Being handled by someone else. Open one to see where it stands.</p>
+    </div>
+    {waiting.length ? <ul className={styles.list}>{waiting.map(row => <Row key={row.id} row={row} asOf={asOf} canRoute={canRoute} showStage showWho viewOnly/>)}</ul>
+      : <p className={styles.empty}>Nothing else is open at your store.</p>}
+  </section>;
 }

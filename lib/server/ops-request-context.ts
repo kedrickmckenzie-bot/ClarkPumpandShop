@@ -35,6 +35,11 @@ export async function assertActiveOperatorMembership(
   return membership;
 }
 
+/** A hands-on owner may do anything Facilities may: routes that allow Facilities allow the owner too. */
+export function roleAllowed(allowedRoles: readonly OperatorRole[], role: OperatorRole) {
+  return allowedRoles.includes(role) || (role === "executive" && allowedRoles.includes("facilities"));
+}
+
 export async function getOpsRequestContext(allowedRoles: readonly OperatorRole[], requiredCapability?: OperatorCapability, request?: Request, organizationWide = false) {
   if (request && !["GET", "HEAD", "OPTIONS"].includes(request.method)) {
     if (!isWorkspaceOrigin(request)) {
@@ -42,7 +47,7 @@ export async function getOpsRequestContext(allowedRoles: readonly OperatorRole[]
     }
   }
   const session = await loadOperatorSession();
-  if (!allowedRoles.includes(session.role)) {
+  if (!roleAllowed(allowedRoles, session.role)) {
     throw new OpsDomainError("FORBIDDEN", "Your current role cannot perform this action.");
   }
   const repository = await getServerOpsRepository();

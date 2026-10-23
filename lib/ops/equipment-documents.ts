@@ -49,7 +49,7 @@ export function documentAppliesTo(document: EquipmentDocument, asset: Pick<Asset
 const systemClock: OpsClock = { now: () => new Date().toISOString() };
 const randomIds: OpsIdSource = { next: prefix => `${prefix}-${crypto.randomUUID()}` };
 /** Knowledge-base documents are curated by managers; technicians read them. */
-const documentManagerRoles = new Set(["facilities_admin", "regional_manager", "field_manager"]);
+const documentManagerRoles = new Set(["executive", "facilities_admin", "regional_manager", "field_manager"]);
 const allowedTypes = new Set(["application/pdf", "image/jpeg", "image/png", "image/webp"]);
 export const EQUIPMENT_DOCUMENT_MAX_BYTES = 25 * 1024 * 1024;
 

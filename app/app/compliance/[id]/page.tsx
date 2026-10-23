@@ -19,7 +19,7 @@ export default async function InspectionPage({params,searchParams}:{params:Promi
  const [files,history,delivery,owner,vendor,work,cycles]=await Promise.all([i.workOrderId?r.listFilesForEntity(i.organizationId,"work_order",i.workOrderId):[],r.inspectionHistory(i.organizationId,i.id),r.inspectionDelivery(i.organizationId,i.id),s.membershipId?r.getMembership(i.organizationId,s.membershipId):null,s.vendorId?r.getVendor(i.organizationId,s.vendorId):null,i.workOrderId?r.getWorkOrder(i.organizationId,i.workOrderId):null,r.queryInspections(session,{today:new Date().toISOString().slice(0,10),scheduleId:s.id,limit:25})]);
  const templates=masterDocuments(i);
  const user=owner?await r.getUserInOrganization(i.organizationId,owner.userId):null;
- const edit=["facilities","regional","store_manager"].includes(session.role),review=["facilities","regional"].includes(session.role);
+ const edit=["facilities","regional","store_manager","executive"].includes(session.role),review=["facilities","regional","executive"].includes(session.role);
  const today=new Date().toISOString().slice(0,10);
  const status=i.status==="passed"?"Reviewed & closed":i.status==="performed"?"Performed · awaiting review":i.status==="action_needed"?"Corrective action needed":i.dueDate<today?"Overdue · not yet inspected":"Not yet inspected";
  const hidden=<><input type="hidden" name="inspectionId" value={i.id}/><input type="hidden" name="version" value={i.version}/></>;

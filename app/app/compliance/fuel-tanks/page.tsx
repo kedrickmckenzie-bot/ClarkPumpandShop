@@ -43,7 +43,7 @@ export default async function FuelTanksPage({ searchParams }: { searchParams: Pr
   const from = Math.min(Math.max(0, Math.floor(Number(query.from) || 0)), Math.max(0, listed.length - 1));
   const shown = listed.slice(from, from + PAGE);
   const listHref = (values: Record<string, string | undefined>) => `/app/compliance/fuel-tanks?${new URLSearchParams(Object.entries({ show, q: search || undefined, ...values }).filter((entry): entry is [string, string] => Boolean(entry[1])))}#operators`;
-  const edit = ["facilities", "regional"].includes(session.role);
+  const edit = ["facilities", "regional", "executive"].includes(session.role);
   const fmt = (day: string) => formatOperationsDate(`${day}T12:00:00Z`, "UTC");
   return (
     <div className={styles.page}>

@@ -44,7 +44,7 @@ export default async function WorkOrdersPage({ searchParams }: { searchParams: P
         searchParams={params}
         canManageWorkflowTasks={roleCan(session, "manage_workflow_tasks")}
       />
-      {session.role === "facilities" && session.storeIds === undefined && session.regionIds === undefined ? <p><Link href="/app/work-orders/inbox">Email inbox →</Link></p> : null}
+      {(session.role === "facilities" || session.role === "executive") && session.storeIds === undefined && session.regionIds === undefined ? <p><Link href="/app/work-orders/inbox">Email inbox →</Link></p> : null}
       {session.demoEdition === "complete" ? <SavedViewsBar model={{ surface: "work-orders", currentQuery, views: savedViews }} collapsed /> : null}
     </>
   );

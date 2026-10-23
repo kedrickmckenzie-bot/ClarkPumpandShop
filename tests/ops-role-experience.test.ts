@@ -153,7 +153,7 @@ describe("role-specific operator experiences", () => {
       "Upcoming visits",
     ]);
     expect(dashboard.priorityActions.find((action) => action.categoryLabel === "Needs your response")?.link.href)
-      .toBe("/app/action-center?lane=mine");
+      .toBe("/app/action-center?view=mine");
     expect(dashboard.priorityActions.find((action) => action.categoryLabel === "Upcoming visits")?.link.href)
       .toBe("/app/visits?status=upcoming");
 
@@ -191,13 +191,18 @@ describe("role-specific operator experiences", () => {
     expect(roleCan("store_manager", "create_work_order")).toBe(false);
     expect(roleCanAccessListRoute("store_manager", "invoices")).toBe(false);
     expect(roleCanAccessProgramRoute("store_manager", "lifecycle")).toBe(false);
-    expect(roleCanSeeWorkNavigation("store_manager", "needs-attention")).toBe(false);
+    // Store managers have Review: their own to-dos and what is open at their store.
+    expect(roleCanSeeWorkNavigation("store_manager", "needs-attention")).toBe(true);
     expect(roleCanSeeWorkNavigation("store_manager", "invoice-review")).toBe(false);
 
-    expect(roleCanSeePrimaryNavigation("executive", "work")).toBe(false);
+    // A hands-on owner can do everything Facilities can.
+    expect(roleCanSeePrimaryNavigation("executive", "work")).toBe(true);
+    expect(roleCanSeeWorkNavigation("executive", "needs-attention")).toBe(true);
     expect(roleCanAccessListRoute("executive", "requests")).toBe(true);
+    expect(roleCanAccessListRoute("executive", "admin")).toBe(true);
     expect(roleCanAccessProgramRoute("executive", "pm")).toBe(true);
-    expect(roleCan("executive", "create_request")).toBe(false);
+    expect(roleCan("executive", "create_request")).toBe(true);
+    expect(roleCan("executive", "administer")).toBe(true);
 
     expect(roleCanSeePrimaryNavigation("finance", "work")).toBe(true);
     expect(roleCanAccessListRoute("finance", "invoices")).toBe(true);

@@ -53,7 +53,7 @@ export default async function InternalJob({ params, searchParams }: { params: Pr
     r.listWorkResults(org, id), r.inspectionForWork(org, id), r.getWorkOrderVisitHold(org, id),
   ]);
   const mine = assignment?.kind === "internal" && assignment.internalMembershipId === s.membershipId;
-  const manager = ["facilities", "regional"].includes(s.role);
+  const manager = ["facilities", "regional", "executive"].includes(s.role);
   await dispatchIdentity(r, org, s.membershipId!, work.storeId, manager ? ["facilities_admin", "field_manager", "regional_manager"] : ["internal_technician"], false);
 
   const active = work.visits.find(visit => visit.status === "active");

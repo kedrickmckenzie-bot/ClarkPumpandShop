@@ -16,14 +16,14 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const operation = formText(formData, "operation", { required: true, max: 30 });
     if (operation === "create-profile") {
-      if (context.session.role !== "facilities") throw new OpsDomainError("FORBIDDEN", "Facilities access is required to create company planning groups.");
+      if (context.session.role !== "facilities" && context.session.role !== "executive") throw new OpsDomainError("FORBIDDEN", "Facilities access is required to create company planning groups.");
       const attributes = Object.fromEntries(formText(formData, "attributes", { max: 2_000 }).split(/\r?\n/).map((line) => line.split("=").map((part) => part.trim())).filter((parts) => parts.length === 2 && parts[0] && parts[1]).map(([key, value]) => [key, value]));
       const matchKeys = formText(formData, "matchKeys", { max: 600 }).split(",").map((value) => value.trim()).filter(Boolean);
       await createReplacementProfile({ repository: context.repository }, { organizationId: context.session.organizationId, code: formText(formData, "code", { required: true, max: 60 }), name: formText(formData, "name", { required: true, max: 200 }), description: formText(formData, "description", { required: true, max: 1_000 }), categoryKey: formText(formData, "categoryKey", { required: true, max: 80 }), taxonomyNodeId: formText(formData, "taxonomyNodeId", { max: 120 }) || undefined, matchKeys, attributes, expectedLifeYears: whole(formData, "expectedLifeYears", 15), annualEscalationBps: whole(formData, "annualEscalationBps", 300), lowVarianceBps: whole(formData, "lowVarianceBps", 1_000), highVarianceBps: whole(formData, "highVarianceBps", 2_000), actor: context.actor });
       return success(request, "/app/lifecycle?updated=profile-created#replacement-profiles");
     }
     if (operation === "publish-benchmark") {
-      if (context.session.role !== "facilities") throw new OpsDomainError("FORBIDDEN", "Facilities access is required to publish companywide planning estimates.");
+      if (context.session.role !== "facilities" && context.session.role !== "executive") throw new OpsDomainError("FORBIDDEN", "Facilities access is required to publish companywide planning estimates.");
       const effectiveAt = optionalIsoDate(formText(formData, "effectiveAt", { max: 40 }));
       if (!effectiveAt) throw new OpsDomainError("VALIDATION", "Effective date is required.");
       if (formText(formData, "impactConfirmed", { max: 10 }) !== "yes") throw new OpsDomainError("VALIDATION", "Review and confirm the portfolio impact before publishing this planning estimate.");

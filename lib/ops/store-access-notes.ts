@@ -3,7 +3,7 @@ import { dispatchAccessAssertion, dispatchIdentity, insertDispatchRecord } from 
 import type { OpsRepository, OpsStatement } from "./repository";
 import type { ActorContext } from "./types";
 
-const roles = ["facilities_admin", "regional_manager", "field_manager", "store_manager"];
+const roles = ["executive", "facilities_admin", "regional_manager", "field_manager", "store_manager"];
 /** Store instructions are configuration; each correction still has an immutable audit. */
 export async function saveStoreAccessNotes(repository: OpsRepository, input: {
   organizationId: string; storeId: string; actor: ActorContext; expectedVersion: number; notes: string; key: string;

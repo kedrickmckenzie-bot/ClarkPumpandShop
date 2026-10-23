@@ -52,7 +52,7 @@ const decisionRoles = new Set<OrganizationRole>([
   "regional_manager", "field_manager",
   "store_manager",
 ]);
-const closureRoles = new Set<OrganizationRole>(["facilities_admin", "regional_manager", "field_manager"]);
+const closureRoles = new Set<OrganizationRole>(["executive", "facilities_admin", "regional_manager", "field_manager"]);
 const reviewableOutcomes = new Set<SiteVisitWorkOrderOutcome>(["completed", "no_issue_found"]);
 export const CLOSE_VERIFIED_WORK_TASK_TITLE = "Close verified work";
 export const RETURN_REJECTED_WORK_TASK_TITLE = "Coordinate return work after rejected verification";

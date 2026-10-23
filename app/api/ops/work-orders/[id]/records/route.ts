@@ -33,7 +33,7 @@ export async function POST(
     const expiresAt = new Date(Date.now() + 7 * 86_400_000).toISOString();
 
     if (operation === "classification") {
-      if (context.session.role !== "facilities" && context.session.role !== "regional") {
+      if (!["facilities", "regional", "executive"].includes(context.session.role)) {
         throw new OpsDomainError("FORBIDDEN", "Your current role cannot change work-order classification.");
       }
       const categoryKey = formText(formData, "categoryKey", { max: 120 }) || undefined;

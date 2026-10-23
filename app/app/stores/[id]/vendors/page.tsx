@@ -8,7 +8,7 @@ import styles from "@/components/workspace/compliance.module.css";
 export default async function StoreVendors({params,searchParams}:{params:Promise<{id:string}>;searchParams:Promise<{q?:string;offset?:string;notice?:string}>}) {
   const {id}=await params,{session,repository,store}=await storeWorkspaceContext(id),q=await searchParams;
   const offset=Math.min(100000,Math.max(0,Math.floor(Number(q.offset)||0))),search=q.q?.slice(0,160)??"";
-  const page=await repository.queryStoreVendors(session,id,{search,offset}),edit=["facilities","regional"].includes(session.role);
+  const page=await repository.queryStoreVendors(session,id,{search,offset}),edit=["facilities","regional","executive"].includes(session.role);
   const href=(start:number)=>`/app/stores/${encodeURIComponent(id)}/vendors?${new URLSearchParams({q:search,offset:String(start)})}`;
   return <div className={styles.page}><header><Link href="/app/stores">Stores</Link><h1>Store {store.storeNumber} · Vendors</h1><p>{store.name}</p><small>{store.address1}, {store.city}, {store.state} {store.postalCode}</small></header>
     <StoreWorkspaceNav id={id} active="vendors"/>

@@ -11,7 +11,7 @@ export default async function ComplianceWorkspace({searchParams,fixedStore,progr
  const session=await loadOperatorSession(),r=await getServerOpsRepository(),q={...await searchParams,...(fixedStore?{store:fixedStore}:{})};
  const today=new Date().toISOString().slice(0,10),view=inspectionViews.includes(q.view as InspectionView)?q.view as InspectionView:program?"pending":"all",offset=Math.min(100000,Math.max(0,Math.floor(Number(q.offset)||0)));
  const page=await r.queryInspections(session,{today,view,storeId:q.store,offset,limit:25,program}),stores=await r.searchStores(session,"",{limit:100});
- const edit=["facilities","regional"].includes(session.role);
+ const edit=["facilities","regional","executive"].includes(session.role);
  const createHref=program?"/app/compliance/new?template=ust-monthly-leak-detection#form":`/app/compliance/new${q.store?`?store=${encodeURIComponent(q.store)}`:""}`;
  const href=(v:InspectionView,start=0)=>`${fixedStore?`/app/stores/${encodeURIComponent(fixedStore)}/compliance`:program?"/app/compliance/fuel-tanks":"/app/compliance"}?${new URLSearchParams({view:v,offset:String(start),...(q.store?{store:q.store}:{})})}`;
  return <div className={styles.page}>

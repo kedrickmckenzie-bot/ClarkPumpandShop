@@ -18,11 +18,10 @@ export async function WorkflowSummary({
     dispatchScope = await internalDispatchScope(repository, session),
     asOf = new Date().toISOString(),
     access = attentionAccess(session);
-  // Managers see the to-do number on the Overview tile; the owner sees it here. Stuck and late checks are parts of it,
-  // so they are not repeated as separate lines.
+  // Managers see the to-do number on the Overview tile; the owner sees it here: only what needs the owner (Review's Mine).
   const owner = session.role === "executive";
   const [review, needs, waiting] = await Promise.all([
-    owner ? repository.listAttention(scope, access, { asOf, stage: "decide", limit: 1 }) : Promise.resolve(undefined),
+    owner ? repository.listAttention(scope, access, { asOf, stage: "decide", lane: "mine", limit: 1 }) : Promise.resolve(undefined),
     repository.listWorkOrders(dispatchScope, {
       internalOnly: true,
       maintenanceTeamOnly: true,
@@ -36,7 +35,7 @@ export async function WorkflowSummary({
   ]);
   return (
     <nav aria-label="Work to arrange" className={styles.lines}>
-      {review ? <Link href="/app/action-center">
+      {review ? <Link href="/app/action-center?view=mine">
         <strong>{review.totalCount}</strong> to do <span>Review →</span>
       </Link> : null}
       <Link href="/app/dispatch?view=plan">

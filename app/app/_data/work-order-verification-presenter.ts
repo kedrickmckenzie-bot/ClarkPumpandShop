@@ -128,7 +128,7 @@ export function buildWorkOrderVerificationModel(
     workOrderNumber: workOrder?.number ?? workOrderId,
     workOrderStatus: workOrder?.status ?? "unavailable",
     originalProblem: workOrder?.problem,
-    canUseTechnicalBasis: session.role === "facilities" || session.role === "regional",
+    canUseTechnicalBasis: ["facilities", "regional", "executive"].includes(session.role),
     expectedWorkOrderVersion: workOrder ? persistedWorkOrderVersion(workOrder) : 0,
   };
   if (!workOrder) {

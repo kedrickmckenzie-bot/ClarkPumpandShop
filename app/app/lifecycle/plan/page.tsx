@@ -10,7 +10,7 @@ import {CapitalPlanForm} from "@/components/workspace/capital-plan-form";
 import styles from "@/components/workspace/compliance.module.css";
 export const metadata={title:"Plan a replacement"};
 export default async function PlanReplacement({searchParams}:{searchParams:Promise<{asset?:string;q?:string;offset?:string;returnTo?:string}>}) {
- const q=await searchParams,session=await loadOperatorSession(),repo=await getServerOpsRepository(),editable=["facilities","regional"].includes(session.role);
+ const q=await searchParams,session=await loadOperatorSession(),repo=await getServerOpsRepository(),editable=["facilities","regional","executive"].includes(session.role);
  const returnTo=safeCapitalReturn(q.returnTo);
  if(!roleCanAccessProgramRoute(session.role,"lifecycle"))notFound();
  if(q.asset){const asset=await repo.getAsset(session.organizationId,q.asset);if(!asset)notFound();const store=await repo.getStore(session.organizationId,asset.storeId);if(!store||session.storeIds!==undefined&&!session.storeIds.includes(store.id)||session.regionIds!==undefined&&!session.regionIds.includes(store.regionId??""))notFound();

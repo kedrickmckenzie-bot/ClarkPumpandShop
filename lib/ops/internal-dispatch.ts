@@ -8,7 +8,7 @@ import type { OpsRepository, OpsStatement } from "./repository";
 import type { ActorContext, WorkOrder, WorkOrderAssignment, WorkflowTask } from "./types";
 
 export type InternalTarget = NonNullable<WorkOrderAssignment["internalTarget"]>;
-export const internalManagerRoles = ["facilities_admin", "regional_manager", "field_manager"] as const;
+export const internalManagerRoles = ["executive", "facilities_admin", "regional_manager", "field_manager"] as const;
 export function internalTarget(assignment: WorkOrderAssignment): InternalTarget | undefined {
   return assignment.kind === "internal"
     ? (assignment.internalTarget ?? (assignment.internalMembershipId ? "person" : undefined))

@@ -238,7 +238,7 @@ export async function loadLifecycleRecordStack(assetId: string, query: Workspace
   return {
     model: {
       prices,
-      canPlan: ["facilities","regional"].includes(session.role) && asset.status!=="retired",
+      canPlan: ["facilities","regional","executive"].includes(session.role) && asset.status!=="retired",
       context: buildDecisionContext(fixture, session, asset.id, query, proposalWork),
       review: review ?? undefined,
       assetId: asset.id,

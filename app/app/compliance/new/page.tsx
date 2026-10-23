@@ -9,7 +9,7 @@ import { COMPLIANCE_TEMPLATES, TEMPLATE_GROUPS, complianceTemplate, type Complia
 import own from "@/components/workspace/compliance-templates.module.css";
 import { addDays } from "@/lib/ops/refrigerant";
 export default async function NewCompliance({searchParams}:{searchParams:Promise<{error?:string;store?:string;template?:string}>}) {
- const session=await loadOperatorSession();if(!["facilities","regional"].includes(session.role))notFound();
+ const session=await loadOperatorSession();if(!["facilities","regional","executive"].includes(session.role))notFound();
  const r=await getServerOpsRepository(),q=await searchParams;
  const stores=await r.searchStores(session,"",{limit:100});
  // Shown on the form so "Store team" names the person each store's inspection goes to.
