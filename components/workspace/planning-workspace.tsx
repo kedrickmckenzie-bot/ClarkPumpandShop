@@ -286,6 +286,7 @@ export function PlanningWorkspace({
   const pmEvidence = kind === "pm" && ["pm-reactive-evidence", "pm-setup-evidence", "pm-review-evidence"].includes(model.table?.id ?? "");
   return (
     <div className={styles.workspace}>
+      {model.spendBoard ? <Link className={styles.backLink} href={model.spendBoard.backHref}>← Spending</Link> : null}
       <WorkspaceHeader model={model} kind={kind} />
       {model.state.kind !== "ready" ? <StatePanel state={model.state} /> : model.pmBoard ? <>
         <PmBoard model={model} board={model.pmBoard} />

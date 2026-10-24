@@ -318,7 +318,7 @@ function dateTimeInputInZone(value: string, timeZone: string) {
   return `${part("year")}-${part("month")}-${part("day")}T${part("hour")}:${part("minute")}`;
 }
 
-function sentence(value: string): string {
+export function sentence(value: string): string {
   return domainLabel(value);
 }
 
@@ -531,7 +531,7 @@ export function scopeFixture(fixture: OpsFixture, session: OperatorSession): Sco
   };
 }
 
-function narrowScopeToStore(scoped: ScopedFixture, storeId: string | undefined): ScopedFixture {
+export function narrowScopeToStore(scoped: ScopedFixture, storeId: string | undefined): ScopedFixture {
   if (!storeId) return scoped;
   if (!scoped.storeIds.has(storeId)) {
     return { ...scoped, stores: [], storeIds: new Set(), workOrders: [], visits: [], assets: [] };
@@ -546,7 +546,7 @@ function narrowScopeToStore(scoped: ScopedFixture, storeId: string | undefined):
   };
 }
 
-function narrowScopeToRegion(scoped: ScopedFixture, regionId: string | undefined): ScopedFixture {
+export function narrowScopeToRegion(scoped: ScopedFixture, regionId: string | undefined): ScopedFixture {
   if (!regionId) return scoped;
   const stores = scoped.stores.filter((store) => store.regionId === regionId);
   const storeIds = new Set(stores.map((store) => store.id));
@@ -578,7 +578,7 @@ function assetMatchesPath(asset: Asset | undefined, path: readonly string[]): bo
   return path.every((segment, index) => hierarchy[index] === segment);
 }
 
-function storeLabel(store: Store | undefined): string {
+export function storeLabel(store: Store | undefined): string {
   return store ? `Store ${store.storeNumber} · ${store.name}` : "Unknown store";
 }
 
@@ -610,7 +610,7 @@ function costForWorkIds(costByWork: Map<string, number>, workIds: Iterable<strin
 
 // Assignments grouped by job, so per-job lookups don't rescan every assignment. Rebuilt if rows are added.
 const assignmentsByWork = new WeakMap<OpsFixture["assignments"], { length: number; byWork: Map<string, OpsFixture["assignments"]> }>();
-function assignmentsForWork(fixture: OpsFixture, workOrderId: string) {
+export function assignmentsForWork(fixture: OpsFixture, workOrderId: string) {
   let index = assignmentsByWork.get(fixture.assignments);
   if (!index || index.length !== fixture.assignments.length) {
     const byWork = new Map<string, OpsFixture["assignments"]>();
@@ -673,7 +673,7 @@ function paginationModel(
   };
 }
 
-function spendPeriod(asOf: string, key: string | undefined) {
+export function spendPeriod(asOf: string, key: string | undefined) {
   const selected = key === "3m" || key === "6m" || key === "ytd" ? key : "12m";
   const asOfDate = new Date(asOf);
   const start = selected === "ytd"
@@ -3252,7 +3252,7 @@ export function buildProgramModel(
       ...(basis === "invoiced" ? { from: periodStart, to: fixture.asOf.slice(0, 10), hasCost: undefined, costFrom: undefined, costTo: undefined } : {}),
     });
 
-    const spendHref = (overrides: Record<string, string | undefined> = {}) => hrefWithQuery("/app/spend", {
+    const spendHref = (overrides: Record<string, string | undefined> = {}) => hrefWithQuery("/app/spend/costs", {
       region: selectedRegionId,
       store: selectedStoreId,
       category: selectedCategory,
@@ -3430,6 +3430,8 @@ export function buildProgramModel(
     const chosenGroup = groupings.some((group) => group.value === requestedGroup) ? requestedGroup : groupings[0].value;
     const spendBoard: SpendBoardViewModel = {
       scopeLine: compactStoreLabel(activeScopeLabel, session.organizationName),
+      backHref: hrefWithQuery("/app/spend", { region: selectedRegionId, store: selectedStoreId, category: selectedCategory, period: period.key, who }),
+      showAreas: first(query.by) === "area" || Boolean(selectedCategory),
       periods: (["3m", "6m", "12m", "ytd"] as const).map((key) => ({ value: key, label: key === "ytd" ? "Year to date" : `${key.slice(0, -1)} months`, href: spendHref({ period: key, page: undefined }), selected: period.key === key })),
       bases: [
         { value: "recorded", label: "Recorded cost", href: spendHref({ basis: "recorded", page: undefined }), selected: basis === "recorded" },
@@ -3489,7 +3491,7 @@ export function buildProgramModel(
     ];
     return {
       state: { kind: "ready" },
-      page: { title: selectedComponent?.name ?? selectedAsset?.name ?? selectedPath.at(-1) ?? (selectedCategory ? sentence(selectedCategory) : "Spending"), eyebrow: "Actual spend visibility", description: "See where maintenance money goes. Open any total to see the work behind it.", scopeLabel: `${activeScopeLabel} · ${hierarchyLabel} · ${basis === "recorded" ? "Recorded work cost" : "Linked invoice amount"}`, periodLabel: period.label, updatedLabel: `Through ${date(fixture.asOf)}`, secondaryAction: upHref ? { label: "Up one level", href: upHref } : undefined },
+      page: { title: selectedComponent?.name ?? selectedAsset?.name ?? selectedPath.at(-1) ?? (selectedCategory ? sentence(selectedCategory) : "All costs"), eyebrow: "Actual spend visibility", description: "Every recorded cost in this view. Open a job to see its costs.", scopeLabel: `${activeScopeLabel} · ${hierarchyLabel} · ${basis === "recorded" ? "Recorded work cost" : "Linked invoice amount"}`, periodLabel: period.label, updatedLabel: `Through ${date(fixture.asOf)}`, secondaryAction: upHref ? { label: "Up one level", href: upHref } : undefined },
       filters,
       metrics: [
         { id: "total", label: basis === "recorded" ? who ? providerLabel(who) : "Recorded job cost" : "Invoiced", value: money(total), supportingText: basis === "recorded" ? `${sourceLines.length} costs entered${!who && total ? ` · ${share(total - inHouseJobCost)} vendors` : ""}` : `Invoices linked to ${invoiceAmountByWork.size} jobs`, link: { href: workspaceStartHref(basis === "recorded" ? workLink({ hasCost: "true" }) : invoiceSourceHref(periodStart, fixture.asOf.slice(0, 10))), label: "Open exact source records" } },

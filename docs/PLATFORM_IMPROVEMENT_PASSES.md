@@ -4,6 +4,16 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Spending becomes a dashboard with drill-down pages — October 24, 2026
+
+**Owner direction:** "more dashboard feel, then drill-down pages under Spending"; enterprise, no visuals for their own sake; lists paged.
+
+- **Spending (`/app/spend`)**: one screen. Four numbers (Recorded job cost with share paid to vendors; In-house team from accounting, company-wide only; Typical store; Highest store vs. typical) and four cards: **Where the money goes** (top 6 stores × top service areas color grid, darker = more, with a typical-store row and totals), **Service areas** (one split bar + legend), **Vendors** (top 5, each bar split by service area in the same colors), **Costliest equipment** (top 5 with Repair-or-replace links). "All costs" in the header.
+- **Drill pages**, all keeping period, store, region and service area, each with "← Spending": **By store** (`/stores`, full grid, 15 stores per page, columns by service area or vendor), **Vendors** (`/vendors`, paged, bars split by service area), **Equipment** (`/equipment`, 25 per page), **All costs** (`/costs`, the exact cost list, 25 per page, with the service-area drill when asked for or a service area is chosen). Every square, bar and row opens exactly those costs.
+- **Store manager**: the same dashboard for their store; the grid is machines × service areas; no typical/highest-store numbers; in-house shows "—".
+- Service areas keep one color everywhere (fixed order; the rest are "Other" in gray). One data pass (`app/app/_data/spend-dashboard.ts`) feeds every page; totals reconcile (tests in `tests/ops-spend-dashboard.test.ts`).
+- Monthly change stays on Trends; to-do items stay on Review.
+
 ### Polish pass: PM, Spending, Trends — October 24, 2026
 
 Owner-approved list from a self-review of the three pages:

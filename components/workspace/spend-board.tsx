@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, ChevronDown, ChevronRight, Inbox, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Inbox, X } from "lucide-react";
 import type { FilterOptionViewModel, ProgramPageViewModel, SpendBoardViewModel } from "@/components/ops/data-contract";
 import { PaginationControls } from "@/components/ops/pagination-controls";
 import { StoreJump } from "@/components/ops/store-jump";
@@ -22,8 +22,9 @@ function Pick({ label, options }: { label: string; options: FilterOptionViewMode
 }
 
 export function SpendBoard({ model, board }: { model: ProgramPageViewModel; board: SpendBoardViewModel }) {
-  const group = board.groupings.find(row => row.selected) ?? board.groupings[0];
-  const max = Math.max(1, ...(group?.rows ?? []).map(row => Math.abs(row.value)));
+  const found = board.groupings.find(row => row.value === "area");
+  const areas = found ? { ...found, rows: found.rows.filter(row => row.value !== 0) } : undefined;
+  const max = Math.max(1, ...(areas?.rows ?? []).map(row => Math.abs(row.value)));
   const table = model.table;
   return (
     <>
@@ -36,18 +37,10 @@ export function SpendBoard({ model, board }: { model: ProgramPageViewModel; boar
       </section>
       {board.chips.length ? <div className={styles.chips}>{board.chips.map(chip => <Link key={chip.label} href={chip.removeHref} aria-label={`Remove ${chip.label}`}>{chip.label}<X size={14} aria-hidden="true" /></Link>)}</div> : null}
 
-      <nav className={styles.tiles} aria-label="Spending at a glance">{model.metrics.map(metric => (
-        <Link href={metric.link.href} className={styles.tile} key={metric.id}>
-          <span>{metric.label}</span><strong>{metric.value}</strong><small>{metric.supportingText}</small>
-        </Link>
-      ))}</nav>
-
-      {group ? <section className={styles.panel} aria-labelledby="spend-where">
-        <header><h2 id="spend-where">Where it went</h2><Link href={board.trendsHref}>See how this changed<ArrowRight size={14} aria-hidden="true" /></Link></header>
-        <Segments label="Group by" options={board.groupings} />
-        {group.note ? <p className={styles.note}>{group.note}</p> : null}
-        {group.rows.length ? <ol className={styles.shares}>{group.rows.map(row => (
-          <li key={row.id} data-selected={row.selected || undefined}>
+      {board.showAreas && areas ? <section className={styles.panel} aria-labelledby="spend-where">
+        <header><h2 id="spend-where">{areas.note ?? "By service area"}</h2><span className={styles.count}>Total {areas.totalLabel}</span></header>
+        {areas.rows.length ? <ol className={styles.shares}>{areas.rows.map(row => (
+          <li key={row.id}>
             <Link href={row.href}>
               <span className={styles.name}><strong>{row.label}</strong>{row.secondary ? <small>{row.secondary}</small> : null}</span>
               <i aria-hidden="true"><b style={{ width: `${Math.max(1, Math.abs(row.value) / max * 100)}%` }} /></i>
@@ -57,7 +50,6 @@ export function SpendBoard({ model, board }: { model: ProgramPageViewModel; boar
             </Link>
           </li>
         ))}</ol> : <p className={styles.empty}><Inbox size={18} aria-hidden="true" />No cost in this view.</p>}
-        <footer><span>Total {group.totalLabel}</span>{group.moreHref ? <Link href={group.moreHref}>{group.moreLabel}<ChevronRight size={14} aria-hidden="true" /></Link> : null}</footer>
       </section> : null}
 
       {table ? <section className={styles.panel} id="costs" aria-labelledby="spend-costs">

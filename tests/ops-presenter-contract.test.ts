@@ -210,7 +210,7 @@ describe("operator presenter drill-through contracts", () => {
 
     const company = buildProgramModel(fixture, session, "spend");
     const refrigeration = company.breakdowns[0].segments.find((segment) => segment.id === "refrigeration")!;
-    expect(new URL(refrigeration.link.href, "https://operations.test").pathname).toBe("/app/spend");
+    expect(new URL(refrigeration.link.href, "https://operations.test").pathname).toBe("/app/spend/costs");
     expect(queryValue(refrigeration.link.href, "category")).toBe("refrigeration");
 
     const grouped = buildProgramModel(fixture, session, "spend", {

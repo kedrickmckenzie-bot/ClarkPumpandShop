@@ -678,6 +678,10 @@ export interface SpendShareRowViewModel { id: string; label: string; secondary?:
 export interface SpendBoardViewModel {
   /** Who and what the page covers, e.g. "Clark Pump and Shop companywide · 15 stores". */
   scopeLine: string;
+  /** The Spending dashboard with the same filters. */
+  backHref: string;
+  /** Show the service-area breakdown above the list (asked for, or a service area is chosen). */
+  showAreas: boolean;
   periods: FilterOptionViewModel[];
   bases: FilterOptionViewModel[];
   regions: FilterOptionViewModel[];

@@ -267,3 +267,4 @@
   .phoneFilters > .filters { border: 0; border-top: 1px solid #e5e9ef; border-radius: 0; }
 }
 .scopeLine { margin: -8px 0 0; color: #526176; font-size: 15px; }
+.backLink { width: fit-content; margin-bottom: -8px; color: var(--ops-brand, #2855d9); font-size: 15px; }

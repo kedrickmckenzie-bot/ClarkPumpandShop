@@ -947,3 +947,10 @@ export async function loadIntegrityRecordsModel(query: OperatorSearchParameters)
   if (!["executive", "facilities", "regional"].includes(session.role)) notFound();
   return buildIntegrityRecords(await getServerOpsRepository(), session, await getServerOpsReportingAsOf(), query);
 }
+
+/** Spending dashboard and its drill-down pages: one tenant read, the same filters on every page. */
+export async function loadSpendPage<T>(build: (fixture: Awaited<ReturnType<typeof getRequestOpsFixtureSnapshot>>, session: OperatorSession, query: OperatorSearchParameters) => T, query: OperatorSearchParameters = {}) {
+  const { session, fixture } = await sessionAndFixture();
+  if (!roleCanAccessProgramRoute(session.role, "spend")) notFound();
+  return build(fixture, session, query);
+}

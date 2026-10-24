@@ -8,7 +8,7 @@ import styles from "./store-jump.module.css";
 /** Query keys that point at a page of results; they reset when the store changes. */
 const PAGING = ["page", "offset", "cursor", "from", "sourcePage", "driverPage", "drillPage"];
 /** Pages whose records can be narrowed to one store with `?store=`. Elsewhere the box stays hidden. */
-const STORE_PAGES = ["/app/work-orders", "/app/requests", "/app/estimates", "/app/visits", "/app/tasks", "/app/equipment", "/app/invoices", "/app/warranties", "/app/pm", "/app/spend", "/app/action-center", "/app/compliance/refrigerant"];
+const STORE_PAGES = ["/app/work-orders", "/app/requests", "/app/estimates", "/app/visits", "/app/tasks", "/app/equipment", "/app/invoices", "/app/warranties", "/app/pm", "/app/spend", "/app/spend/costs", "/app/spend/stores", "/app/spend/vendors", "/app/spend/equipment", "/app/action-center", "/app/compliance/refrigerant"];
 
 /**
  * "Jump to a store" on list pages: type a store number or name, pick it, and the page shows only that store.

@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import { PlanningWorkspace } from "@/components/workspace/planning-workspace";
-import { loadProgramModel } from "../_data/operator-loader";
+import { SpendDashboard } from "@/components/workspace/spend-dashboard";
+import { buildSpendDashboard } from "../_data/spend-dashboard";
+import { loadSpendPage } from "../_data/operator-loader";
 
-export const metadata: Metadata = { title: "Spend" };
+export const metadata: Metadata = { title: "Spending" };
 type Query = Record<string, string | string[] | undefined>;
 export default async function SpendPage({ searchParams }: { searchParams: Promise<Query> }) {
-  return <PlanningWorkspace kind="spend" model={await loadProgramModel("spend", await searchParams)} />;
+  return <SpendDashboard model={await loadSpendPage(buildSpendDashboard, await searchParams)} />;
 }
