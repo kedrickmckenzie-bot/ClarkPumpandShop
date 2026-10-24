@@ -55,7 +55,7 @@ export default async function InHouseTrends({ session, query }: { session: Opera
   const periods: Array<{ range: Range; row?: SpendSplitRow }> = split.length ? split.map((row) => ({ range: { from: row.entry.periodStart, to: row.entry.periodEnd }, row })) : quarters(today, months).map((range) => ({ range }));
   const base = { view: "in_house", period: String(months), ...(region ? { region } : {}) };
   const link = (extra: Record<string, string>) => `/app/trends?${new URLSearchParams({ ...base, ...extra })}#records`;
-  const categoryName = (key?: string) => key ? fixture.taxonomyNodes.find((node) => node.organizationId === session.organizationId && node.nodeKind === "category" && node.canonicalKey === key)?.name ?? key : "Not classified yet";
+  const categoryName = (key?: string) => key ? fixture.taxonomyNodes.find((node) => node.organizationId === session.organizationId && node.nodeKind === "category" && node.canonicalKey === key)?.name ?? key.replace(/[_-]+/g, " ").replace(/^./, (letter) => letter.toUpperCase()) : "Not classified yet";
   const categories = [...new Set(ctx.jobs.filter((job) => !job.pm && completedIn(job, window)).map((job) => job.category ?? "unclassified"))].sort((a, b) => categoryName(a === "unclassified" ? undefined : a).localeCompare(categoryName(b === "unclassified" ? undefined : b)));
   const quality = (category?: string) => ({ in_house: repairQuality(ctx, window, "in_house", category), vendor: repairQuality(ctx, window, "vendor", category) });
   const maxTotal = Math.max(1, ...split.map((row) => row.totalMinor));

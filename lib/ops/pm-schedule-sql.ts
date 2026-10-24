@@ -26,15 +26,18 @@ export function pmScheduleCtes(driver: OpsSqlDriver, scope: OrganizationScope, q
         (SELECT CASE WHEN x.kind='outside_vendor' THEN vv.name WHEN x.kind='internal' THEN COALESCE(uu.display_name,'In-house team') ELSE NULL END FROM ops_work_order_assignments x LEFT JOIN ops_vendors vv ON vv.organization_id=x.organization_id AND vv.id=x.vendor_id LEFT JOIN ops_memberships mm ON mm.organization_id=x.organization_id AND mm.id=x.internal_membership_id LEFT JOIN ops_users uu ON uu.id=mm.user_id
           WHERE x.organization_id=w.organization_id AND x.work_order_id=w.id AND x.status NOT IN ('cancelled','declined','superseded') ORDER BY x.assigned_at DESC,x.id ${driver.dialect === "postgres" ? 'COLLATE "C"' : "COLLATE BINARY"} DESC LIMIT 1) AS assignee_name,
         (SELECT CASE WHEN x.kind='outside_vendor' AND vv.id IS NOT NULL THEN 'vendor:' || vv.id WHEN x.kind='internal' THEN 'in_house' ELSE NULL END FROM ops_work_order_assignments x LEFT JOIN ops_vendors vv ON vv.organization_id=x.organization_id AND vv.id=x.vendor_id
-          WHERE x.organization_id=w.organization_id AND x.work_order_id=w.id AND x.status NOT IN ('cancelled','declined','superseded') ORDER BY x.assigned_at DESC,x.id ${driver.dialect === "postgres" ? 'COLLATE "C"' : "COLLATE BINARY"} DESC LIMIT 1) AS assignee_key
+          WHERE x.organization_id=w.organization_id AND x.work_order_id=w.id AND x.status NOT IN ('cancelled','declined','superseded') ORDER BY x.assigned_at DESC,x.id ${driver.dialect === "postgres" ? 'COLLATE "C"' : "COLLATE BINARY"} DESC LIMIT 1) AS assigned_key,
+        CASE WHEN EXISTS (SELECT 1 FROM ops_work_order_assignments x WHERE x.organization_id=w.organization_id AND x.work_order_id=w.id AND x.status NOT IN ('cancelled','declined','superseded')) THEN 1 ELSE 0 END AS has_assignment,
+        pv.id AS planned_vendor_id,pv.name AS planned_vendor_name
       FROM ops_pm_occurrences o JOIN scoped_stores s ON s.organization_id=o.organization_id AND s.id=o.store_id CROSS JOIN clock
       LEFT JOIN ops_pm_plans p ON p.organization_id=o.organization_id AND p.id=o.plan_id AND (p.store_id IS NULL OR p.store_id=o.store_id)
       LEFT JOIN ops_maintenance_programs g ON g.organization_id=p.organization_id AND g.id=p.program_id
       LEFT JOIN ops_assets a ON a.organization_id=o.organization_id AND a.id=o.asset_id AND a.store_id=o.store_id
       LEFT JOIN ops_work_orders w ON w.organization_id=o.organization_id AND w.id=o.work_order_id AND w.store_id=o.store_id
-    ), pm_classified AS (SELECT pm_facts.*,CASE WHEN end_instant<clock.as_of AND state NOT IN ('waived','cancelled') THEN 1 ELSE 0 END AS closed_eligible,
+      LEFT JOIN ops_vendors pv ON pv.organization_id=p.organization_id AND pv.id=p.preferred_vendor_id
+    ), pm_owned AS (SELECT pm_facts.*,CASE WHEN has_assignment=1 THEN assigned_key WHEN planned_vendor_id IS NOT NULL THEN 'vendor:' || planned_vendor_id ELSE NULL END AS assignee_key FROM pm_facts), pm_classified AS (SELECT pm_owned.*,CASE WHEN end_instant<clock.as_of AND state NOT IN ('waived','cancelled') THEN 1 ELSE 0 END AS closed_eligible,
       CASE WHEN due_instant<clock.as_of AND state NOT IN ('waived','cancelled') AND due_instant>=clock.recent_from THEN 1 ELSE 0 END AS recent_eligible,
-      CASE WHEN state IN ('scheduled','due','overdue','unscheduled') AND due_instant>=clock.as_of AND due_instant<clock.week_end THEN 1 ELSE 0 END AS due_week FROM pm_facts CROSS JOIN clock),
+      CASE WHEN state IN ('scheduled','due','overdue','unscheduled') AND due_instant>=clock.as_of AND due_instant<clock.week_end THEN 1 ELSE 0 END AS due_week FROM pm_owned CROSS JOIN clock),
     pm_base AS (SELECT * FROM pm_classified${where.length ? ` WHERE ${where.join(" AND ")}` : ""})`;
   return { sql, params, instant };
 }
@@ -45,7 +48,7 @@ export function pmScheduleRow(row: SqlRow): PmScheduleRow {
     storeId: String(row.store_id), storeNumber: String(row.store_number), storeName: String(row.store_name), timeZone: optional("time_zone"),
     assetId: optional("asset_id"), assetName: optional("asset_name"), categoryKey: optional("category_key"), workId: optional("work_id"), workNumber: optional("work_number"), hasWorkReference: row.work_reference != null,
     dueAt: new Date(String(row.due_at)).toISOString(), windowStartsAt: new Date(String(row.window_starts_at)).toISOString(), windowEndsAt: new Date(String(row.window_ends_at)).toISOString(),
-    status: String(row.state) as PmScheduleRow["status"], visitCount: Number(row.visit_count), followUpCount: Number(row.follow_up_count), assigneeName: optional("assignee_name"), assigneeKey: optional("assignee_key"), importedHistory: row.state === "completed" && row.work_reference == null && String(row.result ?? "").startsWith("Manager-attested historical completion"),
+    status: String(row.state) as PmScheduleRow["status"], visitCount: Number(row.visit_count), followUpCount: Number(row.follow_up_count), assigneeName: optional("assignee_name") ?? (Number(row.has_assignment) ? undefined : optional("planned_vendor_name")), assigneeKey: optional("assignee_key"), ...(!Number(row.has_assignment) && row.planned_vendor_id != null ? { assigneePlanned: true } : {}), importedHistory: row.state === "completed" && row.work_reference == null && String(row.result ?? "").startsWith("Manager-attested historical completion"),
   };
 }
 export async function queryPmSchedule(driver: OpsSqlDriver, scope: OrganizationScope, query: PmScheduleQuery): Promise<PmSchedulePage> {

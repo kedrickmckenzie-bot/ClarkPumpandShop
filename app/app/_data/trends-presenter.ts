@@ -1,3 +1,4 @@
+import { compactStoreLabel } from "@/lib/product/store-label";
 import { sessionHasNoStores } from "@/components/ops/role-policy";
 import { cachedDateTimeFormat, cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import { invoiceReporting } from "@/lib/ops/invoice-reporting";
@@ -1857,7 +1858,7 @@ export function buildTrendsModel(
     return {
       id: store.id,
       label: `Store ${store.storeNumber}`,
-      context: `${store.name} · ${regionById.get(store.regionId ?? "")?.name ?? "No region"}`,
+      context: `${compactStoreLabel(`Store ${store.storeNumber} · ${store.name}`, session.organizationName).split(" · ").slice(1).join(" · ")} · ${regionById.get(store.regionId ?? "")?.name ?? "No region"}`,
       actualValue: actualHasData ? actual : undefined,
       actualLabel: formatMetric(safeMetric, actual, false, actualHasData),
       comparableActualValue: actualHasData ? comparableActual : undefined,
@@ -1986,7 +1987,7 @@ export function buildTrendsModel(
       const key = store?.regionId ?? unclassifiedDriverKey;
       return { key, label: key === unclassifiedDriverKey ? "No region" : regionById.get(key)?.name ?? "Unknown region", context: "Operating region" };
     }
-    if (dimension === "store") return { key: row.storeId, label: store ? `Store ${store.storeNumber}` : "Store unavailable", context: store?.name ?? "Store record unavailable" };
+    if (dimension === "store") return { key: row.storeId, label: store ? `Store ${store.storeNumber}` : "Store unavailable", context: store ? compactStoreLabel(`Store ${store.storeNumber} · ${store.name}`, session.organizationName).split(" · ").slice(1).join(" · ") : "Store record unavailable" };
     if (dimension === "category") {
       const keys = recordCategoryKeys(row);
       if (selectedCategory && keys.includes(selectedCategory)) return { key: selectedCategory, label: sentence(selectedCategory), context: "Service area" };

@@ -4,7 +4,7 @@
 .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .tile { display: grid; gap: 4px; padding: 14px 16px; border: 1px solid var(--ops-border, #dde2e8); border-radius: 6px; background: var(--ops-panel, #fff); color: var(--ops-ink, #172033); text-decoration: none; }
 .tile span { font-size: 15px; color: #526176; }
-.tile strong { font-size: 30px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.tile strong { font-size: 28px; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .tile small { font-size: 14px; color: #64748b; }
 .tile[data-tone="critical"] strong { color: #b42318; }
 .tile[data-tone="warning"] strong { color: #a15c07; }
@@ -36,7 +36,8 @@
 .store { color: var(--ops-ink, #172033); }
 .due { display: grid; gap: 2px; }
 .due[data-late] strong { color: #b42318; }
-.who { color: var(--ops-ink, #172033); }
+.who { display: grid; gap: 2px; color: var(--ops-ink, #172033); }
+.who small { color: #64748b; font-size: 13px; }
 .who[data-none] { color: #a15c07; }
 .primary, .secondary { display: inline-flex; justify-content: center; align-items: center; min-height: 36px; min-width: 96px; padding: 6px 14px; border-radius: 4px; font-size: 15px; font-weight: 600; text-decoration: none; }
 .primary { background: var(--ops-brand, #2855d9); color: #fff; border: 1px solid var(--ops-brand, #2855d9); }
@@ -67,11 +68,11 @@
 
 @media (max-width: 900px) {
   .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .rows li { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "what action" "store store" "due who"; gap: 4px 12px; padding: 12px 0; }
+  .rows li { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "what action" "store store" "due due" "who who"; gap: 4px 12px; padding: 12px 0; }
   .what { grid-area: what; }
   .store { grid-area: store; font-size: 14px; }
   .due { grid-area: due; }
-  .who { grid-area: who; text-align: right; font-size: 14px; }
+  .who { grid-area: who; font-size: 14px; }
   .rows li > a:last-child { grid-area: action; }
   .slipping { grid-template-columns: 1fr; }
   .bars a { grid-template-columns: 1fr auto; }

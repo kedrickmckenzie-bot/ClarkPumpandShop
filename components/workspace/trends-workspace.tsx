@@ -364,7 +364,7 @@ export function TrendsWorkspace({ model, savedViews }: { model: TrendAnalysisPag
   return (
     <div className={styles.workspace}>
       <header className={styles.pageHeader}>
-        <div><p>{model.activeView === "planning" ? "Spending & planning" : model.page.eyebrow}</p><h1>{model.activeView === "planning" ? "Plan upcoming work" : model.activeView === "records" ? "Records behind the number" : model.activeView === "overview" ? "Trends" : model.page.title}</h1><span>{model.activeView === "planning" ? "Price open jobs. Review maintenance and replacement decisions." : model.activeView === "records" ? "Every record counted in the number you opened." : "What changed, and why."}</span></div>
+        <div>{model.activeView === "planning" ? <p>Spending &amp; planning</p> : null}<h1>{model.activeView === "planning" ? "Plan upcoming work" : model.activeView === "records" ? "Records behind the number" : model.activeView === "overview" ? "Trends" : model.page.title}</h1><span>{model.activeView === "planning" ? "Price open jobs. Review maintenance and replacement decisions." : model.activeView === "records" ? "Every record counted in the number you opened." : "What changed, and why."}</span></div>
         {model.page.secondaryAction ? <Link className={styles.secondaryButton} href={model.page.secondaryAction.href}>{model.page.secondaryAction.label}<ArrowRight size={16} aria-hidden="true" /></Link> : null}
       </header>
 
@@ -373,7 +373,7 @@ export function TrendsWorkspace({ model, savedViews }: { model: TrendAnalysisPag
       {model.activeView === "planning" ? <section className={styles.analysisContext} aria-label="Current analysis context">{model.analysisContext.filter((item) => model.activeView !== "planning" || item.label === "Locations").map((item) => <span key={item.label}><small>{item.label}</small><strong>{item.value}</strong></span>)}{model.activeView === "planning" ? <span><small>Planning basis</small><strong>Current open work · entered repair estimates</strong></span> : null}</section> : null}
       {model.filterNotice ? <aside className={styles.filterNotice}><Info size={16} aria-hidden="true" />{model.filterNotice}</aside> : null}
       {model.invoiceReview ? <aside className={styles.filterNotice}>{model.invoiceReview.message} <Link href={model.invoiceReview.href}>{model.invoiceReview.label}</Link></aside> : null}
-      {model.activeView === "planning" ? <details className={styles.notes}><summary>Locations</summary><TrendsFilterForm scenarioQuery={model.canonicalQuery} action={model.filterAction} activeView={model.activeView} clearHref={model.clearFiltersHref} filters={model.filters} scopeSummary={model.scopeSummary} /></details> : savedViews ? <details className={styles.notes}><summary>Saved views</summary>{savedViews}</details> : null}
+      {model.activeView === "planning" ? <details className={styles.notes}><summary>Locations</summary><TrendsFilterForm scenarioQuery={model.canonicalQuery} action={model.filterAction} activeView={model.activeView} clearHref={model.clearFiltersHref} filters={model.filters} scopeSummary={model.scopeSummary} /></details> : savedViews ? <details className={styles.savedInline}><summary>Saved views</summary>{savedViews}</details> : null}
 
       {model.activeView === "overview" || model.activeView === "drivers" ? <>
         <Headline model={model} />

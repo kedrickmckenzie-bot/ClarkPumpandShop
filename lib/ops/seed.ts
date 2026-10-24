@@ -185,7 +185,7 @@ export function buildPreviewPeopleStatements(): OpsStatement[] {
 
 /** Only new dispatch identities are eligible; existing work is never updated. */
 /** Stable demo identities added after a hosted preview was first seeded; inserted if missing, never overwritten. */
-const BACKFILL_PREFIXES = ["dispatch-study-", "review-demo-", "ai-demo-", "refrigerant-demo-", "ust-demo-", "spend-demo-", "inhouse-demo-", "site-visit-work-inhouse-demo-", "showcase-equipment-document-", "showcase-file-rtu-service-guide", "showcase-file-beer-cave-troubleshooting", "showcase-file-ice-machine-wiring-sheet", "showcase-file-104-beer-cave-install-notes"];
+const BACKFILL_PREFIXES = ["dispatch-study-", "review-demo-", "pm-history-demo-", "ai-demo-", "refrigerant-demo-", "ust-demo-", "spend-demo-", "inhouse-demo-", "site-visit-work-inhouse-demo-", "showcase-equipment-document-", "showcase-file-rtu-service-guide", "showcase-file-beer-cave-troubleshooting", "showcase-file-ice-machine-wiring-sheet", "showcase-file-104-beer-cave-install-notes"];
 export function buildDispatchDemoBackfill(anchorDate = new Date().toISOString()): OpsStatement[] {
   return buildOpsSeedStatements(buildNorthlinePresentationFixture(anchorDate, { operatingHistory: true })).filter(statement =>
     // Refrigerant facts have no ID of their own; each is keyed by equipment and version, so a saved version always wins.

@@ -676,6 +676,8 @@ export interface ProgramPageViewModel extends DashboardPageViewModel {
 /** One row of "Where it went": a store, service area, vendor or machine, with its share and a link to its costs. */
 export interface SpendShareRowViewModel { id: string; label: string; secondary?: string; amountLabel: string; value: number; shareLabel: string; href: string; selected?: boolean }
 export interface SpendBoardViewModel {
+  /** Who and what the page covers, e.g. "Clark Pump and Shop companywide · 15 stores". */
+  scopeLine: string;
   periods: FilterOptionViewModel[];
   bases: FilterOptionViewModel[];
   regions: FilterOptionViewModel[];
@@ -699,6 +701,8 @@ export interface PmBoardRowViewModel {
   timingLabel?: string;
   late: boolean;
   who?: string;
+  /** Why the name is shown, e.g. it is the plan's vendor and no job exists yet. */
+  whoNote?: string;
   statusLabel: string;
   tone: Tone;
   href: string;

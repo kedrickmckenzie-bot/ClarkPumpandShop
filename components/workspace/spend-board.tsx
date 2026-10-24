@@ -68,7 +68,7 @@ export function SpendBoard({ model, board }: { model: ProgramPageViewModel; boar
           <tbody>{table.rows.map(row => <tr key={row.id}>{table.columns.map((column, index) => {
             const cell = row.cells.find(candidate => candidate.key === column.key);
             return <td key={column.key} data-label={column.label} data-align={column.align}>
-              {index === 0 ? <><Link href={row.href} className={styles.job}><strong>{cell?.value}</strong>{cell?.secondary ? <small>{cell.secondary}</small> : null}</Link><WorkReviewButton href={row.href} label={row.label} context={board.costsTitle} /></>
+              {index === 0 ? <div className={styles.jobCell}><Link href={row.href} className={styles.job}><strong>{cell?.value}</strong>{cell?.secondary ? <small>{cell.secondary}</small> : null}</Link><WorkReviewButton compact href={row.href} label={row.label} context={board.costsTitle} /></div>
                 : cell?.link ? <Link href={cell.link.href}>{cell.value}</Link> : <span>{cell?.value ?? "—"}</span>}
             </td>;
           })}</tr>)}</tbody>

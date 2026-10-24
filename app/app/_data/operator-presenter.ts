@@ -3403,7 +3403,10 @@ export function buildProgramModel(
     const companyVendorCost = (from: string, to: string) => fixture.costLines.reduce((sum, line) => line.organizationId === scoped.organizationId && line.amount.currency === "USD"
       && line.serviceDate.slice(0, 10) >= from && line.serviceDate.slice(0, 10) <= to && providerOf(line) !== "in_house" ? sum + line.amount.amountMinor : sum, 0);
     const inHouseAccounting = accounting.reduce((sum, entry) => sum + (entry.kind === "in_house" ? entry.amountMinor : Math.max(0, entry.amountMinor - companyVendorCost(entry.periodStart, entry.periodEnd))), 0);
-    const narrowed = Boolean(selectedStoreId || selectedRegionId || selectedCategory || selectedAssetId || selectedComponentId || selectedPath.length || who);
+    // Accounting's totals are company-wide, so anything less than the whole company (a filter or the person's own store access) can't use them.
+    const narrowed = Boolean(selectedStoreId || selectedRegionId || selectedCategory || selectedAssetId || selectedComponentId || selectedPath.length || who)
+      || scoped.stores.length !== fixture.stores.filter((store) => store.organizationId === scoped.organizationId).length;
+    const singleStore = selectedStoreId ?? (scoped.stores.length === 1 ? scoped.stores[0].id : undefined);
     const dayLabel = (day: string) => date(`${day}T12:00:00Z`);
     const share = (value: number) => total ? `${Math.round(value / total * 100)}%` : "—";
     const shareRows = (values: Map<string, number>, label: (key: string) => string, href: (key: string) => string, secondary?: (key: string) => string | undefined): SpendShareRowViewModel[] =>
@@ -3418,7 +3421,7 @@ export function buildProgramModel(
     const vendorRows = shareRows(providerCost, providerLabel, (key) => spendHref({ who: key, by: "vendor", page: undefined }));
     const requestedGroup = first(query.by);
     const groupings = [
-      selectedStoreId
+      singleStore
         ? { value: "equipment", label: "By machine", rows: equipmentRows.slice(0, 15), moreHref: equipmentRows.length > 15 ? workLink({ hasCost: "true" }) : undefined, moreLabel: `See all ${equipmentRows.length}` }
         : { value: "store", label: "By store", rows: storeRows },
       { value: "area", label: "By service area", rows: areaRows, note: selectedCategory ? hierarchyBreakdown.title : undefined },
@@ -3426,6 +3429,7 @@ export function buildProgramModel(
     ];
     const chosenGroup = groupings.some((group) => group.value === requestedGroup) ? requestedGroup : groupings[0].value;
     const spendBoard: SpendBoardViewModel = {
+      scopeLine: compactStoreLabel(activeScopeLabel, session.organizationName),
       periods: (["3m", "6m", "12m", "ytd"] as const).map((key) => ({ value: key, label: key === "ytd" ? "Year to date" : `${key.slice(0, -1)} months`, href: spendHref({ period: key, page: undefined }), selected: period.key === key })),
       bases: [
         { value: "recorded", label: "Recorded cost", href: spendHref({ basis: "recorded", page: undefined }), selected: basis === "recorded" },
@@ -3491,7 +3495,7 @@ export function buildProgramModel(
         { id: "total", label: basis === "recorded" ? who ? providerLabel(who) : "Recorded job cost" : "Invoiced", value: money(total), supportingText: basis === "recorded" ? `${sourceLines.length} costs entered${!who && total ? ` · ${share(total - inHouseJobCost)} vendors` : ""}` : `Invoices linked to ${invoiceAmountByWork.size} jobs`, link: { href: workspaceStartHref(basis === "recorded" ? workLink({ hasCost: "true" }) : invoiceSourceHref(periodStart, fixture.asOf.slice(0, 10))), label: "Open exact source records" } },
         ...(basis === "recorded" && !who ? [
           { id: "in-house", label: "In-house team", value: narrowed || !accounting.length ? "—" : money(inHouseAccounting),
-            supportingText: narrowed ? "Entered by accounting for the whole company" : accounting.length ? `From accounting · ${dayLabel(accounting[0].periodStart)} – ${dayLabel(accounting.at(-1)!.periodEnd)}` : "Not entered by accounting for these dates",
+            supportingText: narrowed ? "Accounting enters this for the whole company only" : accounting.length ? `From accounting · ${dayLabel(accounting[0].periodStart)} – ${dayLabel(accounting.at(-1)!.periodEnd)}` : "Not entered by accounting for these dates",
             link: { href: "/app/spend/totals", label: "Open spend totals" } },
           { id: "cost-coverage", label: "Vendor jobs with no cost yet", value: String(openedInPeriod.length - workWithCost), supportingText: `of ${openedInPeriod.length} vendor jobs opened in this period`, tone: "neutral" as const, link: { href: workLink({ hasCost: "false", provider: "vendor", createdFrom: periodStart.slice(0, 10), createdThrough: fixture.asOf.slice(0, 10), currency: "USD" }), label: "Review work without recorded cost" } },
         ] : []),

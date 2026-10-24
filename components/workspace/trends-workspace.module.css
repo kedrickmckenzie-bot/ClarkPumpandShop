@@ -466,3 +466,21 @@
   .worthALook a { grid-template-columns: minmax(0, 1fr) 16px; }
   .worthALook small { grid-column: 1 / -1; }
 }
+
+/* One compact filter row: the four common choices and Reset; More filters opens below. */
+.quickControls { grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 10px 14px; padding: 12px 14px; }
+.quickControls > .commonFilterGrid { grid-column: 1; }
+.quickControls > .filterActions { grid-column: 2; display: flex; gap: 10px; align-items: center; }
+.quickControls > .filterGroup { grid-column: 1 / -1; padding: 0; border: 0; background: none; }
+.quickControls > .filterGroup > summary { justify-content: flex-start; gap: 6px; color: var(--ops-brand, #2855d9); }
+.quickControls > .filterGroup > summary strong { color: var(--ops-brand, #2855d9); font-size: 14px; }
+.quickControls > .filterGroup:not([open]) > summary small { display: none; }
+.quickControls > .filterGroup[open] > .filterGrid { margin-top: 10px; }
+.savedInline { margin-top: -8px; }
+.savedInline > summary { display: inline-flex; cursor: pointer; color: var(--ops-brand, #2855d9); font-size: 14px; list-style: none; }
+.savedInline > summary::-webkit-details-marker { display: none; }
+.savedInline[open] > summary { margin-bottom: 8px; }
+@media (max-width: 760px) {
+  .quickControls { grid-template-columns: 1fr; }
+  .quickControls > .filterActions { grid-column: 1; }
+}

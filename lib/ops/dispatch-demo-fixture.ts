@@ -1,5 +1,6 @@
 import { addInHouseWorkDemo } from "./demo-in-house-work";
 import { addRegionalReviewDemo } from "./review-demo";
+import { addPmHistoryDemo } from "./pm-history-demo";
 import { addRefrigerantDemo } from "./refrigerant-demo-fixture";
 import { addUstDemo } from "./ust";
 import { addSpendTotalsDemo } from "./spend-totals";
@@ -274,5 +275,5 @@ export function addDispatchDemo(f: OpsFixture, options: { centralTeam?: boolean 
   });
   const demo = addCallbacksDemo(addSpendTotalsDemo(addUstDemo(addRefrigerantDemo(addAiDiagnosticDemo(f)))));
   // Everyday in-house history belongs to the full showcase only; the compact base demo stays small.
-  return options.centralTeam ? addRegionalReviewDemo(addInHouseWorkDemo(demo)) : demo;
+  return options.centralTeam ? addPmHistoryDemo(addRegionalReviewDemo(addInHouseWorkDemo(demo))) : demo;
 }

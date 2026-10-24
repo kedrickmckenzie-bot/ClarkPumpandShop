@@ -46,6 +46,8 @@ export interface PmScheduleRow {
   assigneeName?: string;
   /** "vendor:<id>" or "in_house"; groups the by-vendor table. */
   assigneeKey?: string;
+  /** No job is assigned yet; the name is the plan's preferred vendor. */
+  assigneePlanned?: boolean;
 }
 export interface PmScheduleSummary {
   states: Record<PmScheduleState, number>;
@@ -116,9 +118,11 @@ export function pmScheduleRowsFromFixture(fixture: OpsFixture, scope: Organizati
       .sort((a, b) => (b.assignedAt < a.assignedAt ? -1 : b.assignedAt > a.assignedAt ? 1 : b.id < a.id ? -1 : b.id > a.id ? 1 : 0))[0] : undefined;
     const vendor = assignment?.kind === "outside_vendor" ? fixture.vendors.find(row => row.organizationId === scope.organizationId && row.id === assignment.vendorId) : undefined;
     const techUser = assignment?.kind === "internal" && assignment.internalMembershipId ? fixture.users.find(user => user.id === fixture.memberships.find(m => m.organizationId === scope.organizationId && m.id === assignment.internalMembershipId)?.userId) : undefined;
-    const assigneeName = vendor ? vendor.name : techUser ? techUser.displayName : assignment?.kind === "internal" ? "In-house team" : undefined;
-    const assigneeKey = vendor ? `vendor:${vendor.id}` : assignment?.kind === "internal" ? "in_house" : undefined;
-    return { id: occurrence.id, assigneeName, assigneeKey, planId: plan?.id, planName: plan?.name ?? "Planned maintenance", programId: program?.id,
+    // Nobody assigned yet: the plan's preferred vendor is who the maintenance is planned with.
+    const planned = !assignment && plan?.preferredVendorId ? fixture.vendors.find(row => row.organizationId === scope.organizationId && row.id === plan.preferredVendorId) : undefined;
+    const assigneeName = vendor ? vendor.name : techUser ? techUser.displayName : assignment?.kind === "internal" ? "In-house team" : planned?.name;
+    const assigneeKey = vendor ? `vendor:${vendor.id}` : assignment?.kind === "internal" ? "in_house" : planned ? `vendor:${planned.id}` : undefined;
+    return { id: occurrence.id, assigneeName, assigneeKey, ...(planned ? { assigneePlanned: true } : {}), planId: plan?.id, planName: plan?.name ?? "Planned maintenance", programId: program?.id,
       storeId: store.id, storeNumber: store.storeNumber, storeName: store.name, timeZone: store.timeZone,
       assetId: asset?.id, assetName: asset?.name, categoryKey: plan?.categoryKey,
       workId: work?.id, workNumber: work?.number, hasWorkReference: Boolean(occurrence.workOrderId),

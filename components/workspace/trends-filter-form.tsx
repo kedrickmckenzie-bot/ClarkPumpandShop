@@ -49,16 +49,16 @@ export function TrendsFilterForm({ action, activeView, clearHref, filters, scope
           <label key={`${filter.id}:${filter.value ?? ""}`}><span>{filter.label}</span><select defaultValue={filter.value} name={filter.id}>{filter.options.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select>{filter.helperText ? <small>{filter.helperText}</small> : null}</label>
         ))}
       </div>
+      <div className={styles.filterActions}>
+        <button type="submit" disabled={pending}><Filter size={16} aria-hidden="true" />{pending ? "Updating…" : "Show"}</button>
+        <Link href={clearHref} title={scopeSummary}><RotateCcw size={15} aria-hidden="true" />Reset</Link>
+      </div>
       <details className={styles.filterGroup} open={hasMaintenanceScope}>
         <summary><span><strong>More filters{activeSpecialist ? ` · ${activeSpecialist} on` : ""}</strong><small>Region, who did the work, equipment, cost type, vendor</small></span><ChevronRight size={16} aria-hidden="true" /></summary>
         <div className={styles.filterGrid}>{specialistFilters.map((filter) => filter.options.length > 8 ? <FilterPicker key={`${filter.id}:${filter.value ?? ""}`} filter={filter} /> : (
           <label key={`${filter.id}:${filter.value ?? ""}`}><span>{filter.label}</span><select defaultValue={filter.value} name={filter.id}>{filter.options.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select>{filter.helperText ? <small>{filter.helperText}</small> : null}</label>
         ))}</div>
       </details>
-      <div className={styles.filterActions}>
-        <button type="submit" disabled={pending}><Filter size={16} aria-hidden="true" />{pending ? "Updating…" : "Show"}</button>
-        <Link href={clearHref} title={scopeSummary}><RotateCcw size={15} aria-hidden="true" />Reset</Link>
-      </div>
     </form>
   );
 }

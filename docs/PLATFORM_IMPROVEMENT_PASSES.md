@@ -4,6 +4,20 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Polish pass: PM, Spending, Trends — October 24, 2026
+
+Owner-approved list from a self-review of the three pages:
+
+1. **PM comparison reads realistically.** Insert-only fictional records (prefix `pm-history-demo-`, in `BACKFILL_PREFIXES`): an annual coil cleaning that seven of the busiest beer caves and rooftop units missed in the last month. Hosted showcase: 3.1 repairs per machine a year when maintenance was done vs. 5.7 when missed (11 machines, enough to compare). Existing records are untouched.
+2. **PM lower half matches the top.** "Schedules" is one plain list (name, how often and next date, coverage, missed/due/on track, Edit) with three count links above it; "Invoices to check against visits" is a short list; store schedule changes fold away.
+3. **Trends filters are one row** (Measure, Time range, Compare to, Store, Show, Reset; More filters opens below). "Saved views" is a small link instead of an empty panel. The uppercase eyebrow is gone so the header matches the other pages.
+4. **Spending cost rows are compact:** Quick look is an icon beside the job number (`WorkReviewButton compact`).
+5. **No repeats:** PM and Spending show one scope line instead of the Viewing/Period/Updated box; Trends store rows drop the repeated company name; Trends tabs wrap on phones; in-house table capitalizes service areas.
+6. **One look:** number boxes are the same size on PM, Spending and Trends.
+7. **"Who's doing it" when no job exists:** the plan's preferred vendor, labeled "Plan's vendor · no job yet" (fixture, D1 and PostgreSQL agree, including a "choose later" assignment, which keeps it unassigned). The vendor slipping table now credits planned work to the vendor.
+
+**Role checks.** Store manager and regional Spending no longer show the company-wide in-house total (accounting enters it for the whole company); a single-store view groups "Where it went" by machine. PM grammar "1 machine". Checked owner PM, regional Spending, store manager PM/Spending/Trends, Trends Vendors and In-house tabs, and phone layouts (PM rows now stack cleanly).
+
 ### Spending: in-house money comes from accounting — October 24, 2026
 
 **Owner correction.** In-house jobs don't carry costs; accounting enters in-house totals on Spend totals. The first Spending overhaul showed "In-house team $8,672" from stray job costs and counted in-house jobs as "missing a cost".

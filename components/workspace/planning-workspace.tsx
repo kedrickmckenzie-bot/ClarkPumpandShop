@@ -116,11 +116,11 @@ function WorkspaceHeader({ model, kind }: { model: ProgramPageViewModel; kind: P
           {model.page.primaryAction ? <Link className={styles.primaryButton} href={model.page.primaryAction.href}>{model.page.primaryAction.label}<ArrowRight size={16} aria-hidden="true" /></Link> : null}
         </div>
       </header>
-      <div className={styles.context} aria-label="Current planning context">
+      {model.pmBoard || model.spendBoard ? <p className={styles.scopeLine}>{model.spendBoard?.scopeLine ?? model.page.scopeLabel}{model.page.updatedLabel ? ` · ${model.page.updatedLabel.replace(/^Through /, "through ").replace(/^As of /, "as of ")}` : ""}</p> : <div className={styles.context} aria-label="Current planning context">
         <span><Layers3 size={15} aria-hidden="true" /><small>Viewing</small><strong>{model.page.scopeLabel}</strong></span>
         {model.page.periodLabel ? <span><Clock3 size={15} aria-hidden="true" /><small>Period</small><strong>{model.page.periodLabel}</strong></span> : null}
         {model.page.updatedLabel ? <span><ShieldCheck size={15} aria-hidden="true" /><small>Updated</small><strong>{model.page.updatedLabel}</strong></span> : null}
-      </div>
+      </div>}
     </>
   );
 }

@@ -12,11 +12,12 @@ type ReviewTarget = { id: string; href: string; label: string; context?: string 
 const ReviewContext = createContext<((target: ReviewTarget) => void) | undefined>(undefined);
 
 /** Explicit companion to the normal record link; never intercepts workflow actions. */
-export function WorkReviewButton({ href, label, context }: { href: string; label: string; context?: string }) {
+/** `compact` shows only the icon, for dense tables where a labeled button would double the row height. */
+export function WorkReviewButton({ href, label, context, compact = false }: { href: string; label: string; context?: string; compact?: boolean }) {
   const open = useContext(ReviewContext);
   const id = workReviewTarget(href);
   if (!open || !id) return null;
-  return <button type="button" className={styles.reviewButton} aria-label={`Quick look at ${label}`} onClick={(event) => { event.preventDefault(); event.stopPropagation(); open({ id, href, label, context }); }}><PanelRightOpen size={15} aria-hidden="true" /><span>Quick look</span></button>;
+  return <button type="button" className={compact ? `${styles.reviewButton} ${styles.reviewIcon}` : styles.reviewButton} aria-label={`Quick look at ${label}`} title={compact ? "Quick look" : undefined} onClick={(event) => { event.preventDefault(); event.stopPropagation(); open({ id, href, label, context }); }}><PanelRightOpen size={15} aria-hidden="true" />{compact ? null : <span>Quick look</span>}</button>;
 }
 
 function EvidenceList({ rows, related = false }: { rows: ReviewEvidence[]; related?: boolean }) {

@@ -74,3 +74,4 @@
   .tableScroller td[data-align="end"] { grid-column: 2; grid-row: 2; font-weight: 600; }
   .tableScroller td:not(:first-child):not([data-align="end"]) { grid-column: 1; color: #526176; font-size: 14px; }
 }
+.jobCell { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }

@@ -61,3 +61,5 @@
 }
 .pager{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:12px;font-size:14px;color:#475569}
 .pager a{color:#1d4ed8;font-weight:700;text-decoration:none}
+
+@media (max-width:640px){.tabs{flex-wrap:wrap;overflow-x:visible;gap:0}.tabs a{padding:9px 10px;font-size:14px}}

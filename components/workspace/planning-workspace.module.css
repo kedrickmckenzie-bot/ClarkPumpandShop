@@ -266,3 +266,4 @@
   .phoneFilters > summary small { flex-basis: 100%; color: #64748b; font-weight: 500; font-size: 13px; }
   .phoneFilters > .filters { border: 0; border-top: 1px solid #e5e9ef; border-radius: 0; }
 }
+.scopeLine { margin: -8px 0 0; color: #526176; font-size: 15px; }

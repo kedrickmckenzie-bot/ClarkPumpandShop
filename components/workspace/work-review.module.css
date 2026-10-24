@@ -37,3 +37,4 @@
 .gaps li { margin:9px 0; }
 .message { padding:24px; }
 @media(max-width:640px) { .dialog { width:100%; } .content { padding:0 18px 24px; } .header, .actions { padding:14px 18px; } .evidence li { flex-wrap:wrap; } .amounts { grid-template-columns:1fr; } .reviewButton { min-height:40px; } }
+.reviewIcon { min-width:34px; justify-content:center; padding:6px; }

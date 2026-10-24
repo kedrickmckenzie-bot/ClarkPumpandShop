@@ -66,7 +66,7 @@ export function PmBoard({ model, board }: { model: ProgramPageViewModel; board: 
             <Link href={row.href} className={styles.what}><strong>{row.title}</strong><small>{row.equipment ?? "Store maintenance"}</small></Link>
             <Link href={row.storeHref} className={styles.store}>{row.storeLabel}</Link>
             <span className={styles.due} data-late={row.late || undefined}><strong>{row.timingLabel ?? row.statusLabel}</strong><small>{row.dueLabel}</small></span>
-            <span className={styles.who} data-none={!row.who || undefined}>{row.who ?? "Not assigned"}</span>
+            <span className={styles.who} data-none={!row.who || undefined}>{row.who ?? "Not assigned"}{row.whoNote ? <small>{row.whoNote}</small> : null}</span>
             <Link href={row.action.href} className={row.action.primary ? styles.primary : styles.secondary}>{row.action.label}</Link>
           </li>
         ))}</ul> : <p className={styles.empty}><Inbox size={18} aria-hidden="true" />{board.emptyLabel}</p>}

@@ -44,7 +44,7 @@ function analysisContext(result: PmAnalysisPage, params: Query, asOf: string) {
   return {
     periodLabel, method, costMethod,
     breakdown: { id: "pm-effectiveness-cohorts", title: "Repairs when maintenance is done vs. missed", description: `Last 12 months. Machines grouped by whether their last maintenance was done or missed. A pattern, not proof.`, totalLabel: `${stats.completedEquipment + stats.missedEquipment} machines`,
-      segments: (["completed", "missed"] as const).map(cohort => { const equipment = cohort === "completed" ? stats.completedEquipment : stats.missedEquipment, work = cohort === "completed" ? stats.completedWork : stats.missedWork; return { id: cohort, label: `Maintenance ${cohort === "completed" ? "done" : "missed"} · ${equipment} machines${equipment > 0 && equipment < 10 ? " · too few to compare" : ""}`, value: perMachine(work, equipment), formattedValue: perMachineLabel(work, equipment), tone: cohort === "completed" ? "positive" as const : "warning" as const, link: { href: source("reactive-work", { cohort }), label: "Review work records" } }; }),
+      segments: (["completed", "missed"] as const).map(cohort => { const equipment = cohort === "completed" ? stats.completedEquipment : stats.missedEquipment, work = cohort === "completed" ? stats.completedWork : stats.missedWork; return { id: cohort, label: `Maintenance ${cohort === "completed" ? "done" : "missed"} · ${equipment} machine${equipment === 1 ? "" : "s"}${equipment > 0 && equipment < 10 ? " · too few to compare" : ""}`, value: perMachine(work, equipment), formattedValue: perMachineLabel(work, equipment), tone: cohort === "completed" ? "positive" as const : "warning" as const, link: { href: source("reactive-work", { cohort }), label: "Review work records" } }; }),
       sourceLink: { href: source("cohort-equipment", { cohort: "all" }), label: "See the machines" } }
   };
 }
@@ -52,7 +52,7 @@ function analysisContext(result: PmAnalysisPage, params: Query, asOf: string) {
 export async function buildPmScheduleModel(repository: OpsRepository, session: OperatorSession, asOf: string, params: Query): Promise<ProgramPageViewModel> {
   const query = parsePmScheduleQuery(params, asOf), page = pageNumber(params);
   const stores = query.store || query.region ? await repository.searchStores(pmScheduleScope(session, query), "", { limit: 1 }) : undefined;
-  const scopeLabel = query.store ? stores?.items[0] ? compactStoreLabel(`Store ${stores.items[0].storeNumber} · ${stores.items[0].name}`, session.organizationName) : "Store unavailable in this scope" : query.region ? `${stores?.items[0]?.regionName ?? "Region unavailable"} · ${stores?.totalCount ?? 0} stores` : session.scopeLabel;
+  const scopeLabel = query.store ? stores?.items[0] ? compactStoreLabel(`Store ${stores.items[0].storeNumber} · ${stores.items[0].name}`, session.organizationName) : "Store unavailable in this scope" : query.region ? `${stores?.items[0]?.regionName ?? "Region unavailable"} · ${stores?.totalCount ?? 0} stores` : compactStoreLabel(session.scopeLabel, session.organizationName);
   const evidence = first(params.evidence);
   if (evidence && !["reactive-cost", "reactive-work", "cohort-equipment"].includes(evidence)) throw new RangeError("Choose a valid maintenance comparison.");
   const analysisQuery: PmAnalysisQuery = { asOf, store: query.store, region: query.region, program: query.program, window: query.window, kind: (evidence ?? "months") as PmAnalysisQuery["kind"], cohort: evidence ? first(params.cohort) as PmAnalysisQuery["cohort"] : undefined, month: evidence ? first(params.month) : undefined, limit: evidence ? SIZE : 13, offset: evidence ? (page - 1) * SIZE : 0 };
@@ -103,10 +103,11 @@ export async function buildPmScheduleModel(repository: OpsRepository, session: O
     const action = !open(row.status) ? { label: "Open", href, primary: false }
       : row.status === "unscheduled" ? { label: "Schedule", href, primary: true }
       : !row.hasWorkReference && ["due", "overdue"].includes(row.status) && roleCanOpenOperatorHref(session.role, createHref) ? { label: "Create job", href: createHref, primary: true }
-      : workHref && !row.assigneeName && ["due", "overdue"].includes(row.status) ? { label: "Assign", href: workHref, primary: true }
+      : workHref && (!row.assigneeName || row.assigneePlanned) && ["due", "overdue"].includes(row.status) ? { label: "Assign", href: workHref, primary: true }
       : { label: "Open", href: workHref ?? href, primary: false };
     return { id: row.id, title: row.planName, equipment: row.assetName, storeLabel: storeLabel(row.storeNumber, row.storeName), storeHref: `/app/stores/${encodeURIComponent(row.storeId)}`,
       dueLabel: date(row.dueAt, row.timeZone), timingLabel: timing(row.status, row.dueAt), late: row.status === "overdue" || row.status === "missed",
+      whoNote: row.assigneePlanned ? "Plan's vendor · no job yet" : undefined,
       who: row.assigneeName ?? (row.importedHistory ? "Imported history" : open(row.status) ? undefined : row.workNumber ? undefined : "—"),
       statusLabel: labels[row.status], tone: tone(row.status), href, action };
   });
