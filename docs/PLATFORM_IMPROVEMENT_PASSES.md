@@ -4,6 +4,17 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Trends becomes a real trends dashboard; Spending charts — October 24, 2026
+
+**Owner direction:** Trends should cover actual trends: historical comparisons and what caused the change.
+
+- **Trends overview (`/app/trends`)**: six measure tiles, each with 24-month sparkline and last 12 months vs. the 12 before (better/worse colored by whether lower or higher is good): Spend, Repair jobs, Cost per repair, Days to fix (median), Came back (another repair on the same machine within 30 days), Maintenance done. A chosen measure shows month by month against the same months a year earlier (the current month compares the same days); every point opens its records (`/app/trends/month`).
+- **Why spending changed**: four parts that add up exactly to the change (`lib/ops/trend-measures.ts`): big one-off jobs (≥ $5,000 and 5× typical), more or fewer jobs, shift in the kind of work (service-area mix), each job cost more or less. Labels follow the direction. `/app/trends/why` lists the big jobs and the service-area table behind each part. Stated as a pattern, not proof of cause.
+- **Biggest movers** by store, service area or vendor; **Unusual months** (≥ 1.6× a typical month and $5,000 more) with the biggest job that month.
+- Other Trends tabs (Stores, Vendors, In-house vs vendors, Plan ahead) are unchanged.
+- **Spending:** service areas are a ring chart; vendor bars stay split by service area and show the area, amount and share on hover.
+- Tests: `tests/ops-trends-dashboard.test.ts` (parts add up, month records match, filters kept, store-manager scope).
+
 ### Spending becomes a dashboard with drill-down pages — October 24, 2026
 
 **Owner direction:** "more dashboard feel, then drill-down pages under Spending"; enterprise, no visuals for their own sake; lists paged.

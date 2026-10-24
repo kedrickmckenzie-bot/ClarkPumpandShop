@@ -219,7 +219,7 @@ export function buildSpendVendors(fixture: OpsFixture, session: OperatorSession,
     const facts = scope.facts.filter(row => row.provider === key);
     return { key, label: scope.providerName(key), amount, amountLabel: spendMoney(amount), share: pct(amount, scope.total), jobs: new Set(facts.map(row => row.workId)).size, stores: new Set(facts.map(row => row.storeId)).size,
       href: scope.href("/app/spend/costs", { who: key }), vendorHref: key.startsWith("vendor:") ? `/app/vendors/${encodeURIComponent(key.slice(7))}` : undefined,
-      segments: sumBy(facts, row => row.area).map(([area, value]) => ({ key: area, label: scope.areaName(area), amount: value, share: pct(value, amount), color: areaColor(area) })) };
+      segments: sumBy(facts, row => row.area).map(([area, value]) => ({ key: area, label: scope.areaName(area), amount: value, amountLabel: spendMoney(value), share: pct(value, amount), color: areaColor(area) })) };
   });
   return { scope, rows, max: Math.max(1, ...all.map(([, value]) => value)), count: all.length,
     pagination: pagination(all.length, page, size, next => `${scope.href("/app/spend/vendors")}${scope.href("/app/spend/vendors").includes("?") ? "&" : "?"}page=${next}`) };

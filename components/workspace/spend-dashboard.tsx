@@ -80,10 +80,26 @@ export function SpendGrid({ grid, firstColumn }: { grid: SpendGridModel; firstCo
   );
 }
 
-function SplitBar({ segments, label }: { segments: SpendSegment[]; label: string }) {
-  return <div className={styles.split} role="img" aria-label={`${label}: ${segments.map(segment => `${segment.label} ${segment.share}`).join(", ")}`}>
-    {segments.map(segment => <span key={segment.key} style={{ flexGrow: segment.amount, background: segment.color }} />)}
-  </div>;
+/** Share of spending as a ring; each slice opens its costs and names itself on hover. */
+function Donut({ segments, total }: { segments: SpendSegment[]; total: string }) {
+  const sum = segments.reduce((value, segment) => value + segment.amount, 0) || 1;
+  const radius = 60, circumference = 2 * Math.PI * radius, gap = segments.length > 1 ? 2 : 0;
+  const lengths = segments.map(segment => segment.amount / sum * circumference);
+  const offsets = lengths.map((_, index) => lengths.slice(0, index).reduce((total, value) => total + value, 0));
+  return <svg className={styles.donut} viewBox="0 0 160 160" role="img" aria-label={`Share of spending by service area: ${segments.map(segment => `${segment.label} ${segment.share}`).join(", ")}`}>
+    <circle cx="80" cy="80" r={radius} fill="none" stroke="#eef1f5" strokeWidth="24" />
+    {segments.map((segment, index) => {
+      const dash = Math.max(0, lengths[index] - gap);
+      return <a key={segment.key} href={segment.href}><circle cx="80" cy="80" r={radius} fill="none" stroke={segment.color} strokeWidth="24" strokeDasharray={`${dash} ${circumference - dash}`} strokeDashoffset={-offsets[index]} transform="rotate(-90 80 80)"><title>{`${segment.label}: ${segment.amountLabel} (${segment.share})`}</title></circle></a>;
+    })}
+    <text x="80" y="76" textAnchor="middle" className={styles.donutValue}>{total}</text>
+    <text x="80" y="96" textAnchor="middle" className={styles.donutLabel}>total</text>
+  </svg>;
+}
+
+/** A bar split by service area; each piece shows its area, amount and share on hover. */
+function SegmentedBar({ width, segments }: { width: number; segments: Array<{ key: string; label: string; amount: number; amountLabel: string; share: string; color: string }> }) {
+  return <span className={styles.barTrack} aria-hidden="true"><span style={{ width: `${width}%` }}>{segments.map(segment => <i key={segment.key} className={styles.seg} style={{ flexGrow: segment.amount, background: segment.color }}><span className={styles.tip}><b>{segment.label}</b>{segment.amountLabel} · {segment.share}</span></i>)}</span></span>;
 }
 
 export function SpendDashboard({ model }: { model: ReturnType<typeof buildSpendDashboard> }) {
@@ -103,17 +119,17 @@ export function SpendDashboard({ model }: { model: ReturnType<typeof buildSpendD
 
         <Card title="Service areas" href={scope.href("/app/spend/costs", { by: "area" })} linkLabel="Open">
           {model.areas.length ? <>
-            <SplitBar segments={model.areas} label="Share of spending by service area" />
-            <ul className={styles.legend}>{model.areas.map(segment => <li key={segment.key}><Link href={segment.href}><i style={{ background: segment.color }} aria-hidden="true" /><span>{segment.label}</span><strong>{segment.amountLabel}</strong><small>{segment.share}</small></Link></li>)}</ul>
+            <div className={styles.donutWrap}><Donut segments={model.areas} total={model.grid.grandTotal} />
+            <ul className={styles.legend}>{model.areas.map(segment => <li key={segment.key}><Link href={segment.href}><i style={{ background: segment.color }} aria-hidden="true" /><span>{segment.label}</span><strong>{segment.amountLabel}</strong><small>{segment.share}</small></Link></li>)}</ul></div>
           </> : <Empty />}
         </Card>
 
         <Card title="Vendors" href={scope.href("/app/spend/vendors")} linkLabel="All vendors">
           {model.vendors.length ? <ul className={styles.bars}>{model.vendors.map(vendor => <li key={vendor.key}><Link href={vendor.href}>
             <span className={styles.barName}><strong>{vendor.label}</strong><small>{vendor.amountLabel} · {vendor.share}</small></span>
-            <span className={styles.barTrack} aria-hidden="true"><span style={{ width: `${vendor.amount / model.vendorMax * 100}%` }}>{vendor.segments.map(segment => <i key={segment.key} style={{ flexGrow: segment.amount, background: segment.color }} />)}</span></span>
+            <SegmentedBar width={vendor.amount / model.vendorMax * 100} segments={vendor.segments} />
           </Link></li>)}</ul> : <Empty />}
-          {model.vendors.length ? <p className={styles.note}>Bar colors match the service areas.</p> : null}
+          {model.vendors.length ? <p className={styles.note}>Colors are service areas. Point at a color to see it.</p> : null}
         </Card>
 
         <Card wide title="Costliest equipment" href={scope.href("/app/spend/equipment")} linkLabel="All equipment">
@@ -152,11 +168,11 @@ export function SpendStoresPage({ model }: { model: ReturnType<typeof buildSpend
 export function SpendVendorsPage({ model }: { model: ReturnType<typeof buildSpendVendors> }) {
   return <SpendFrame scope={model.scope} title="Vendors" subtitle="Who was paid, and for what">
     <section className={styles.panel}>
-      <header><h2>Who was paid</h2><span className={styles.count}>Bar colors are service areas</span></header>
+      <header><h2>Who was paid</h2><span className={styles.count}>Colors are service areas · point at a color to see it</span></header>
       {model.rows.length ? <ul className={styles.vendorRows}>{model.rows.map(row => <li key={row.key}>
         <div className={styles.vendorName}>{row.vendorHref ? <Link href={row.vendorHref} className={styles.strongLink}>{row.label}</Link> : <strong>{row.label}</strong>}<small>{row.jobs} jobs · {row.stores} {row.stores === 1 ? "store" : "stores"}</small></div>
         <Link href={row.href} className={styles.vendorBar} aria-label={`${row.label}: ${row.amountLabel}. ${row.segments.map(segment => `${segment.label} ${segment.share}`).join(", ")}`}>
-          <span className={styles.barTrack}><span style={{ width: `${row.amount / model.max * 100}%` }}>{row.segments.map(segment => <i key={segment.key} title={`${segment.label}: ${segment.share}`} style={{ flexGrow: segment.amount, background: segment.color }} />)}</span></span>
+          <SegmentedBar width={row.amount / model.max * 100} segments={row.segments} />
           <small>{row.segments.slice(0, 3).map(segment => `${segment.label} ${segment.share}`).join(" · ")}</small>
         </Link>
         <div className={styles.vendorAmount}><strong>{row.amountLabel}</strong><small>{row.share} of spending</small></div>

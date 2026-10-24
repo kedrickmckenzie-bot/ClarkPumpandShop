@@ -954,3 +954,10 @@ export async function loadSpendPage<T>(build: (fixture: Awaited<ReturnType<typeo
   if (!roleCanAccessProgramRoute(session.role, "spend")) notFound();
   return build(fixture, session, query);
 }
+
+/** Trends dashboard and its record pages: one tenant read, filtered to the person's stores. */
+export async function loadTrendsDashboard<T>(build: (fixture: Awaited<ReturnType<typeof getRequestOpsFixtureSnapshot>>, session: OperatorSession, query: OperatorSearchParameters) => T, query: OperatorSearchParameters = {}) {
+  const { session, fixture } = await sessionAndFixture();
+  if (!roleCanAccessProgramRoute(session.role, "trends")) notFound();
+  return build(fixture, session, query);
+}
