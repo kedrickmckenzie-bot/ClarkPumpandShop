@@ -850,10 +850,7 @@ describe("enterprise trends presenter", () => {
       asset: work.assetId,
       component: work.componentId,
     });
-    const point = model.trends[0]?.points.find((candidate) => candidate.value > 0);
-    expect(point).toBeDefined();
-    if (!point) throw new Error("Expected a linked-invoice month for the selected equipment and component");
-    const parameters = queryFromHref(point.link.href);
+    const parameters = queryFromHref(model.metrics.find((metric) => metric.id === "total")!.link.href);
 
     expect(parameters).toMatchObject({
       region: store.regionId,
@@ -861,11 +858,10 @@ describe("enterprise trends presenter", () => {
       category: work.categoryKey,
       asset: work.assetId,
       component: work.componentId,
-      from: `${point.id}-01`,
     });
     expect(parameters.path).toBe(hierarchyPath.join("|"));
-    expect(parameters.to).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(parameters.to.slice(0, 7)).toBe(point.id);
+    expect(parameters.from).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(parameters.to).toBe(fixture.asOf.slice(0, 10));
 
     const invoices = buildListModel(fixture, session(), "invoices", parameters);
     expect(invoices.table.rows.length).toBeGreaterThan(0);

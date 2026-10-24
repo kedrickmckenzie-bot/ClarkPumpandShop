@@ -17,7 +17,7 @@ interface TrendsFilterFormProps {
   scenarioQuery?: string;
 }
 
-const commonFilterIds = new Set(["metric", "period", "compare", "work", "region", "store"]);
+const commonFilterIds = new Set(["metric", "period", "compare", "store"]);
 
 export function TrendsFilterForm({ action, activeView, clearHref, filters, scopeSummary, scenarioQuery }: TrendsFilterFormProps) {
   const router = useRouter();
@@ -50,7 +50,7 @@ export function TrendsFilterForm({ action, activeView, clearHref, filters, scope
         ))}
       </div>
       <details className={styles.filterGroup} open={hasMaintenanceScope}>
-        <summary><span><strong>More filters{activeSpecialist ? ` · ${activeSpecialist} on` : ""}</strong><small>Equipment, cost type, vendor, work type</small></span><ChevronRight size={16} aria-hidden="true" /></summary>
+        <summary><span><strong>More filters{activeSpecialist ? ` · ${activeSpecialist} on` : ""}</strong><small>Region, who did the work, equipment, cost type, vendor</small></span><ChevronRight size={16} aria-hidden="true" /></summary>
         <div className={styles.filterGrid}>{specialistFilters.map((filter) => filter.options.length > 8 ? <FilterPicker key={`${filter.id}:${filter.value ?? ""}`} filter={filter} /> : (
           <label key={`${filter.id}:${filter.value ?? ""}`}><span>{filter.label}</span><select defaultValue={filter.value} name={filter.id}>{filter.options.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select>{filter.helperText ? <small>{filter.helperText}</small> : null}</label>
         ))}</div>

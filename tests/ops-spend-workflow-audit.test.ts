@@ -72,15 +72,13 @@ describe("spend and connected workflow audit", () => {
   it("preserves invoice month, hierarchy, and exact confirmed allocations through Spending", () => {
     const fixture = buildNorthlinePresentationFixture();
     const spend = buildProgramModel(fixture, session, "spend", { basis: "invoiced", period: "12m", store: "store-northline-104" });
-    for (const point of spend.trends[0].points) {
-      const query = queryFrom(point.link.href);
-      expect(query.store).toBe("store-northline-104");
-      const model = buildInvoiceEvidenceModel(fixture, session, query);
-      const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(point.value / 100);
-      expect(model.resultSummary).toContain(money);
-      expect(model.table.rows.every((row) => row.cells.find((cell) => cell.key === "store")?.value === "Store 104")).toBe(true);
-    }
+    // The monthly chart lives on Trends now; the total opens the exact confirmed allocations.
+    expect(spend.trends).toEqual([]);
     const fromTotal = queryFrom(spend.metrics[0].link.href);
+    expect(fromTotal.store).toBe("store-northline-104");
+    const totalModel = buildInvoiceEvidenceModel(fixture, session, fromTotal);
+    expect(totalModel.resultSummary).toContain(spend.metrics[0].value);
+    expect(totalModel.table.rows.every((row) => row.cells.find((cell) => cell.key === "store")?.value === "Store 104")).toBe(true);
     expect(buildInvoiceEvidenceModel(fixture, { ...session, storeIds: [] }, fromTotal).table.rows).toEqual([]);
     expect(buildInvoiceEvidenceModel(fixture, session, { ...fromTotal, category: "nonexistent" }).table.rows).toEqual([]);
     expect(spend.table!.rows.every((row) => row.href.endsWith("?view=cost"))).toBe(true);

@@ -1,7 +1,7 @@
 import { cachedNumberFormat } from "@/lib/ops/intl-format-cache";
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { ChangeBridge, SpendHeatmap, TrendStory } from "./trends-visuals";
+import { ChangeBridge, SpendHeatmap } from "./trends-visuals";
 import { formatOperationsDate } from "@/lib/ops/local-time";
 import { planningScenario, scenarioKeys } from "@/lib/ops/planning-scenario";
 import { WorkReviewButton } from "./work-review";
@@ -102,14 +102,25 @@ function BreakdownSwitch({ options }: { options: NonNullable<TrendAnalysisPageVi
   </nav>;
 }
 
-function DriverSnapshot({ model }: { model: TrendAnalysisPageViewModel }) {
-  const rows = [...model.drivers.rows].filter(row => row.currentValue !== undefined).sort((a, b) => (b.currentValue ?? 0) - (a.currentValue ?? 0)).slice(0, 6);
-  const max = Math.max(1, ...rows.map(row => row.currentValue ?? 0));
-  return <section className={styles.driverSnapshot} aria-labelledby="driver-snapshot-title">
-    <header><div><h2 id="driver-snapshot-title">Where the money goes</h2><p>{model.drivers.title} · {model.currentPeriodLabel}</p></div><Link href={model.views.find(view => view.id === "drivers")!.link.href}>Explore drivers →</Link></header>
-    {rows.length ? <div className={styles.driverBars}>{rows.map(row => <Link key={row.id} href={row.recordsLink.href} className={styles.driverBar}><span><strong>{row.label}</strong><b>{row.currentLabel}</b></span><i aria-hidden="true"><em style={{ width: `${Math.max(0, (row.currentValue ?? 0) / max * 100)}%` }} /></i><small>{row.changeLabel} · {row.currentSourceCount} source records</small></Link>)}</div> : <p>No recorded costs in this scope.</p>}
-    <footer>{rows.length} shown · {model.drivers.sampleLabel}. Open drivers for the complete breakdown.</footer>
-  </section>;
+/** The answer first: now, before, and the change, then the few plain facts behind it. */
+function Headline({ model }: { model: TrendAnalysisPageViewModel }) {
+  const result = model.mainResult;
+  const comparison = model.summary.find(metric => metric.id === "comparison");
+  const up = result.absoluteChangeLabel?.trim().startsWith("+");
+  const down = result.absoluteChangeLabel?.trim().startsWith("-") || result.absoluteChangeLabel?.trim().startsWith("−");
+  const sentences = model.story?.sentences.filter(sentence => sentence.id !== "total") ?? [];
+  return (
+    <section className={styles.headline} aria-labelledby="trend-headline">
+      <h2 id="trend-headline">{model.metricLabel} {model.comparisonPeriodLabel && result.relativeChangeLabel ? <>is <span data-direction={up ? "up" : down ? "down" : "flat"}>{up ? "up" : down ? "down" : "about the same"} {result.relativeChangeLabel.replace(/^[+−-]/, "")}</span> vs. {model.comparisonLabel.toLowerCase()}</> : <>· {model.currentPeriodLabel}</>}</h2>
+      <div className={styles.headlineNumbers}>
+        <Link href={result.link.href}><small>Now</small><strong>{result.value}</strong><span>{model.currentPeriodLabel}</span></Link>
+        {comparison && model.comparisonPeriodLabel ? <Link href={comparison.link.href}><small>Before</small><strong>{comparison.value}</strong><span>{model.comparisonPeriodLabel}</span></Link> : null}
+        {result.absoluteChangeLabel ? <div data-direction={up ? "up" : down ? "down" : "flat"}><small>Change</small><strong>{result.absoluteChangeLabel}</strong><span>{result.evidenceLabel}</span></div> : null}
+      </div>
+      {sentences.length ? <ul className={styles.headlineFacts}>{sentences.map(sentence => <li key={sentence.id}><span>{sentence.text}</span>{sentence.link ? <Link href={sentence.link.href}>{sentence.link.label}<ChevronRight size={14} aria-hidden="true" /></Link> : null}</li>)}</ul> : null}
+      {model.insights.some(insight => !insight.eyebrow.startsWith("Material period")) ? <div className={styles.worthALook}><h3>Worth a look</h3>{model.insights.filter(insight => !insight.eyebrow.startsWith("Material period")).slice(0, 3).map(insight => <Link key={insight.id} href={insight.link.href}><small>{insight.eyebrow}</small><strong>{insight.title}</strong><ChevronRight size={15} aria-hidden="true" /></Link>)}</div> : null}
+    </section>
+  );
 }
 
 function ExecutiveResults({ model }: { model: TrendAnalysisPageViewModel }) {
@@ -200,14 +211,13 @@ function AnalysisViews({ model }: { model: TrendAnalysisPageViewModel }) {
 function RelatedMeasures({ model }: { model: TrendAnalysisPageViewModel }) {
   return (
     <section className={styles.relatedMeasures} aria-labelledby="related-measures-title">
-      <header><p>Continue the investigation</p><h2 id="related-measures-title">Look at the same scope from another angle</h2><span>Operating, location, and maintenance scope stay in place. Measure-specific filters such as cost type may reset, and each measure uses its own recorded event date.</span></header>
+      <header><h2 id="related-measures-title">Same stores, other measures</h2></header>
       <div>
         {model.relatedMeasures.map((measure) => (
           <Link href={measure.link.href} key={measure.metricId} aria-label={measure.link.label}>
             <span>{measure.label}<ChevronRight size={16} aria-hidden="true" /></span>
             <strong>{measure.value}</strong>
             <small>{measure.comparisonLabel ? `${measure.comparisonLabel} · ` : ""}{measure.evidenceLabel}</small>
-            <p>{measure.description}</p>
           </Link>
         ))}
       </div>
@@ -354,11 +364,11 @@ export function TrendsWorkspace({ model, savedViews }: { model: TrendAnalysisPag
   return (
     <div className={styles.workspace}>
       <header className={styles.pageHeader}>
-        <div><p>{model.activeView === "planning" ? "Spending & planning" : model.page.eyebrow}</p><h1>{model.activeView === "planning" ? "Plan upcoming work" : model.activeView === "overview" ? "Trends" : model.page.title}</h1><span>{model.activeView === "planning" ? "Price open jobs. Review maintenance and replacement decisions." : "Costs, work, and changes over time."}</span></div>
+        <div><p>{model.activeView === "planning" ? "Spending & planning" : model.page.eyebrow}</p><h1>{model.activeView === "planning" ? "Plan upcoming work" : model.activeView === "records" ? "Records behind the number" : model.activeView === "overview" ? "Trends" : model.page.title}</h1><span>{model.activeView === "planning" ? "Price open jobs. Review maintenance and replacement decisions." : model.activeView === "records" ? "Every record counted in the number you opened." : "What changed, and why."}</span></div>
         {model.page.secondaryAction ? <Link className={styles.secondaryButton} href={model.page.secondaryAction.href}>{model.page.secondaryAction.label}<ArrowRight size={16} aria-hidden="true" /></Link> : null}
       </header>
 
-      <AnalysisViews model={model} />
+      {model.activeView === "records" ? <Link className={styles.backLink} href={model.views.find(view => view.id === "overview")?.link.href ?? "/app/trends"}>← Back to trends</Link> : <AnalysisViews model={model} />}
       {model.activeView !== "planning" ? <TrendsFilterForm scenarioQuery={model.canonicalQuery} action={model.filterAction} activeView={model.activeView} clearHref={model.clearFiltersHref} filters={model.filters} scopeSummary={model.scopeSummary} /> : null}
       {model.activeView === "planning" ? <section className={styles.analysisContext} aria-label="Current analysis context">{model.analysisContext.filter((item) => model.activeView !== "planning" || item.label === "Locations").map((item) => <span key={item.label}><small>{item.label}</small><strong>{item.value}</strong></span>)}{model.activeView === "planning" ? <span><small>Planning basis</small><strong>Current open work · entered repair estimates</strong></span> : null}</section> : null}
       {model.filterNotice ? <aside className={styles.filterNotice}><Info size={16} aria-hidden="true" />{model.filterNotice}</aside> : null}
@@ -366,26 +376,27 @@ export function TrendsWorkspace({ model, savedViews }: { model: TrendAnalysisPag
       {model.activeView === "planning" ? <details className={styles.notes}><summary>Locations</summary><TrendsFilterForm scenarioQuery={model.canonicalQuery} action={model.filterAction} activeView={model.activeView} clearHref={model.clearFiltersHref} filters={model.filters} scopeSummary={model.scopeSummary} /></details> : savedViews ? <details className={styles.notes}><summary>Saved views</summary>{savedViews}</details> : null}
 
       {model.activeView === "overview" || model.activeView === "drivers" ? <>
-        {model.breakdownSwitch ? <BreakdownSwitch options={model.breakdownSwitch} /> : null}
-        {model.story ? <TrendStory story={model.story} /> : null}
-        <ExecutiveResults model={model} />
-        {model.bridge ? <ChangeBridge bridge={model.bridge} metricLabel={model.metricLabel} /> : null}
-        <details className={styles.allDrivers} open={model.activeView === "drivers" || !model.bridge}>
-          <summary>See every {model.drivers.title.replace(/^What changed by /, "")} · sort, focus or open records</summary>
-          <DriversTable model={model} />
-        </details>
+        <Headline model={model} />
         <ComparisonChart model={model} />
-        {model.heatmap ? <SpendHeatmap heatmap={model.heatmap} metricLabel={model.metricLabel} /> : model.metricId === "recorded_cost" ? <DriverSnapshot model={model} /> : null}
+        <section className={styles.drove} aria-labelledby="drove-title">
+          <header><h2 id="drove-title">What drove the change</h2>{model.breakdownSwitch ? <BreakdownSwitch options={model.breakdownSwitch} /> : null}</header>
+          {model.bridge ? <ChangeBridge bridge={model.bridge} metricLabel={model.metricLabel} /> : null}
+          <details className={styles.allDrivers} open={model.activeView === "drivers" || !model.bridge}>
+            <summary>See every {model.drivers.title.replace(/^What changed by /, "")} as a table</summary>
+            <DriversTable model={model} />
+          </details>
+        </section>
         <RelatedMeasures model={model} />
       </> : null}
       {model.activeView === "stores" ? <>
+        {model.heatmap ? <SpendHeatmap heatmap={model.heatmap} metricLabel={model.metricLabel} /> : null}
         <DriversTable model={model} />
         <details className={styles.peerDetails}><summary>Compare with similar stores (same kinds of equipment)</summary><BenchmarkTable model={model} /></details>
       </> : null}
       {model.activeView === "planning" ? <UpcomingWorkPlan model={model} savedViews={savedViews} /> : null}
       {model.activeView === "records" ? <SourceTable model={model} /> : null}
 
-      {model.activeView === "vendors" || model.activeView === "records" ? <ExecutiveResults model={model} /> : null}
+      {model.activeView === "vendors" ? <ExecutiveResults model={model} /> : null}
       <details className={styles.notes}>
         <summary><Info size={17} aria-hidden="true" />How these numbers work<ChevronRight size={16} aria-hidden="true" /></summary>
         <ul>{model.notes.map((note) => <li key={note}>{note}</li>)}</ul>

@@ -669,6 +669,23 @@ export interface ProgramPageViewModel extends DashboardPageViewModel {
   pagination?: ListPageViewModel["pagination"];
   /** The PM page: one list of maintenance with who is doing it, who is slipping, and the done-vs-missed comparison. */
   pmBoard?: PmBoardViewModel;
+  /** The Spending page: how much, where it went, who was paid, and the exact costs. */
+  spendBoard?: SpendBoardViewModel;
+}
+
+/** One row of "Where it went": a store, service area, vendor or machine, with its share and a link to its costs. */
+export interface SpendShareRowViewModel { id: string; label: string; secondary?: string; amountLabel: string; value: number; shareLabel: string; href: string; selected?: boolean }
+export interface SpendBoardViewModel {
+  periods: FilterOptionViewModel[];
+  bases: FilterOptionViewModel[];
+  regions: FilterOptionViewModel[];
+  areas: FilterOptionViewModel[];
+  /** Applied narrowing (service area path, machine, who was paid) with a link that removes each. */
+  chips: Array<{ label: string; removeHref: string }>;
+  groupings: Array<FilterOptionViewModel & { rows: SpendShareRowViewModel[]; totalLabel: string; note?: string; moreHref?: string; moreLabel?: string }>;
+  trendsHref: string;
+  costsTitle: string;
+  costsDownloadHref?: string;
 }
 
 export interface PmBoardRowViewModel {

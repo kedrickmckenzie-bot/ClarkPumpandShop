@@ -178,8 +178,8 @@ describe("operator presenter drill-through contracts", () => {
     const storeInvoiceCount = new Set(fixture.invoiceLineAllocations.filter((allocation) => allocation.organizationId === NORTHLINE_ORGANIZATION_ID && allocation.confirmedAt && allocation.amount.amountMinor > 0 && storeWorkIds.has(allocation.workOrderId) && periodInvoiceIds.has(invoiceByLine.get(allocation.invoiceLineId)!)).map((allocation) => invoiceByLine.get(allocation.invoiceLineId))).size;
 
     expect(model.page.scopeLabel).toContain(`Store ${store.storeNumber}`);
-    expect(model.metrics.find((metric) => metric.id === "total")?.supportingText).toContain(`${sourceLineCount} entered source lines`);
-    expect(model.metrics.find((metric) => metric.id === "invoices")?.value).toBe(String(storeInvoiceCount));
+    expect(model.metrics.find((metric) => metric.id === "total")?.supportingText).toContain(`${sourceLineCount} costs entered`);
+    expect(buildProgramModel(fixture, executiveSession(), "spend", { store: storeId, basis: "invoiced" }).metrics.find((metric) => metric.id === "invoices")?.value).toBe(String(storeInvoiceCount));
 
     const totalSource = model.metrics.find((metric) => metric.id === "total")?.link?.href;
     expect(totalSource && queryValue(totalSource, "store")).toBe(storeId);
@@ -197,9 +197,9 @@ describe("operator presenter drill-through contracts", () => {
     expect(storeSources.length).toBeGreaterThan(1);
     expect(storeSources.every((segment) => queryValue(segment.link.href, "store") === segment.id)).toBe(true);
 
-    const monthlySources = model.trends.flatMap((trend) => trend.points);
-    expect(monthlySources.length).toBeGreaterThan(0);
-    expect(monthlySources.every((point) => queryValue(point.link.href, "store") === storeId)).toBe(true);
+    // Monthly change lives on Trends; every Spending row keeps the store.
+    expect(model.trends).toEqual([]);
+    expect(model.spendBoard!.groupings.flatMap((group) => group.rows).filter((row) => row.href.startsWith("/app/spend")).every((row) => queryValue(row.href, "store") === storeId)).toBe(true);
   });
 
   it("keeps spend interactive through service area, flexible groups, equipment, and component", () => {
@@ -715,8 +715,8 @@ it("spending cost coverage opens the exact missing-cost cohort", async () => {
     storeId: query.get("store")!, hasCost: false, currency: "USD", costFrom: query.get("costFrom")!, costTo: query.get("costTo")!,
     ...(await import("@/lib/ops/work-created-range")).workCreatedRange(query.get("createdFrom")!, query.get("createdThrough")!), limit: 100,
   });
-  const [recorded, total] = metric.value.split(" of ").map(Number);
+  const total = Number(metric.supportingText.match(/of (\d+) jobs/)![1]);
   expect(total).toBeGreaterThan(0);
-  expect(missing.items).toHaveLength(total - recorded);
+  expect(missing.items).toHaveLength(Number(metric.value));
   expect(missing.items.every(row => row.recordedCostLineCount === 0)).toBe(true);
 });

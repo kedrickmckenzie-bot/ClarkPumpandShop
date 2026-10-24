@@ -1,17 +1,6 @@
 import Link from "next/link";
-import type { TrendBridgeViewModel, TrendHeatmapViewModel, TrendStoryViewModel } from "@/components/ops/data-contract";
+import type { TrendBridgeViewModel, TrendHeatmapViewModel } from "@/components/ops/data-contract";
 import styles from "./trends-visuals.module.css";
-
-/** The short answer: a few plain sentences, each opening the records behind it. */
-export function TrendStory({ story }: { story: TrendStoryViewModel }) {
-  if (!story.sentences.length) return null;
-  return <section className={`${styles.panel} ${styles.story}`} aria-labelledby="story-title">
-    <p className={styles.eyebrow} id="story-title">The short answer</p>
-    <ul className={styles.storyList}>
-      {story.sentences.map((sentence) => <li key={sentence.id}><span>{sentence.text}</span>{sentence.link ? <Link href={sentence.link.href}>{sentence.link.label} →</Link> : null}</li>)}
-    </ul>
-  </section>;
-}
 
 /**
  * "Where the change came from": one row per biggest mover plus "All other",

@@ -433,3 +433,36 @@
 .quickSorts { display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 16px; border-bottom: 1px solid #e5e9ef; }
 .quickSorts a { padding: 6px 12px; border: 1px solid #c6ced9; border-radius: 999px; color: #1d4ed8; font-size: 14px; font-weight: 650; text-decoration: none; background: #fff; }
 .quickSorts a[aria-current] { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
+
+/* Overview: the answer first. */
+.headline { display: grid; gap: 16px; padding: 20px 22px; border: 1px solid var(--ops-border, #dde2e8); border-radius: 6px; background: #fff; }
+.headline h2 { margin: 0; font-size: 24px; line-height: 1.25; }
+.headline h2 [data-direction="up"] { color: #b42318; }
+.headline h2 [data-direction="down"] { color: #067647; }
+.headlineNumbers { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.headlineNumbers > a, .headlineNumbers > div { display: grid; gap: 2px; padding: 12px 14px; border: 1px solid var(--ops-border, #dde2e8); border-radius: 6px; color: var(--ops-ink, #172033); text-decoration: none; }
+.headlineNumbers > a:hover { border-color: var(--ops-brand, #2855d9); }
+.headlineNumbers small { color: #526176; font-size: 14px; }
+.headlineNumbers strong { font-size: 28px; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.headlineNumbers span { color: #64748b; font-size: 14px; }
+.headlineNumbers [data-direction="up"] strong { color: #b42318; }
+.headlineNumbers [data-direction="down"] strong { color: #067647; }
+.headlineFacts { margin: 0; padding: 0 0 0 18px; display: grid; gap: 8px; font-size: 15px; line-height: 1.45; }
+.headlineFacts a { display: inline-flex; align-items: center; gap: 2px; margin-left: 6px; color: var(--ops-brand, #2855d9); white-space: nowrap; }
+.worthALook { display: grid; gap: 6px; padding-top: 12px; border-top: 1px solid #edf0f4; }
+.worthALook h3 { margin: 0 0 2px; font-size: 15px; color: #526176; }
+.worthALook a { display: grid; grid-template-columns: 180px minmax(0, 1fr) 16px; gap: 12px; align-items: center; padding: 8px 6px; border-radius: 4px; color: var(--ops-ink, #172033); text-decoration: none; font-size: 15px; }
+.worthALook a:hover { background: #f8fafc; }
+.worthALook a:hover strong { color: var(--ops-brand, #2855d9); text-decoration: underline; }
+.worthALook small { color: #64748b; font-size: 13px; text-transform: none; }
+.drove { display: grid; gap: 12px; }
+.drove > header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.drove > header h2 { margin: 0; font-size: 20px; }
+.backLink { color: var(--ops-brand, #2855d9); font-size: 15px; }
+@media (max-width: 760px) {
+  .headlineNumbers { grid-template-columns: 1fr 1fr; }
+  .headlineNumbers > div { grid-column: 1 / -1; }
+  .headline h2 { font-size: 20px; }
+  .worthALook a { grid-template-columns: minmax(0, 1fr) 16px; }
+  .worthALook small { grid-column: 1 / -1; }
+}
