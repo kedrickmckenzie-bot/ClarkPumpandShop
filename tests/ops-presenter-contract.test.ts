@@ -712,11 +712,12 @@ it("spending cost coverage opens the exact missing-cost cohort", async () => {
   const query = new URL(metric.link!.href, "https://example.test").searchParams;
   const repository = (await import("@/lib/ops/fixture-repository")).createOpsFixtureRepository(fixture);
   const missing = await repository.listWorkOrders({ organizationId: NORTHLINE_ORGANIZATION_ID }, {
-    storeId: query.get("store")!, hasCost: false, currency: "USD", costFrom: query.get("costFrom")!, costTo: query.get("costTo")!,
+    storeId: query.get("store")!, hasCost: false, vendorOnly: query.get("provider") === "vendor", currency: "USD", costFrom: query.get("costFrom")!, costTo: query.get("costTo")!,
     ...(await import("@/lib/ops/work-created-range")).workCreatedRange(query.get("createdFrom")!, query.get("createdThrough")!), limit: 100,
   });
-  const total = Number(metric.supportingText.match(/of (\d+) jobs/)![1]);
+  const total = Number(metric.supportingText.match(/of (\d+) vendor jobs/)![1]);
   expect(total).toBeGreaterThan(0);
   expect(missing.items).toHaveLength(Number(metric.value));
+  expect(missing.items.every(row => row.assignmentKind === "outside_vendor")).toBe(true);
   expect(missing.items.every(row => row.recordedCostLineCount === 0)).toBe(true);
 });

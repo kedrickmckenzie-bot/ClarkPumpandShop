@@ -1063,6 +1063,7 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
         && (!query.storeId || row.storeId === query.storeId)
         && (!query.regionId || this.fixture.stores.find((store) => store.organizationId === scope.organizationId && store.id === row.storeId)?.regionId === query.regionId)
         && (!query.vendorId || this.fixture.assignments.some((assignment) => assignment.organizationId === scope.organizationId && assignment.workOrderId === row.id && assignment.vendorId === query.vendorId))
+        && (!query.vendorOnly || currentAssignment(this.fixture, scope.organizationId, row.id)?.kind === "outside_vendor")
         && (!query.internalOnly || (() => {const a=currentAssignment(this.fixture, scope.organizationId, row.id);return a?.kind==='internal'&&['pending','issued','opened','accepted'].includes(a.status);})())
         && (!query.internalTarget || (() => {const a=currentAssignment(this.fixture, scope.organizationId, row.id);return a?.kind==='internal'&&['pending','issued','opened','accepted'].includes(a.status)&&(a.internalTarget??(a.internalMembershipId?'person':undefined))===query.internalTarget;})())
         && (!query.foundByMembershipId || row.foundByMembershipId === query.foundByMembershipId)

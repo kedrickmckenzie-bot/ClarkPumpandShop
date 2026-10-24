@@ -4,6 +4,14 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Spending: in-house money comes from accounting — October 24, 2026
+
+**Owner correction.** In-house jobs don't carry costs; accounting enters in-house totals on Spend totals. The first Spending overhaul showed "In-house team $8,672" from stray job costs and counted in-house jobs as "missing a cost".
+
+- **In-house team** now comes from accounting's entered totals that fall wholly inside the period, split exactly as Spend totals does (an in-house entry as entered; a total entry minus vendor job cost for the same days). When the page is narrowed to a store, region, service area or vendor, it says the figure is company-wide instead of showing it. Spend totals are now loaded in both the PostgreSQL and D1 page snapshots (they were missing, so the page could not see them).
+- **Vendor jobs with no cost yet** counts only jobs whose current assignment is an outside vendor; the link opens exactly those jobs through a new `vendorOnly` work-list filter (`provider=vendor`), identical in fixture, D1 and PostgreSQL (parity regression added).
+- **Who was paid** uses the same rule as Spend totals and reports (line marking first, else the job's latest active assignment). The total stays the same recorded job cost as Overview and Trends; the rare cost entered on an in-house job shows as its own "Recorded on in-house jobs" row instead of being hidden or called in-house spend.
+
 ### Spending and Trends overhaul — October 24, 2026
 
 **Why.** Both pages showed cost by store, cost by month and the cost list, so a manager couldn't tell which to open. Each page now answers one question.

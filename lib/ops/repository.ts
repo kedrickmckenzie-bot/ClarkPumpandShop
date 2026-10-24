@@ -144,6 +144,8 @@ export interface WorkOrderListQuery extends PageRequest {
   /** Any work a technician reported themselves. */
   foundByTechnician?: boolean;
   internalOnly?: boolean;
+  /** Only jobs whose current assignment is an outside vendor. */
+  vendorOnly?: boolean;
   /** Dispatch shows work for the maintenance team, not store-team checks assigned to store staff. */
   maintenanceTeamOnly?: boolean;
   internalTarget?: "person" | "pool" | "awaiting_allocation";

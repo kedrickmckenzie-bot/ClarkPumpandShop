@@ -1,4 +1,5 @@
 import { compactStoreLabel } from "@/lib/product/store-label";
+import { activeTotals } from "@/lib/ops/spend-totals";
 import { costProvider } from "@/lib/ops/cost-provider";
 import type { SpendBoardViewModel, SpendShareRowViewModel } from "@/components/ops/data-contract";
 import type { TodoCounts } from "./dashboard-presenter";
@@ -3177,9 +3178,11 @@ export function buildProgramModel(
     // Who was paid: a vendor, the in-house team, or not marked. Narrowing to one keeps only their cost lines.
     const providerOf = (line: OpsFixture["costLines"][number]) => costProvider(line, assignmentsForWork(fixture, line.workOrderId).filter((row) => row.organizationId === scoped.organizationId));
     const who = basis === "recorded" ? first(query.who) : undefined;
-    const recordedAmountByWork = who ? new Map<string, number>() : recordedCostByWork(fixture, scoped.organizationId, periodStart, fixture.asOf.slice(0, 10));
-    if (who) for (const line of fixture.costLines) {
-      if (line.organizationId !== scoped.organizationId || line.serviceDate < periodStart || line.serviceDate.slice(0, 10) > fixture.asOf.slice(0, 10) || line.amount.currency !== "USD" || providerOf(line) !== who) continue;
+    // Job costs as recorded (the same total as Overview and Trends). In-house team money is entered by accounting on Spend totals.
+    const recordedAmountByWork = new Map<string, number>();
+    for (const line of fixture.costLines) {
+      if (line.organizationId !== scoped.organizationId || line.serviceDate < periodStart || line.serviceDate.slice(0, 10) > fixture.asOf.slice(0, 10) || line.amount.currency !== "USD") continue;
+      if (who && providerOf(line) !== who) continue;
       recordedAmountByWork.set(line.workOrderId, (recordedAmountByWork.get(line.workOrderId) ?? 0) + line.amount.amountMinor);
     }
     const selectedCategory = first(query.category);
@@ -3214,7 +3217,9 @@ export function buildProgramModel(
         line.serviceDate >= periodStart && line.serviceDate.slice(0, 10) <= fixture.asOf.slice(0, 10) && line.amount.currency === "USD" &&
         (!who || providerOf(line) === who),
     );
-    const openedInPeriod = spendWork.filter(work => work.createdAt.slice(0, 10) >= periodStart.slice(0, 10) && work.createdAt.slice(0, 10) <= fixture.asOf.slice(0, 10));
+    // In-house jobs never carry a cost, so only jobs currently with an outside vendor can be "missing" one.
+    const openedInPeriod = spendWork.filter(work => work.createdAt.slice(0, 10) >= periodStart.slice(0, 10) && work.createdAt.slice(0, 10) <= fixture.asOf.slice(0, 10)
+      && assignmentForWork(fixture, scoped.organizationId, work.id)?.kind === "outside_vendor");
     const costRecordedIds = new Set(sourceLines.map(line => line.workOrderId));
     const workWithCost = openedInPeriod.filter(work => costRecordedIds.has(work.id)).length;
     const total = costForWorkIds(basisAmountByWork, spendWork.map((work) => work.id));
@@ -3375,7 +3380,7 @@ export function buildProgramModel(
     });
     // Spending board: who was paid, where the money went, and the chips that say what is narrowed.
     const vendorNames = new Map(fixture.vendors.filter((vendor) => vendor.organizationId === scoped.organizationId).map((vendor) => [vendor.id, vendor.name]));
-    const providerLabel = (key: string) => key === "in_house" ? "In-house team" : key === "unmarked" ? "Not marked" : vendorNames.get(key.replace(/^vendor:/, "")) ?? "Vendor";
+    const providerLabel = (key: string) => key === "in_house" ? "Recorded on in-house jobs" : key === "unmarked" ? "Not marked" : vendorNames.get(key.replace(/^vendor:/, "")) ?? "Vendor";
     const providerCost = new Map<string, number>();
     const providersByWork = new Map<string, Set<string>>();
     if (basis === "recorded") for (const line of sourceLines) {
@@ -3389,9 +3394,17 @@ export function buildProgramModel(
       const keys = [...(providersByWork.get(workId) ?? [])];
       return keys.length === 1 ? providerLabel(keys[0]) : keys.length ? "Several" : basis === "recorded" ? "—" : "See invoice";
     };
-    const vendorTotal = [...providerCost].filter(([key]) => key.startsWith("vendor:")).reduce((sum, [, value]) => sum + value, 0);
-    const inHouseTotal = providerCost.get("in_house") ?? 0;
     const unmarkedTotal = providerCost.get("unmarked") ?? 0;
+    const inHouseJobCost = providerCost.get("in_house") ?? 0;
+    // In-house: accounting's entered totals that fall wholly inside the period, the same split as Spend totals.
+    const asOfDay = fixture.asOf.slice(0, 10);
+    const accounting = activeTotals((fixture.spendTotals ?? []).filter((entry) => entry.organizationId === scoped.organizationId && entry.currency === "USD"))
+      .filter((entry) => entry.periodStart >= periodStart.slice(0, 10) && entry.periodEnd <= asOfDay);
+    const companyVendorCost = (from: string, to: string) => fixture.costLines.reduce((sum, line) => line.organizationId === scoped.organizationId && line.amount.currency === "USD"
+      && line.serviceDate.slice(0, 10) >= from && line.serviceDate.slice(0, 10) <= to && providerOf(line) !== "in_house" ? sum + line.amount.amountMinor : sum, 0);
+    const inHouseAccounting = accounting.reduce((sum, entry) => sum + (entry.kind === "in_house" ? entry.amountMinor : Math.max(0, entry.amountMinor - companyVendorCost(entry.periodStart, entry.periodEnd))), 0);
+    const narrowed = Boolean(selectedStoreId || selectedRegionId || selectedCategory || selectedAssetId || selectedComponentId || selectedPath.length || who);
+    const dayLabel = (day: string) => date(`${day}T12:00:00Z`);
     const share = (value: number) => total ? `${Math.round(value / total * 100)}%` : "—";
     const shareRows = (values: Map<string, number>, label: (key: string) => string, href: (key: string) => string, secondary?: (key: string) => string | undefined): SpendShareRowViewModel[] =>
       [...values].filter(([, value]) => value !== 0).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
@@ -3409,7 +3422,7 @@ export function buildProgramModel(
         ? { value: "equipment", label: "By machine", rows: equipmentRows.slice(0, 15), moreHref: equipmentRows.length > 15 ? workLink({ hasCost: "true" }) : undefined, moreLabel: `See all ${equipmentRows.length}` }
         : { value: "store", label: "By store", rows: storeRows },
       { value: "area", label: "By service area", rows: areaRows, note: selectedCategory ? hierarchyBreakdown.title : undefined },
-      ...(basis === "recorded" ? [{ value: "vendor", label: "By who was paid", rows: vendorRows, note: unmarkedTotal ? `"Not marked" is cost on jobs with no clear single vendor or in-house team. Open it to fix the records.` : undefined }] : []),
+      ...(basis === "recorded" ? [{ value: "vendor", label: "By vendor", rows: vendorRows, note: `In-house team cost is entered by accounting on Spend totals, not per job.${inHouseJobCost ? ` "Recorded on in-house jobs" is cost someone entered on an in-house job anyway.` : ""}${unmarkedTotal ? ` "Not marked" is vendor cost on jobs with more than one vendor.` : ""}` }] : []),
     ];
     const chosenGroup = groupings.some((group) => group.value === requestedGroup) ? requestedGroup : groupings[0].value;
     const spendBoard: SpendBoardViewModel = {
@@ -3422,11 +3435,11 @@ export function buildProgramModel(
       areas: [{ value: "all", label: "All service areas", href: spendHref({ category: undefined, path: undefined, asset: undefined, component: undefined, page: undefined }), selected: !selectedCategory }, ...categoryOptions],
       chips: [
         ...(hierarchyParts.length ? [{ label: hierarchyLabel, removeHref: spendHref({ category: undefined, path: undefined, asset: undefined, component: undefined, page: undefined }) }] : []),
-        ...(who ? [{ label: `Paid to ${providerLabel(who)}`, removeHref: spendHref({ who: undefined, page: undefined }) }] : []),
+        ...(who ? [{ label: providerLabel(who), removeHref: spendHref({ who: undefined, page: undefined }) }] : []),
       ],
       groupings: groupings.map((group) => ({ ...group, href: spendHref({ by: group.value, page: undefined }), selected: group.value === chosenGroup, totalLabel: money(total) })),
       trendsHref: hrefWithQuery("/app/trends", { store: selectedStoreId, region: selectedRegionId }),
-      costsTitle: who ? `Costs paid to ${providerLabel(who)}` : basis === "recorded" ? "Every job with cost" : "Every job with a linked invoice",
+      costsTitle: who ? `Costs: ${providerLabel(who)}` : basis === "recorded" ? "Every job with cost" : "Every job with a linked invoice",
     };
     const sourceWork = spendWork.filter((work) => (basisAmountByWork.get(work.id) ?? 0) > 0).sort((a, b) => (basisAmountByWork.get(b.id) ?? 0) - (basisAmountByWork.get(a.id) ?? 0) || a.number.localeCompare(b.number));
     // Reports (CSV and print) ask for every record; the screen shows 25 at a time.
@@ -3475,11 +3488,12 @@ export function buildProgramModel(
       page: { title: selectedComponent?.name ?? selectedAsset?.name ?? selectedPath.at(-1) ?? (selectedCategory ? sentence(selectedCategory) : "Spending"), eyebrow: "Actual spend visibility", description: "See where maintenance money goes. Open any total to see the work behind it.", scopeLabel: `${activeScopeLabel} · ${hierarchyLabel} · ${basis === "recorded" ? "Recorded work cost" : "Linked invoice amount"}`, periodLabel: period.label, updatedLabel: `Through ${date(fixture.asOf)}`, secondaryAction: upHref ? { label: "Up one level", href: upHref } : undefined },
       filters,
       metrics: [
-        { id: "total", label: basis === "recorded" ? "Spent" : "Invoiced", value: money(total), supportingText: basis === "recorded" ? `${sourceLines.length} costs entered · recorded work cost` : `Invoices linked to ${invoiceAmountByWork.size} jobs`, link: { href: workspaceStartHref(basis === "recorded" ? workLink({ hasCost: "true" }) : invoiceSourceHref(periodStart, fixture.asOf.slice(0, 10))), label: "Open exact source records" } },
+        { id: "total", label: basis === "recorded" ? who ? providerLabel(who) : "Recorded job cost" : "Invoiced", value: money(total), supportingText: basis === "recorded" ? `${sourceLines.length} costs entered${!who && total ? ` · ${share(total - inHouseJobCost)} vendors` : ""}` : `Invoices linked to ${invoiceAmountByWork.size} jobs`, link: { href: workspaceStartHref(basis === "recorded" ? workLink({ hasCost: "true" }) : invoiceSourceHref(periodStart, fixture.asOf.slice(0, 10))), label: "Open exact source records" } },
         ...(basis === "recorded" && !who ? [
-          { id: "vendors", label: "Outside vendors", value: money(vendorTotal), supportingText: `${share(vendorTotal)} of spending`, link: { href: spendHref({ by: "vendor", page: undefined }), label: "See each vendor" } },
-          { id: "in-house", label: "In-house team", value: money(inHouseTotal), supportingText: `${share(inHouseTotal)} of spending${unmarkedTotal ? ` · ${money(unmarkedTotal)} not marked` : ""}`, link: { href: spendHref({ who: "in_house", by: "vendor", page: undefined }), label: "See in-house costs" } },
-          { id: "cost-coverage", label: "Jobs with no cost yet", value: String(openedInPeriod.length - workWithCost), supportingText: `of ${openedInPeriod.length} jobs opened in this period`, tone: "neutral" as const, link: { href: workLink({ hasCost: "false", createdFrom: periodStart.slice(0, 10), createdThrough: fixture.asOf.slice(0, 10), currency: "USD" }), label: "Review work without recorded cost" } },
+          { id: "in-house", label: "In-house team", value: narrowed || !accounting.length ? "—" : money(inHouseAccounting),
+            supportingText: narrowed ? "Entered by accounting for the whole company" : accounting.length ? `From accounting · ${dayLabel(accounting[0].periodStart)} – ${dayLabel(accounting.at(-1)!.periodEnd)}` : "Not entered by accounting for these dates",
+            link: { href: "/app/spend/totals", label: "Open spend totals" } },
+          { id: "cost-coverage", label: "Vendor jobs with no cost yet", value: String(openedInPeriod.length - workWithCost), supportingText: `of ${openedInPeriod.length} vendor jobs opened in this period`, tone: "neutral" as const, link: { href: workLink({ hasCost: "false", provider: "vendor", createdFrom: periodStart.slice(0, 10), createdThrough: fixture.asOf.slice(0, 10), currency: "USD" }), label: "Review work without recorded cost" } },
         ] : []),
         ...(basis === "invoiced" ? [{ id: "invoices", label: "Linked invoice references", value: String(invoiceCount), supportingText: "Optional billing safeguard; not required for cost visibility", link: { href: invoiceSourceHref(periodStart, fixture.asOf.slice(0, 10)), label: "Review invoices" } },] : []),
       ],

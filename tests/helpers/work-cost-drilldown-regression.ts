@@ -30,6 +30,13 @@ export async function workCostDrilldownRegression(repository: OpsRepository) {
   expect(grouped.items.every((row) => row.storeId === storeId && fixture.workOrders.find((work) => work.id === row.id)?.assetId === asset.id)).toBe(true);
   expect((await repository.listWorkOrders(scope, { hasCost: true, categoryPath: [...categoryPath, "Nonexistent subgroup"] })).items).toEqual([]);
 
+  // Vendor-only: the job's current assignment is an outside vendor (same pick as the work list's Assigned column).
+  const vendorOnly = await repository.listWorkOrders(scope, { hasCost: false, createdFrom: "2025-11-01T00:00:00.000Z", vendorOnly: true, limit: 500 });
+  expect(vendorOnly.items.length).toBeGreaterThan(0);
+  expect(vendorOnly.items.every((row) => row.assignmentKind === "outside_vendor")).toBe(true);
+  const everyJob = await repository.listWorkOrders(scope, { hasCost: false, createdFrom: "2025-11-01T00:00:00.000Z", limit: 500 });
+  expect(vendorOnly.items.map((row) => row.id)).toEqual(everyJob.items.filter((row) => row.assignmentKind === "outside_vendor").map((row) => row.id));
+
   const first = await repository.listWorkOrders(scope, { ...query, limit: 2 });
   const next = await repository.listWorkOrders(scope, { ...query, limit: 2, offset: 2 });
   expect(new Set([...first.items, ...next.items].map((row) => row.id)).size).toBe(4);

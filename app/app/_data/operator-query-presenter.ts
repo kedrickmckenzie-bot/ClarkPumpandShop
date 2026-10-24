@@ -389,6 +389,7 @@ export async function buildQueryListModel(repository: OpsRepository, session: Op
       stage: first(query.stage),
       storeId: first(query.store),
       vendorId: first(query.vendor),
+      vendorOnly: first(query.provider) === "vendor" || undefined,
       // "My work": the signed-in team member's current internal assignments.
       internalMembershipId: first(query.assignee) === "me" ? session.membershipId ?? "__none__" : undefined,
       regionId: first(query.region),

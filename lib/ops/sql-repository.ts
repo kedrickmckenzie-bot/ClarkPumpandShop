@@ -950,6 +950,7 @@ class SqlOpsRepository implements OpsRepository {
       }
     }
     if (query.internalOnly) clauses.push("a.kind = 'internal' AND a.status IN ('pending','issued','opened','accepted')");
+    if (query.vendorOnly) clauses.push("a.kind = 'outside_vendor'");
     if (query.internalTarget) { clauses.push("a.kind = 'internal' AND COALESCE(a.internal_target, 'person') = ? AND a.status IN ('pending','issued','opened','accepted')"); params.push(query.internalTarget); }
     if (query.internalMembershipId) { clauses.push("a.kind = 'internal' AND a.internal_membership_id = ?"); params.push(query.internalMembershipId); }
     if (query.foundByMembershipId) { clauses.push("w.found_by_membership_id = ?"); params.push(query.foundByMembershipId); }
