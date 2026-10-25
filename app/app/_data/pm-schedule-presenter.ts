@@ -107,7 +107,7 @@ export async function buildPmScheduleModel(repository: OpsRepository, session: O
       : { label: "Open", href: workHref ?? href, primary: false };
     return { id: row.id, title: row.planName, equipment: row.assetName, storeLabel: storeLabel(row.storeNumber, row.storeName), storeHref: `/app/stores/${encodeURIComponent(row.storeId)}`,
       dueLabel: date(row.dueAt, row.timeZone), timingLabel: timing(row.status, row.dueAt), late: row.status === "overdue" || row.status === "missed",
-      whoNote: row.assigneePlanned ? "Plan's vendor · no job yet" : undefined,
+      whoNote: row.assigneePlanned ? "Planned vendor · no job yet" : undefined,
       who: row.assigneeName ?? (row.importedHistory ? "Imported history" : open(row.status) ? undefined : row.workNumber ? undefined : "—"),
       statusLabel: labels[row.status], tone: tone(row.status), href, action };
   });
@@ -124,7 +124,7 @@ export async function buildPmScheduleModel(repository: OpsRepository, session: O
     { id: "overdue", label: "Overdue", value: String(summary.states.overdue), supportingText: "Past the due date, still not done", tone: summary.states.overdue ? "critical" as const : "neutral" as const, selected: query.status === "overdue", link: { href: listHref({ status: "overdue", view: "all" }), label: "See overdue" } },
     { id: "week", label: "Due this week", value: String(summary.dueThisWeek), supportingText: "Due in the next 7 days", tone: "neutral" as const, selected: query.view === "week", link: { href: listHref({ view: "week" }), label: "See this week" } },
     { id: "unscheduled", label: "Needs a date", value: String(summary.states.unscheduled), supportingText: "Nobody has set a date yet", tone: summary.states.unscheduled ? "warning" as const : "neutral" as const, selected: query.status === "unscheduled", link: { href: listHref({ status: "unscheduled", view: "all" }), label: "See what needs a date" } },
-    { id: "completed", label: `Done · last ${PM_RECENT_DAYS} days`, value: pct(summary.recentCompleted, summary.recentEligible), supportingText: summary.recentEligible ? `${summary.recentCompleted} of ${summary.recentEligible} that came due` : "Nothing came due", tone: "neutral" as const, selected: recentView || query.status === "completed", link: { href: listHref({ view: "recent" }), label: "See what was counted" } },
+    { id: "completed", label: `Done in the last ${PM_RECENT_DAYS} days`, value: pct(summary.recentCompleted, summary.recentEligible), supportingText: summary.recentEligible ? `${summary.recentCompleted} of the ${summary.recentEligible} that came due` : "Nothing came due", tone: "neutral" as const, selected: recentView || query.status === "completed", link: { href: listHref({ view: "recent" }), label: "See what was counted" } },
   ];
   const nowCount = summary.states.due + summary.states.overdue + summary.states.unscheduled;
   const tabs = [

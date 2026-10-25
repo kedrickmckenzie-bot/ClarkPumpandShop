@@ -18,7 +18,7 @@ describe("server-rendered analytical source tables", () => {
     const model = buildProgramModel(buildNorthlinePresentationFixture(), session, kind, { store: "store-northline-104", view: "all" });
     expect(model.table?.rows.length).toBeGreaterThan(0);
     const html = renderToStaticMarkup(createElement(PlanningWorkspace, { model, kind }));
-    expect(html).toContain(kind === "spend" ? "Every job with cost" : "Supporting records");
+    expect(html).toContain(kind === "spend" ? "Every job with a cost" : "Supporting records");
     expect(html).toContain(model.table!.rows[0].href.replaceAll("&", "&amp;"));
   });
 });

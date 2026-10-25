@@ -7,12 +7,12 @@ import { pmClosedEligible, pmScheduleRowsFromFixture, type PmScheduleRow } from 
 export const TREND_MEASURES = ["spend", "jobs", "cost_per_job", "days_to_fix", "came_back", "pm_done"] as const;
 export type TrendMeasure = typeof TREND_MEASURES[number];
 export const MEASURE_INFO: Record<TrendMeasure, { label: string; unit: "money" | "count" | "days" | "percent"; lowerIsBetter: boolean; definition: string }> = {
-  spend: { label: "Spend", unit: "money", lowerIsBetter: true, definition: "Recorded job cost, by the date of each cost." },
-  jobs: { label: "Repair jobs", unit: "count", lowerIsBetter: true, definition: "Repair jobs opened. Planned maintenance is left out." },
-  cost_per_job: { label: "Cost per repair", unit: "money", lowerIsBetter: true, definition: "Repair cost divided by the repair jobs that had a cost in the month." },
-  days_to_fix: { label: "Days to fix", unit: "days", lowerIsBetter: true, definition: "Typical (median) days from opening a repair to finishing it, by finish date." },
-  came_back: { label: "Came back", unit: "percent", lowerIsBetter: true, definition: "Finished repairs on a machine that needed another repair within 30 days. Repairs finished in the last 30 days aren't counted yet." },
-  pm_done: { label: "Maintenance done", unit: "percent", lowerIsBetter: false, definition: "Planned maintenance due in the month that got done. Skipped or canceled maintenance is left out." },
+  spend: { label: "Spending", unit: "money", lowerIsBetter: true, definition: "All repair and maintenance costs, by the date of each cost." },
+  jobs: { label: "Repairs", unit: "count", lowerIsBetter: true, definition: "Repairs started each month. Scheduled maintenance isn't counted." },
+  cost_per_job: { label: "Average repair cost", unit: "money", lowerIsBetter: true, definition: "Repair costs divided by the number of repairs that had a cost." },
+  days_to_fix: { label: "Days to fix", unit: "days", lowerIsBetter: true, definition: "How long a repair usually takes, from reported to fixed." },
+  came_back: { label: "Broke again", unit: "percent", lowerIsBetter: true, definition: "Repairs where the same machine needed another repair within 30 days. Repairs from the last 30 days aren't counted yet." },
+  pm_done: { label: "Scheduled maintenance completed", unit: "percent", lowerIsBetter: false, definition: "Of the scheduled maintenance that came due, how much got done. Late still counts as done; skipped or canceled maintenance isn't counted." },
 };
 
 const DAY = 86_400_000;

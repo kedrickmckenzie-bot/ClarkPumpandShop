@@ -67,7 +67,7 @@ export function spendScope(fixture: OpsFixture, session: OperatorSession, query:
   const scopeLabel = store && storeById.get(store) ? compactStoreLabel(`Store ${storeById.get(store)!.storeNumber} · ${storeById.get(store)!.name}`, session.organizationName)
     : selectedRegion ? `${selectedRegion.name} · ${scoped.stores.length} stores` : compactStoreLabel(session.scopeLabel, session.organizationName);
   const areaName = (key: string) => key === "unclassified" ? "Not classified" : categoryNames.get(key) ?? sentence(key);
-  const providerName = (key: string) => key === "in_house" ? "Recorded on in-house jobs" : key === "unmarked" ? "Not marked" : vendors.get(key.replace(/^vendor:/, "")) ?? "Vendor";
+  const providerName = (key: string) => key === "in_house" ? "Costs on in-house jobs" : key === "unmarked" ? "Vendor not recorded" : vendors.get(key.replace(/^vendor:/, "")) ?? "Vendor";
   const regions = fixture.regions.filter(row => row.organizationId === org && scopeFixture(fixture, session).stores.some(storeRow => storeRow.regionId === row.id));
   const areas = [...new Set(scoped.workOrders.map(row => row.categoryKey).filter((value): value is string => Boolean(value)))].sort();
   return {
@@ -138,7 +138,7 @@ export function spendGrid(scope: SpendScope, options: { by: "area" | "vendor"; r
     columns, rows, rowCount: allRows.length,
     max: Math.max(1, ...rows.flatMap(row => row.cells.map(cell => cell.amount))),
     totals: columnTotals.map(spendMoney), grandTotal: spendMoney(scope.total),
-    average: storeCount > 1 ? { label: `Typical store (average of ${storeCount})`, cells: columnTotals.map(value => spendMoney(Math.round(value / storeCount))), total: spendMoney(Math.round(scope.total / storeCount)) } : undefined,
+    average: storeCount > 1 ? { label: `Average store`, cells: columnTotals.map(value => spendMoney(Math.round(value / storeCount))), total: spendMoney(Math.round(scope.total / storeCount)) } : undefined,
   };
 }
 
@@ -163,12 +163,12 @@ export function buildSpendDashboard(fixture: OpsFixture, session: OperatorSessio
   const inHouse = accounting.reduce((sum, row) => sum + (row.kind === "in_house" ? row.amountMinor : Math.max(0, row.amountMinor - vendorCost(row.periodStart, row.periodEnd))), 0);
   const vendorTotal = scope.facts.filter(row => row.provider !== "in_house").reduce((sum, row) => sum + row.amount, 0);
   const metrics: SpendMetric[] = [
-    { id: "recorded", label: "Recorded job cost", value: spendMoney(scope.total), detail: `${scope.facts.length} costs · ${pct(vendorTotal, scope.total)} paid to vendors`, href: scope.href("/app/spend/costs") },
+    { id: "recorded", label: "Spent on repairs and maintenance", value: spendMoney(scope.total), detail: `${pct(vendorTotal, scope.total)} paid to outside vendors · ${scope.facts.length} costs`, href: scope.href("/app/spend/costs") },
     { id: "in-house", label: "In-house team", value: scope.companyWide && accounting.length ? spendMoney(inHouse) : "—",
       detail: !scope.companyWide ? "Entered by accounting for the whole company" : accounting.length ? `From accounting · ${day(accounting[0].periodStart)} – ${day(accounting.at(-1)!.periodEnd)}` : "Not entered for these dates", href: "/app/spend/totals" },
     ...(scope.singleStoreId ? [] : [
-      { id: "typical", label: "Typical store", value: spendMoney(typical), detail: `Middle of ${storeTotals.length} stores`, href: scope.href("/app/spend/stores") },
-      { id: "top-store", label: "Highest store", value: topStoreId ? scope.storeName(topStoreId).number : "—", detail: topStoreId ? `${spendMoney(topStoreAmount)}${typical ? ` · ${(topStoreAmount / typical).toFixed(1)}× typical` : ""}` : "No costs", href: topStoreId ? scope.href("/app/spend", { store: topStoreId, region: undefined }) : scope.href("/app/spend/stores") },
+      { id: "typical", label: "Typical store", value: spendMoney(typical), detail: `Half of your ${storeTotals.length} stores spent more, half less`, href: scope.href("/app/spend/stores") },
+      { id: "top-store", label: "Highest store", value: topStoreId ? scope.storeName(topStoreId).number : "—", detail: topStoreId ? `${spendMoney(topStoreAmount)}${typical ? ` · ${(topStoreAmount / typical).toFixed(1)} times a typical store` : ""}` : "No costs", href: topStoreId ? scope.href("/app/spend", { store: topStoreId, region: undefined }) : scope.href("/app/spend/stores") },
     ]),
   ];
   const areas = sumBy(scope.facts, row => row.area);

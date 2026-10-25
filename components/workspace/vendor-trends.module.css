@@ -70,3 +70,7 @@
   .cell{justify-items:end}
   .drillHead{flex-direction:column}
 }
+.bridge{fill:none;stroke:#93b4ef;stroke-width:1.6;stroke-dasharray:4 4}
+.noData{fill:#fff;stroke:#94a3b8;stroke-width:1.5}
+.noDataKey{width:8px!important;height:8px;border:1.5px solid #94a3b8;border-radius:50%;background:#fff}
+.spark path.sparkBridge{stroke:#93b4ef;stroke-width:1.4;stroke-dasharray:3 3}

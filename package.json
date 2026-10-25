@@ -13,7 +13,7 @@
     "dev:render": "cross-env OPS_RUNTIME=render next dev --hostname 0.0.0.0 --port 3000",
     "build:render": "cross-env OPS_RUNTIME=render next build",
     "start:render": "cross-env OPS_RUNTIME=render next start --hostname 0.0.0.0",
-    "start:render:free": "npm run render:predeploy && npm run start:render",
+    "start:render:free": "npm run render:predeploy && cross-env NODE_OPTIONS=--max-old-space-size=360 npm run start:render",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

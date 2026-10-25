@@ -3380,7 +3380,7 @@ export function buildProgramModel(
     });
     // Spending board: who was paid, where the money went, and the chips that say what is narrowed.
     const vendorNames = new Map(fixture.vendors.filter((vendor) => vendor.organizationId === scoped.organizationId).map((vendor) => [vendor.id, vendor.name]));
-    const providerLabel = (key: string) => key === "in_house" ? "Recorded on in-house jobs" : key === "unmarked" ? "Not marked" : vendorNames.get(key.replace(/^vendor:/, "")) ?? "Vendor";
+    const providerLabel = (key: string) => key === "in_house" ? "Costs on in-house jobs" : key === "unmarked" ? "Vendor not recorded" : vendorNames.get(key.replace(/^vendor:/, "")) ?? "Vendor";
     const providerCost = new Map<string, number>();
     const providersByWork = new Map<string, Set<string>>();
     if (basis === "recorded") for (const line of sourceLines) {
@@ -3425,7 +3425,7 @@ export function buildProgramModel(
         ? { value: "equipment", label: "By machine", rows: equipmentRows.slice(0, 15), moreHref: equipmentRows.length > 15 ? workLink({ hasCost: "true" }) : undefined, moreLabel: `See all ${equipmentRows.length}` }
         : { value: "store", label: "By store", rows: storeRows },
       { value: "area", label: "By service area", rows: areaRows, note: selectedCategory ? hierarchyBreakdown.title : undefined },
-      ...(basis === "recorded" ? [{ value: "vendor", label: "By vendor", rows: vendorRows, note: `In-house team cost is entered by accounting on Spend totals, not per job.${inHouseJobCost ? ` "Recorded on in-house jobs" is cost someone entered on an in-house job anyway.` : ""}${unmarkedTotal ? ` "Not marked" is vendor cost on jobs with more than one vendor.` : ""}` }] : []),
+      ...(basis === "recorded" ? [{ value: "vendor", label: "By vendor", rows: vendorRows, note: `In-house team cost is entered by accounting on Spend totals, not per job.${inHouseJobCost ? ` "Costs on in-house jobs" are costs someone entered on an in-house job anyway.` : ""}${unmarkedTotal ? ` "Vendor not recorded" is vendor cost on jobs that had more than one vendor.` : ""}` }] : []),
     ];
     const chosenGroup = groupings.some((group) => group.value === requestedGroup) ? requestedGroup : groupings[0].value;
     const spendBoard: SpendBoardViewModel = {
@@ -3445,7 +3445,7 @@ export function buildProgramModel(
       ],
       groupings: groupings.map((group) => ({ ...group, href: spendHref({ by: group.value, page: undefined }), selected: group.value === chosenGroup, totalLabel: money(total) })),
       trendsHref: hrefWithQuery("/app/trends", { store: selectedStoreId, region: selectedRegionId }),
-      costsTitle: who ? `Costs: ${providerLabel(who)}` : basis === "recorded" ? "Every job with cost" : "Every job with a linked invoice",
+      costsTitle: who ? `Costs: ${providerLabel(who)}` : basis === "recorded" ? "Every job with a cost" : "Every job with a linked invoice",
     };
     const sourceWork = spendWork.filter((work) => (basisAmountByWork.get(work.id) ?? 0) > 0).sort((a, b) => (basisAmountByWork.get(b.id) ?? 0) - (basisAmountByWork.get(a.id) ?? 0) || a.number.localeCompare(b.number));
     // Reports (CSV and print) ask for every record; the screen shows 25 at a time.

@@ -4,6 +4,13 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+### Plain words, vendor chart gaps, free-plan memory — October 25, 2026
+
+- **Trends wording** (owner-approved): Spending, Repairs, Average repair cost, Days to fix, Broke again, Scheduled maintenance completed (late still counts; definition says so). Change lines read "Up 50% from last year (was $255k)" / "About the same as last year". "Why spending went up/down" with parts "A few very expensive repairs", "More repairs", "More of the low-cost / costly kinds of repairs" (names the service area whose share moved most), "The same repairs cost less / more"; "Biggest changes"; "Expensive months … times a normal month".
+- **Spending and PM wording**: "Spent on repairs and maintenance", "Half of your stores spent more, half less", "Average store" row (it is an average), "Costs on in-house jobs", "Vendor not recorded", "Planned vendor · no job yet", "Done in the last 90 days".
+- **Vendor trend charts**: months with no jobs no longer break the line. Spend and job counts show a true zero; rates and averages bridge the gap with a light dashed line and mark the month "No jobs that month" (charts and sparklines).
+- **Render free-plan crash (heap out of memory)**: measured locally with a 250 MB heap: ~135 MB at start, ~200 MB under use, so a second tenant snapshot during a reload can exceed the limit. `start:render:free` now sets `--max-old-space-size=360` (512 MB instance, ~130 MB outside the heap), and the snapshot cache drops every outdated copy for the tenant as soon as the database changes, so only one generation stays in memory.
+
 ### Trends becomes a real trends dashboard; Spending charts — October 24, 2026
 
 **Owner direction:** Trends should cover actual trends: historical comparisons and what caused the change.

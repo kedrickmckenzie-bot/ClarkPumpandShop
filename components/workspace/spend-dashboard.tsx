@@ -73,7 +73,7 @@ export function SpendGrid({ grid, firstColumn }: { grid: SpendGridModel; firstCo
         </tbody>
         <tfoot>
           {grid.average ? <tr className={styles.average}><th scope="row">{grid.average.label}</th>{grid.average.cells.map((value, index) => <td key={index}>{value}</td>)}<td className={styles.total}>{grid.average.total}</td></tr> : null}
-          <tr><th scope="row">All in view</th>{grid.totals.map((value, index) => <td key={index}>{value}</td>)}<td className={styles.total}>{grid.grandTotal}</td></tr>
+          <tr><th scope="row">All stores shown</th>{grid.totals.map((value, index) => <td key={index}>{value}</td>)}<td className={styles.total}>{grid.grandTotal}</td></tr>
         </tfoot>
       </table>
     </div>

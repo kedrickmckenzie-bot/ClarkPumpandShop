@@ -24,14 +24,14 @@ export function formatMeasure(which: TrendMeasure, value: number | undefined) {
 }
 /** "+12% vs last year", "+3 pts", "+0.8 days"; and whether that is better, worse or about the same. */
 export function changeOf(which: TrendMeasure, before?: number, after?: number) {
-  if (before === undefined || after === undefined) return { label: "No earlier data to compare", tone: "neutral" as const };
+  if (before === undefined || after === undefined) return { label: "No data from last year to compare", tone: "neutral" as const };
   const unit = MEASURE_INFO[which].unit;
   const diff = after - before;
   const relative = before ? diff / Math.abs(before) : undefined;
-  const label = unit === "percent" ? `${diff >= 0 ? "+" : "−"}${Math.abs(Math.round(diff * 100))} pts` : unit === "days" ? `${diff >= 0 ? "+" : "−"}${Math.abs(diff).toFixed(1)} days`
-    : relative === undefined ? "New" : `${diff >= 0 ? "+" : "−"}${Math.abs(Math.round(relative * 100))}%`;
+  const amount = unit === "percent" ? `${Math.abs(Math.round(diff * 100))} points` : unit === "days" ? `${Math.abs(diff).toFixed(1)} days` : relative === undefined ? "" : `${Math.abs(Math.round(relative * 100))}%`;
   const small = unit === "percent" ? Math.abs(diff) < 0.02 : unit === "days" ? Math.abs(diff) < 0.3 : relative !== undefined && Math.abs(relative) < 0.03;
   const worse = MEASURE_INFO[which].lowerIsBetter ? diff > 0 : diff < 0;
+  const label = small ? "About the same as last year" : relative === undefined && unit !== "percent" && unit !== "days" ? "New since last year" : `${diff > 0 ? "Up" : "Down"} ${amount} from last year`;
   return { label, tone: small ? "neutral" as const : worse ? "worse" as const : "better" as const };
 }
 
@@ -80,13 +80,18 @@ export function buildTrendsDashboard(fixture: OpsFixture, session: OperatorSessi
   };
   const change = spendChange(c.data, c.today);
   const sign = (id: string) => change.parts.find(part => part.id === id)!.amount;
-  const partLabel = { big: "A few big one-off jobs", volume: change.regular.jobsAfter >= change.regular.jobsBefore ? "More jobs" : "Fewer jobs",
-    mix: sign("mix") >= 0 ? "Shift toward costlier work" : "Shift toward cheaper work", rate: sign("rate") >= 0 ? "Each job cost more" : "Each job cost less" } as const;
+  const totalJobsBefore = change.regular.jobsBefore, totalJobsAfter = change.regular.jobsAfter;
+  // The service area whose share of repairs moved most explains the "kind of repairs" part in plain words.
+  const shifted = [...change.areas].map(row => ({ ...row, p0: totalJobsBefore ? row.jobsBefore / totalJobsBefore : 0, p1: totalJobsAfter ? row.jobsAfter / totalJobsAfter : 0 }))
+    .sort((x, y) => Math.abs(y.p1 - y.p0) - Math.abs(x.p1 - x.p0))[0];
+  const partLabel = { big: "A few very expensive repairs", volume: totalJobsAfter >= totalJobsBefore ? "More repairs" : "Fewer repairs",
+    mix: sign("mix") >= 0 ? "More of the costly kinds of repairs" : "More of the low-cost kinds of repairs", rate: sign("rate") >= 0 ? "The same repairs cost more" : "The same repairs cost less" } as const;
+  const bigBefore = change.bigJobs.before.length, bigAfter = change.bigJobs.after.length;
   const partDetail = {
-    big: `${change.bigJobs.after.length} jobs of ${short(change.bigThreshold)} or more this year vs. ${change.bigJobs.before.length} the year before`,
-    volume: `${change.regular.jobsAfter} jobs with cost vs. ${change.regular.jobsBefore}, at the old typical cost`,
-    mix: "The mix of service areas changed, e.g. more or less refrigeration",
-    rate: `Same kind of job, different price: average ${short(change.regular.avgAfter)} vs. ${short(change.regular.avgBefore)}`,
+    big: `${bigAfter} ${bigAfter === 1 ? "repair" : "repairs"} over ${short(change.bigThreshold)} this year, ${bigBefore ? bigBefore : "none"} last year`,
+    volume: `${totalJobsAfter} repairs this year vs. ${totalJobsBefore} last year`,
+    mix: shifted ? `${areaName(shifted.key)} went from ${Math.round(shifted.p0 * 100)}% to ${Math.round(shifted.p1 * 100)}% of all repairs` : "The mix of repairs changed",
+    rate: `An average repair was ${short(change.regular.avgAfter)}, ${change.regular.avgAfter >= change.regular.avgBefore ? "up" : "down"} from ${short(change.regular.avgBefore)}`,
   };
   const why = { before: money(change.before), after: money(change.after), change: change.after - change.before, changeLabel: `${change.after >= change.before ? "+" : "−"}${money(Math.abs(change.after - change.before))}`,
     parts: change.parts.map(part => ({ ...part, label: partLabel[part.id], detail: partDetail[part.id], amountLabel: `${part.amount >= 0 ? "+" : "−"}${money(Math.abs(part.amount))}`, href: `${c.href("/app/trends/why")}#${part.id}` })),
@@ -97,10 +102,10 @@ export function buildTrendsDashboard(fixture: OpsFixture, session: OperatorSessi
   const moverHref = (key: string) => by === "store" ? c.href("/app/trends", { store: key, region: undefined }) : by === "area" ? c.href("/app/trends", { category: key }) : key.startsWith("in_house") || key === "unmarked" ? "/app/spend/vendors" : `/app/trends?view=vendors&vendor=${encodeURIComponent(key)}`;
   const moverRows = movers(c.data, c.today, by).slice(0, 6);
   const moverMax = Math.max(1, ...moverRows.map(row => Math.abs(row.change)));
-  const odd = unusualMonths(c.data, months).slice(0, 4).map(row => ({ key: row.month.key, label: monthName(row.month.key, true), value: money(row.value), times: `${(row.value / row.typical).toFixed(1)}× a typical month`,
-    cause: row.top && row.top.amount ? `Biggest job: ${row.top.job.number} · ${clip(row.top.job.problem, 70)} · ${money(row.top.amount)}` : undefined, causeHref: row.top ? `/app/work-orders/${encodeURIComponent(row.top.job.id)}` : undefined,
+  const odd = unusualMonths(c.data, months).slice(0, 4).map(row => ({ key: row.month.key, label: monthName(row.month.key, true), value: money(row.value), times: `${(row.value / row.typical).toFixed(1)} times a normal month`,
+    cause: row.top && row.top.amount ? `Biggest repair: ${row.top.job.number} · ${clip(row.top.job.problem, 70)} · ${money(row.top.amount)}` : undefined, causeHref: row.top ? `/app/work-orders/${encodeURIComponent(row.top.job.id)}` : undefined,
     href: c.href("/app/trends/month", { measure: "spend", month: row.month.key }) }));
-  return { scopeLabel: c.scopeLabel, periodLabel: `Last 12 months (${formatOperationsDate(`${current.from}T12:00:00Z`, "UTC")} – ${formatOperationsDate(`${current.to}T12:00:00Z`, "UTC")}) vs. the 12 before`,
+  return { whyTitle: change.after >= change.before ? "Why spending went up" : "Why spending went down", scopeLabel: c.scopeLabel, periodLabel: `Last 12 months (${formatOperationsDate(`${current.from}T12:00:00Z`, "UTC")} – ${formatOperationsDate(`${current.to}T12:00:00Z`, "UTC")}) vs. the 12 before`,
     tiles, chart, why, movers: { by, rows: moverRows.map(row => ({ key: row.key, label: moverLabel(row.key), before: short(row.before), after: short(row.after), change: row.change, changeLabel: `${row.change >= 0 ? "+" : "−"}${short(Math.abs(row.change))}`, href: moverHref(row.key) })), max: moverMax,
       options: (["store", "area", "vendor"] as const).map(key => ({ value: key, label: key === "store" ? "Stores" : key === "area" ? "Service areas" : "Vendors", selected: key === by, href: c.href("/app/trends", { by: key === "store" ? undefined : key, measure: selected === "spend" ? undefined : selected }) })) },
     odd, href: c.href,

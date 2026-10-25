@@ -120,7 +120,7 @@ export default async function VendorTrends({ session, query }: { session: Operat
                     {(["spend", "onTime", "callbacks", "costPerJob"] as const).map((key) => {
                       const s = rowSeries.find((item) => item.key === key)!;
                       return <td key={key} data-label={VENDOR_TREND_INFO[key].label}>
-                        <span className={styles.cell}><Spark points={s.points} /><b>{format(key, yearValue(s), false)}</b><small className={styles[s.verdict.tone]}>{s.verdict.short}</small></span>
+                        <span className={styles.cell}><Spark points={s.points} measure={key} /><b>{format(key, yearValue(s), false)}</b><small className={styles[s.verdict.tone]}>{s.verdict.short}</small></span>
                       </td>;
                     })}
                   </tr>
@@ -144,17 +144,27 @@ function yearValue(series: VendorTrendSeries) {
 
 const W = 560, H = 200, PAD = { l: 60, r: 14, t: 14, b: 30 };
 
+/** Spend and job counts are truly zero in a month with no jobs; rates and averages have no value, so the line bridges the gap. */
+const zeroWhenEmpty = (key: VendorTrendMeasure) => key === "spend" || key === "jobs";
+function linePaths(values: Array<number | undefined>, x: (i: number) => number, y: (v: number) => number) {
+  let solid = "", bridge = "", pen = false, last: number | undefined;
+  values.forEach((v, i) => {
+    if (v === undefined) { pen = false; return; }
+    if (!pen && last !== undefined) bridge += `M${x(last).toFixed(1)},${y(values[last]!).toFixed(1)}L${x(i).toFixed(1)},${y(v).toFixed(1)}`;
+    solid += `${pen ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`; pen = true; last = i;
+  });
+  return { solid, bridge };
+}
+
 function Chart({ series, href, selected }: { series: VendorTrendSeries; href: (month: string) => string; selected?: string }) {
-  const info = VENDOR_TREND_INFO[series.key], pts = series.points;
+  const info = VENDOR_TREND_INFO[series.key];
+  const pts = zeroWhenEmpty(series.key) ? series.points.map((p) => ({ ...p, value: p.value ?? (p.partial ? undefined : 0), lastYear: p.lastYear ?? 0 })) : series.points;
   const values = pts.flatMap((p) => [p.value, p.lastYear]).filter((v): v is number => v !== undefined);
   const max = info.unit === "percent" ? 1 : Math.max(1, ...values) * 1.1;
   const x = (i: number) => PAD.l + (i * (W - PAD.l - PAD.r)) / (pts.length - 1);
   const y = (v: number) => H - PAD.b - (v / max) * (H - PAD.t - PAD.b);
-  const path = (get: (p: VendorTrendPoint) => number | undefined) => {
-    let d = "", pen = false;
-    pts.forEach((p, i) => { const v = get(p); if (v === undefined) { pen = false; return; } d += `${pen ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`; pen = true; });
-    return d;
-  };
+  const path = (get: (p: VendorTrendPoint) => number | undefined) => linePaths(pts.map(get), x, y);
+  const now = path((p) => p.value);
   const ticks = [0, 0.5, 1].map((f) => f * max);
   const latest = [...pts].reverse().find((p) => p.value !== undefined && !p.partial);
   const showLastYear = series.key === "spend" || series.key === "jobs";
@@ -167,29 +177,31 @@ function Chart({ series, href, selected }: { series: VendorTrendSeries; href: (m
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${info.label} by month: ${pts.map((p) => `${monthShort(p.month)} ${format(series.key, p.value)}`).join(", ")}`}>
         {ticks.map((t) => <g key={t}><line x1={PAD.l} x2={W - PAD.r} y1={y(t)} y2={y(t)} className={styles.grid} /><text x={PAD.l - 8} y={y(t) + 4} textAnchor="end" className={styles.axis}>{format(series.key, t, true)}</text></g>)}
         {series.normal !== undefined ? <line x1={PAD.l} x2={W - PAD.r} y1={y(series.normal)} y2={y(series.normal)} className={styles.normal} /> : null}
-        {showLastYear ? <path d={path((p) => p.lastYear)} className={styles.lastYear} /> : null}
-        <path d={path((p) => p.value)} className={styles.line} />
+        {showLastYear ? <path d={path((p) => p.lastYear).solid} className={styles.lastYear} /> : null}
+        <path d={now.bridge} className={styles.bridge} />
+        <path d={now.solid} className={styles.line} />
         {pts.map((p, i) => (
           <a key={p.month} href={href(p.month)} aria-label={`${monthLong(p.month)}: ${format(series.key, p.value)}${p.partial ? " so far" : ""}${p.tooFew ? `, only ${p.counted} job${p.counted === 1 ? "" : "s"}` : ""}. Show jobs`}>
-            <title>{`${monthLong(p.month)}: ${format(series.key, p.value)}${p.partial ? " so far" : ""} · ${p.counted} job${p.counted === 1 ? "" : "s"}${p.tooFew ? " (too few to judge)" : ""}${showLastYear && p.lastYear !== undefined ? ` · last year ${format(series.key, p.lastYear)}` : ""}`}</title>
+            <title>{`${monthLong(p.month)}: ${p.value === undefined ? "no jobs this month" : format(series.key, p.value)}${p.partial ? " so far" : ""} · ${p.counted} job${p.counted === 1 ? "" : "s"}${p.tooFew ? " (too few to judge)" : ""}${showLastYear && p.lastYear !== undefined ? ` · last year ${format(series.key, p.lastYear)}` : ""}`}</title>
             <rect x={x(i) - 18} y={PAD.t} width={36} height={H - PAD.t - PAD.b} className={styles.hit} />
-            {p.value !== undefined ? <circle cx={x(i)} cy={y(p.value)} r={selected === p.month ? 7 : 5} className={p.partial || p.tooFew ? styles.hollow : selected === p.month ? styles.selectedDot : styles.dot} /> : null}
+            {p.value !== undefined ? <circle cx={x(i)} cy={y(p.value)} r={selected === p.month ? 7 : 5} className={p.partial || p.tooFew ? styles.hollow : selected === p.month ? styles.selectedDot : styles.dot} />
+              : <circle cx={x(i)} cy={y(0)} r={3.5} className={styles.noData} />}
             <text x={x(i)} y={H - 8} textAnchor="middle" className={styles.axis}>{monthShort(p.month)}</text>
           </a>
         ))}
       </svg>
       <p className={`${styles.verdict} ${styles[series.verdict.tone]}`}>{series.verdict.text}</p>
-      <p className={styles.key}>{series.normal !== undefined ? <><i className={styles.normalKey} />Normal month</> : null}{showLastYear ? <><i className={styles.lastYearKey} />Same month last year</> : null}<><i className={styles.hollowKey} />So far, or too few jobs</></p>
+      <p className={styles.key}>{series.normal !== undefined ? <><i className={styles.normalKey} />Normal month</> : null}{showLastYear ? <><i className={styles.lastYearKey} />Same month last year</> : null}<><i className={styles.hollowKey} />So far, or too few jobs</>{!zeroWhenEmpty(series.key) && pts.some((p) => p.value === undefined) ? <><i className={styles.noDataKey} />No jobs that month</> : null}</p>
     </figure>
   );
 }
 
-function Spark({ points }: { points: VendorTrendPoint[] }) {
-  const values = points.map((p) => p.value).filter((v): v is number => v !== undefined);
+function Spark({ points, measure }: { points: VendorTrendPoint[]; measure: VendorTrendMeasure }) {
+  const filled = points.map((p) => p.value ?? (zeroWhenEmpty(measure) && !p.partial ? 0 : undefined));
+  const values = filled.filter((v): v is number => v !== undefined);
   if (values.length < 2) return <span className={styles.sparkEmpty}>—</span>;
   const max = Math.max(...values) || 1, min = Math.min(0, ...values);
   const x = (i: number) => (i * 96) / (points.length - 1) + 2, y = (v: number) => 26 - ((v - min) / (max - min || 1)) * 22;
-  let d = "", pen = false;
-  points.forEach((p, i) => { if (p.value === undefined) { pen = false; return; } d += `${pen ? "L" : "M"}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`; pen = true; });
-  return <svg className={styles.spark} viewBox="0 0 100 30" aria-hidden="true"><path d={d} /></svg>;
+  const { solid, bridge } = linePaths(filled, x, y);
+  return <svg className={styles.spark} viewBox="0 0 100 30" aria-hidden="true"><path d={bridge} className={styles.sparkBridge} /><path d={solid} /></svg>;
 }

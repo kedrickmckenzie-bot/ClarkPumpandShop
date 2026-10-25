@@ -48,6 +48,8 @@ export async function readCachedPostgresSnapshot(
   const key = `${organizationId}\u0000${variant}`;
   let entry = entries.get(key);
   if (!entry || entry.token !== token) {
+    // The database changed: drop every outdated copy for this tenant now, so at most one generation stays in memory.
+    for (const [other, value] of entries) if (other.startsWith(`${organizationId}\u0000`) && value.token !== token) entries.delete(other);
     const snapshot = load(asOf).then(deepFreeze);
     entry = { token, snapshot };
     entries.set(key, entry);
