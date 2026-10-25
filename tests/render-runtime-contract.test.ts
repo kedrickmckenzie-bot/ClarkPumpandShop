@@ -22,7 +22,7 @@ describe("Render runtime contract", () => {
       "cross-env OPS_RUNTIME=render next start --hostname 0.0.0.0",
     );
     expect(packageJson.scripts["start:render:free"]).toBe(
-      "npm run render:predeploy && npm run start:render",
+      "npm run render:predeploy && cross-env NODE_OPTIONS=--max-old-space-size=360 npm run start:render",
     );
     expect(packageJson.dependencies.next).toBeTruthy();
   });
