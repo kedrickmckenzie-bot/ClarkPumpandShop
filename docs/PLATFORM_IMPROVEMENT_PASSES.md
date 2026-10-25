@@ -4,6 +4,8 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+- 2026-10-25 — Trends overview follows the chosen tile. Picking a measure now changes the chart, "Why it changed" (repairs by service area; average cost, broke again and scheduled maintenance split into "mix of work" plus each service area, adding up exactly; days to fix by in-house vs. vendors and service area, side by side), "Biggest changes" (that measure by store, service area or vendor, increases and decreases, groups under 5 records skipped for rates) and "Months that stood out". Links keep the measure. Tests: parts add up for repairs and the mix/area split; movers keep the measure and show both directions. Browser-checked desktop and phone.
+
 ### Plain words, vendor chart gaps, free-plan memory — October 25, 2026
 
 - **Trends wording** (owner-approved): Spending, Repairs, Average repair cost, Days to fix, Broke again, Scheduled maintenance completed (late still counts; definition says so). Change lines read "Up 50% from last year (was $255k)" / "About the same as last year". "Why spending went up/down" with parts "A few very expensive repairs", "More repairs", "More of the low-cost / costly kinds of repairs" (names the service area whose share moved most), "The same repairs cost less / more"; "Biggest changes"; "Expensive months … times a normal month".

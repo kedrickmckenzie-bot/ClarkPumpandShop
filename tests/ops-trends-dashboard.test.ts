@@ -3,7 +3,7 @@ import type { OperatorSession } from "@/components/ops/data-contract";
 import { buildNorthlinePresentationFixture, NORTHLINE_ORGANIZATION_ID } from "@/lib/ops/fixtures";
 import { buildTrendMonth, buildTrendsDashboard, buildTrendWhy } from "@/app/app/_data/trends-dashboard";
 import { buildReportContext } from "@/lib/ops/reports/facts";
-import { measure, spendChange, trendData, trendMonths, yearBefore } from "@/lib/ops/trend-measures";
+import { lastYear, measure, measureMovers, mixAndRate, repairsByArea, spendChange, trendData, trendMonths, yearBefore } from "@/lib/ops/trend-measures";
 
 const session = (role: OperatorSession["role"] = "facilities", storeIds?: string[]): OperatorSession => ({ organizationId: NORTHLINE_ORGANIZATION_ID, userId: "u", displayName: "Manager", email: "m@example.test", organizationName: "Clark Pump and Shop", scopeLabel: "All stores", role, ...(storeIds ? { storeIds } : {}) });
 
@@ -17,6 +17,27 @@ describe("Trends dashboard", () => {
     const change = spendChange(data, today);
     expect(change.parts.reduce((sum, part) => sum + part.amount, 0)).toBe(change.after - change.before);
     expect(change.bigJobs.after.every(row => row.amount >= change.bigThreshold)).toBe(true);
+  });
+  it("explains each measure with parts that add up, and follows the chosen tile", () => {
+    const { current, prior } = lastYear(today);
+    const repairs = repairsByArea(data, today);
+    expect(repairs.reduce((sum, row) => sum + row.change, 0)).toBe(measure(data, "jobs", current).value! - measure(data, "jobs", prior).value!);
+    for (const which of ["cost_per_job", "came_back", "pm_done"] as const) {
+      const split = mixAndRate(data, which, today);
+      expect(split.mix + split.rate).toBeCloseTo(split.after - split.before, 6);
+    }
+    for (const which of ["jobs", "came_back", "pm_done"] as const) {
+      const model = buildTrendsDashboard(fixture, session(), { measure: which, by: "area" });
+      expect(model.why.title.toLowerCase()).toContain(which === "jobs" ? "repairs" : which === "came_back" ? "broke again" : "maintenance");
+      if (which !== "jobs") continue;
+      const total = model.why.parts.reduce((sum, part) => sum + part.amount, 0);
+      expect(total).toBe(measure(data, "jobs", current).value! - measure(data, "jobs", prior).value!);
+      expect(model.movers.rows.every(row => new URL(row.href, "https://x.test").searchParams.get("measure") === "jobs")).toBe(true);
+    }
+    const ranked = measureMovers(data, "jobs", today, "vendor");
+    expect(ranked.some(row => row.change > 0) && ranked.some(row => row.change < 0)).toBe(true);
+    const shown = buildTrendsDashboard(fixture, session(), { measure: "jobs", by: "vendor" }).movers.rows;
+    expect(shown.some(row => row.change > 0) && shown.some(row => row.change < 0)).toBe(true);
   });
   it("compares each month with the same days a year earlier and opens exactly the records counted", () => {
     const months = trendMonths(today);

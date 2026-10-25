@@ -82,6 +82,9 @@
 .diverge i { position: absolute; top: 2px; height: 10px; border-radius: 2px; }
 .diverge i[data-side="up"] { left: 50%; background: #d64545; }
 .diverge i[data-side="down"] { right: 50%; background: #2f9e6b; }
+.diverge i[data-tone-bar="worse"] { background: #d64545; }
+.diverge i[data-tone-bar="better"] { background: #2f9e6b; }
+.diverge i[data-tone-bar="neutral"] { background: #94a3b8; }
 
 .odd { list-style: none; margin: 0; padding: 0; display: grid; }
 .odd li { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 16px; align-items: center; padding: 10px 0; border-top: 1px solid #edf0f4; }

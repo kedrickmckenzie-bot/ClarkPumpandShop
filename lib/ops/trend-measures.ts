@@ -154,3 +154,112 @@ export function unusualMonths(data: TrendData, months: TrendMonth[]) {
     return { month: row.month, value: row.value, typical, top };
   }).reverse();
 }
+
+/** Grouping for "Biggest changes": store, service area, or who did the work. */
+export type TrendGroupBy = "store" | "area" | "vendor";
+const jobGroup = (by: TrendGroupBy, job: JobFact) => by === "store" ? job.storeId : by === "area" ? job.category ?? "unclassified" : job.provider === "in_house" ? "in_house" : job.vendorId ?? "unassigned";
+const pmGroup = (by: TrendGroupBy, row: PmScheduleRow) => by === "store" ? row.storeId : by === "area" ? row.categoryKey ?? "unclassified" : row.assigneeKey === "in_house" ? "in_house" : row.assigneeKey?.replace(/^vendor:/, "") ?? "unassigned";
+
+/** The same records narrowed to one store, service area or provider. */
+export function trendSubset(data: TrendData, by: TrendGroupBy, key: string): TrendData {
+  const jobs = data.jobs.filter(job => jobGroup(by, job) === key);
+  return { ...data, jobs, repairs: jobs.filter(job => !job.pm), pm: data.pm.filter(row => pmGroup(by, row) === key) };
+}
+
+const RATE_MIN = 5;
+/** Last 12 months vs. the 12 before for each group; rates and averages need at least 5 records in both years to be compared. */
+export function measureMovers(data: TrendData, which: TrendMeasure, today: string, by: TrendGroupBy) {
+  if (which === "spend") return movers(data, today, by).map(row => ({ key: row.key, before: row.before as number | undefined, after: row.after as number | undefined, change: row.change, enough: true }));
+  const { current, prior } = lastYear(today);
+  const keys = new Set([...data.jobs.map(job => jobGroup(by, job)), ...(which === "pm_done" ? data.pm.map(row => pmGroup(by, row)) : [])]);
+  const additive = MEASURE_INFO[which].unit === "count";
+  return [...keys].map(key => {
+    const subset = trendSubset(data, by, key);
+    const after = measure(subset, which, current), before = measure(subset, which, prior);
+    const enough = additive || (after.count >= RATE_MIN && before.count >= RATE_MIN);
+    const change = after.value !== undefined && before.value !== undefined ? after.value - before.value : 0;
+    return { key, before: before.value, after: after.value, change, enough };
+  }).filter(row => row.enough && row.before !== undefined && row.after !== undefined && row.change !== 0)
+    .sort((a, b) => Math.abs(b.change) - Math.abs(a.change) || a.key.localeCompare(b.key));
+}
+
+/** Per-record values behind an average or a share, by service area, for a mix-vs-rate split. */
+function pieces(data: TrendData, which: TrendMeasure, range: Range): Array<{ area: string; value: number }> {
+  if (which === "cost_per_job") return data.repairs.filter(job => job.costs.some(cost => inRange(cost.date, range))).map(job => ({ area: job.category ?? "unclassified", value: job.costs.reduce((sum, cost) => sum + (inRange(cost.date, range) ? cost.amountMinor : 0), 0) }));
+  if (which === "came_back") return data.repairs.filter(job => job.assetId && job.status !== "cancelled" && inRange(job.completedAt, range) && addDays(job.completedAt!.slice(0, 10), 30) <= data.ctx.today).map(job => ({ area: job.category ?? "unclassified", value: cameBack(data, job) ? 1 : 0 }));
+  if (which === "pm_done") return data.pm.filter(row => inRange(row.dueAt, range) && pmClosedEligible(row, data.ctx.now)).map(row => ({ area: row.categoryKey ?? "unclassified", value: row.status === "completed" ? 1 : 0 }));
+  return [];
+}
+
+/**
+ * Splits the change in an average or a share into "the mix of work changed" and "each kind changed",
+ * by service area. The two parts add up exactly to the change in the overall average.
+ */
+export function mixAndRate(data: TrendData, which: TrendMeasure, today: string) {
+  const { current, prior } = lastYear(today);
+  const before = pieces(data, which, prior), after = pieces(data, which, current);
+  const mean = (rows: Array<{ value: number }>) => rows.length ? rows.reduce((sum, row) => sum + row.value, 0) / rows.length : 0;
+  const m0 = mean(before), m1 = mean(after);
+  const areas = [...new Set([...before, ...after].map(row => row.area))].sort();
+  let mix = 0, rate = 0;
+  const rows = areas.map(area => {
+    const g0 = before.filter(row => row.area === area), g1 = after.filter(row => row.area === area);
+    const a0 = g0.length ? mean(g0) : m0, a1 = g1.length ? mean(g1) : 0;
+    const p0 = before.length ? g0.length / before.length : 0, p1 = after.length ? g1.length / after.length : 0;
+    mix += (p1 - p0) * a0; rate += p1 * (a1 - a0);
+    return { area, countBefore: g0.length, countAfter: g1.length, valueBefore: g0.length ? a0 : undefined, valueAfter: g1.length ? a1 : undefined, shareBefore: p0, shareAfter: p1, rateEffect: p1 * (a1 - a0), mixEffect: (p1 - p0) * a0 };
+  });
+  return { before: m0, after: m1, mix, rate, rows, countBefore: before.length, countAfter: after.length };
+}
+
+/** Repairs by service area: last 12 months vs. the 12 before. The rows add up to the change in repairs. */
+export function repairsByArea(data: TrendData, today: string) {
+  const { current, prior } = lastYear(today);
+  const map = new Map<string, { before: number; after: number }>();
+  for (const job of data.repairs) {
+    const key = job.category ?? "unclassified", row = map.get(key) ?? { before: 0, after: 0 };
+    if (inRange(job.createdAt, current)) row.after++; else if (inRange(job.createdAt, prior)) row.before++; else continue;
+    map.set(key, row);
+  }
+  return [...map].map(([key, row]) => ({ key, ...row, change: row.after - row.before })).sort((a, b) => Math.abs(b.change) - Math.abs(a.change) || a.key.localeCompare(b.key));
+}
+
+/** Typical days to fix by service area and by who did the work. Medians don't add up, so these are side-by-side comparisons. */
+export function daysByGroup(data: TrendData, today: string) {
+  const { current, prior } = lastYear(today);
+  const days = (jobs: JobFact[], range: Range) => { const rows = jobs.filter(job => job.status !== "cancelled" && inRange(job.completedAt, range)); return { value: median(rows.flatMap(job => daysToComplete(job) ?? [])), count: rows.length }; };
+  const group = (key: (job: JobFact) => string) => {
+    const keys = [...new Set(data.repairs.map(key))];
+    return keys.map(k => { const jobs = data.repairs.filter(job => key(job) === k); const b = days(jobs, prior), a = days(jobs, current); return { key: k, before: b.value, after: a.value, countBefore: b.count, countAfter: a.count }; })
+      .filter(row => row.before !== undefined && row.after !== undefined && row.countBefore >= RATE_MIN && row.countAfter >= RATE_MIN)
+      .sort((a, b) => Math.abs(b.after! - b.before!) - Math.abs(a.after! - a.before!));
+  };
+  return { byArea: group(job => job.category ?? "unclassified"), byWho: group(job => job.provider === "in_house" ? "in_house" : job.provider === "vendor" ? "vendor" : "unassigned") };
+}
+
+/**
+ * Months well off a normal month, in the bad direction, for any measure. Counts and amounts must be at least
+ * 1.5 times the typical month; shares must be 10 points worse. Each comes with the record that best explains it.
+ */
+export function standoutMonths(data: TrendData, which: TrendMeasure, months: TrendMonth[]) {
+  if (which === "spend") return unusualMonths(data, months).map(row => ({ month: row.month, value: row.value, typical: row.typical, job: row.top?.amount ? row.top.job : undefined, amount: row.top?.amount, area: undefined as string | undefined, areaCount: 0, missed: 0 }));
+  const values = months.filter(month => !month.partial).map(month => ({ month, result: measure(data, which, month.range) }));
+  const known = values.filter(row => row.result.value !== undefined && row.result.count >= (which === "jobs" ? 0 : RATE_MIN));
+  const typical = median(known.map(row => row.result.value!));
+  if (typical === undefined) return [];
+  const lower = MEASURE_INFO[which].lowerIsBetter, unit = MEASURE_INFO[which].unit;
+  const stands = (value: number) => unit === "percent" ? (lower ? value - typical >= 0.1 : typical - value >= 0.1) : typical > 0 && value >= typical * 1.5 && (which !== "jobs" || value - typical >= 3);
+  const jobs = new Map(data.jobs.map(job => [job.id, job]));
+  return known.filter(row => stands(row.result.value!)).map(row => {
+    const rows = row.result.jobIds.map(id => jobs.get(id)!);
+    const areas = new Map<string, number>();
+    for (const job of rows) areas.set(job.category ?? "unclassified", (areas.get(job.category ?? "unclassified") ?? 0) + 1);
+    const [area, areaCount] = [...areas].sort((a, b) => b[1] - a[1])[0] ?? [undefined, 0];
+    const cost = (job: JobFact) => job.costs.reduce((sum, line) => sum + (inRange(line.date, row.month.range) ? line.amountMinor : 0), 0);
+    const job = which === "cost_per_job" ? [...rows].sort((a, b) => cost(b) - cost(a))[0]
+      : which === "days_to_fix" ? [...rows].sort((a, b) => (daysToComplete(b) ?? 0) - (daysToComplete(a) ?? 0))[0]
+      : which === "came_back" ? rows.find(candidate => cameBack(data, candidate)) : undefined;
+    const missed = which === "pm_done" ? data.pm.filter(occurrence => row.result.occurrenceIds?.includes(occurrence.id) && occurrence.status !== "completed").length : 0;
+    return { month: row.month, value: row.result.value!, typical, job, amount: job && which === "cost_per_job" ? cost(job) : undefined, area, areaCount, missed };
+  }).reverse();
+}

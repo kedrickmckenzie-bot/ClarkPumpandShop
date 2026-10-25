@@ -86,31 +86,31 @@ export function TrendsDashboard({ model }: { model: Dashboard }) {
 
       <div className={styles.pair}>
         <section className={styles.card} aria-labelledby="why">
-          <header><div><h2 id="why">{model.whyTitle}</h2><p>{model.why.before} → {model.why.after} · <strong data-tone={model.why.change > 0 ? "worse" : "better"}>{model.why.changeLabel}</strong></p></div><Link href={model.href("/app/trends/why")}>Details<ChevronRight size={14} aria-hidden="true" /></Link></header>
-          <ol className={styles.parts}>{model.why.parts.map(part => <li key={part.id}><Link href={part.href}>
+          <header><div><h2 id="why">{model.why.title}</h2><p>{model.why.summary} · <strong data-tone={model.why.tone}>{model.why.changeLabel}</strong></p></div>{model.why.detailsHref ? <Link href={model.why.detailsHref}>Details<ChevronRight size={14} aria-hidden="true" /></Link> : null}</header>
+          {model.why.parts.length ? <ol className={styles.parts}>{model.why.parts.map(part => <li key={part.id}><Link href={part.href}>
             <span className={styles.partName}><strong>{part.label}</strong><small>{part.detail}</small></span>
-            <span className={styles.diverge} aria-hidden="true"><i data-side={part.amount >= 0 ? "up" : "down"} style={{ width: `${Math.abs(part.amount) / model.why.max * 50}%` }} /></span>
-            <b data-tone={part.amount > 0 ? "worse" : part.amount < 0 ? "better" : "neutral"}>{part.amountLabel}</b>
-          </Link></li>)}</ol>
-          <p className={styles.note}>These four add up to the total change.</p>
+            <span className={styles.diverge} aria-hidden="true"><i data-side={part.amount >= 0 ? "up" : "down"} data-tone-bar={part.tone} style={{ width: `${Math.abs(part.amount) / model.why.max * 50}%` }} /></span>
+            <b data-tone={part.tone}>{part.amountLabel}</b>
+          </Link></li>)}</ol> : <p className={styles.empty}><Inbox size={18} aria-hidden="true" />Not enough records to explain the change.</p>}
+          <p className={styles.note}>{model.why.note}</p>
         </section>
 
         <section className={styles.card} aria-labelledby="movers">
-          <header><h2 id="movers">Biggest changes</h2><nav className={styles.segments} aria-label="Movers by">{model.movers.options.map(option => <Link key={option.value} href={option.href} aria-current={option.selected ? "page" : undefined}>{option.label}</Link>)}</nav></header>
+          <header><h2 id="movers">{model.movers.title}</h2><nav className={styles.segments} aria-label="Changes by">{model.movers.options.map(option => <Link key={option.value} href={option.href} aria-current={option.selected ? "page" : undefined}>{option.label}</Link>)}</nav></header>
           {model.movers.rows.length ? <ol className={styles.parts}>{model.movers.rows.map(row => <li key={row.key}><Link href={row.href}>
             <span className={styles.partName}><strong>{row.label}</strong><small>{row.before} → {row.after}</small></span>
-            <span className={styles.diverge} aria-hidden="true"><i data-side={row.change >= 0 ? "up" : "down"} style={{ width: `${Math.abs(row.change) / model.movers.max * 50}%` }} /></span>
-            <b data-tone={row.change > 0 ? "worse" : row.change < 0 ? "better" : "neutral"}>{row.changeLabel}</b>
-          </Link></li>)}</ol> : <p className={styles.empty}><Inbox size={18} aria-hidden="true" />No spending to compare.</p>}
-          <p className={styles.note}>Who spent the most more, or less, than last year.</p>
+            <span className={styles.diverge} aria-hidden="true"><i data-side={row.change >= 0 ? "up" : "down"} data-tone-bar={row.tone} style={{ width: `${Math.abs(row.change) / model.movers.max * 50}%` }} /></span>
+            <b data-tone={row.tone}>{row.changeLabel}</b>
+          </Link></li>)}</ol> : <p className={styles.empty}><Inbox size={18} aria-hidden="true" />{model.movers.empty}</p>}
+          <p className={styles.note}>{model.movers.note}</p>
         </section>
       </div>
 
-      {model.odd.length ? <section className={styles.card} aria-labelledby="odd">
-        <header><h2 id="odd">Expensive months</h2><span className={styles.period}>Months that cost far more than a normal month</span></header>
-        <ul className={styles.odd}>{model.odd.map(row => <li key={row.key}>
+      {model.odd.rows.length ? <section className={styles.card} aria-labelledby="odd">
+        <header><h2 id="odd">{model.odd.title}</h2><span className={styles.period}>{model.odd.note}</span></header>
+        <ul className={styles.odd}>{model.odd.rows.map(row => <li key={row.key}>
           <Link href={row.href} className={styles.oddMonth}><strong>{row.label}</strong><small>{row.value} · {row.times}</small></Link>
-          {row.cause && row.causeHref ? <Link href={row.causeHref} className={styles.oddCause}>{row.cause}</Link> : null}
+          {row.cause ? <Link href={row.causeHref} className={styles.oddCause}>{row.cause}</Link> : null}
         </li>)}</ul>
       </section> : null}
     </div>
