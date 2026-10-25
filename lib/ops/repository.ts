@@ -499,6 +499,8 @@ export interface OpsRepository extends TaskRepository {
   listWorkOrders(scope: OrganizationScope, query?: WorkOrderListQuery): Promise<WorkOrderListPage>;
   getWorkOrderDetail(scope: OrganizationScope, workOrderId: OpsId): Promise<WorkOrderDetailView | null>;
   listWorkWarrantyDecisions(organizationId: string, workId: string): Promise<Array<{ actorName: string; occurredAt: string; payloadJson: string }>>;
+  /** Nudges recorded on these jobs (work_order.nudged), oldest first. */
+  listWorkOrderNudges(organizationId: OpsId, workOrderIds: readonly OpsId[]): Promise<import("./nudge").NudgeRecord[]>;
   /** Only invoices associated with this work; includes sibling lines/splits to verify reconciliation. */
   getWorkOrderInvoiceSources(organizationId: OpsId, workOrderId: OpsId): Promise<import("./invoice-reporting").InvoiceReportingSources>;
   getAssetWarrantySources(organizationId: OpsId, assetId: OpsId): Promise<Pick<OpsFixture, "repairItems" | "appliedWarranties" | "warrantyAmendments" | "manufacturerWarranties" | "warrantyCases">>;

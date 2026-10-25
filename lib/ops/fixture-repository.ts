@@ -1205,6 +1205,13 @@ class FixtureOpsRepository implements MutableOpsFixtureRepository {
     };
   }
 
+  async listWorkOrderNudges(organizationId: OpsId, workOrderIds: readonly OpsId[]) {
+    const ids = new Set(workOrderIds);
+    return this.fixture.auditEvents.filter(e => e.organizationId === organizationId && e.aggregateType === "work_order" && ids.has(e.aggregateId) && e.eventType === "work_order.nudged")
+      .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.id.localeCompare(b.id))
+      .map(e => ({ workOrderId: e.aggregateId, taskId: String((JSON.parse(e.payloadJson) as { taskId?: string }).taskId ?? ""), actorId: e.actorId, actorName: e.actorName, occurredAt: new Date(e.occurredAt).toISOString() }));
+  }
+
   async listWorkWarrantyDecisions(organizationId: string, workId: string) {
     return this.fixture.auditEvents.filter(e => e.organizationId === organizationId && e.aggregateType === "work_order" && e.aggregateId === workId && e.eventType === "work_order.warranty_dismissed").sort((a,b) => b.occurredAt.localeCompare(a.occurredAt)).slice(0,50);
   }

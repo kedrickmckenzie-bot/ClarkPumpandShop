@@ -2,6 +2,7 @@
 const TITLES: Record<string, string> = {
   "request.submitted": "Store reported the problem",
   "work_order.created": "Work order created",
+  "work_order.nudged": "Nudged",
   "work_order.assigned": "Assigned",
   "work_order.issued": "Work order sent",
   "work_order.cost_recorded": "Cost added",

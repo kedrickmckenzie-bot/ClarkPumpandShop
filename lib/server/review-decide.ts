@@ -4,6 +4,7 @@ import type { OperatorSession } from "@/components/ops/data-contract";
 import type { OpsRepository } from "@/lib/ops/repository";
 import { attentionSortKey, compareAttentionKeys, type AttentionQueueRow } from "@/lib/ops/attention-query";
 import { reviewBucket, waitingOn, type ReviewBucket } from "@/lib/ops/review-buckets";
+import { nudgeState } from "@/lib/ops/nudge";
 
 export type DecideStage = "new" | "stuck" | "done";
 export interface DecideRow extends AttentionQueueRow {
@@ -13,7 +14,9 @@ export interface DecideRow extends AttentionQueueRow {
   /** When a stuck job last stopped: the unfinished result a technician recorded. */ stuckSince?: string;
 }
 /** A Review item with where it belongs for this person and who it waits on. */
-export interface ReviewItem extends DecideRow { stage: DecideStage; bucket: ReviewBucket; waitingOn: string; waitingSince?: string }
+export interface ReviewItem extends DecideRow { stage: DecideStage; bucket: ReviewBucket; waitingOn: string; waitingSince?: string;
+  /** Nudges on an item waiting on someone else: how many so far, and whether this person already nudged today. */
+  nudge?: { count: number; nudgedToday: boolean; lastAt?: string } }
 export interface DecideSection { stage: DecideStage; rows: ReviewItem[]; totalCount: number }
 /** A problem a technician found and sent to a manager, still waiting for someone to choose who handles it. */
 export interface SentRow { id: string; number: string; problem: string; storeLabel: string; foundBy: string; reportedAt: string; dueAt?: string }
@@ -129,9 +132,16 @@ export async function loadReviewDecide(repository: OpsRepository, session: Opera
   }
   const onsiteByStore = [...groups.values()].sort((a, b) => b.rows.length - a.rows.length || (a.oldest ?? "").localeCompare(b.oldest ?? "") || a.storeLabel.localeCompare(b.storeLabel));
 
+  // Nudges for everything that waits on someone else and can be nudged (open tasks on a job).
+  const nudgeable = items.filter(item => (item.bucket === "waiting" || item.bucket === "onsite") && item.sourceKind === "workflow_task" && item.workOrderId);
+  const nudges = await repository.listWorkOrderNudges(org, [...new Set(nudgeable.map(item => item.workOrderId!))]);
+  for (const item of nudgeable) item.nudge = nudgeState(nudges.filter(row => !item.waitingSince || row.occurredAt >= item.waitingSince), item, access.membershipId, asOf);
+
   const counts = { mine: inBucket("mine").length, help: inBucket("help").length, onsite: inBucket("onsite").length, waiting: inBucket("waiting").length };
   return {
     sections, sent, help: merge(inBucket("help")), onsiteByStore, waiting: merge(inBucket("waiting")),
+    /** Everything open in their stores that someone else has to move: on-site work and items waiting on others. */
+    stuck: merge([...inBucket("onsite"), ...inBucket("waiting")]),
     counts: { ...counts, stores: counts.help + counts.onsite + counts.waiting },
     allOpenCount: items.length,
   };

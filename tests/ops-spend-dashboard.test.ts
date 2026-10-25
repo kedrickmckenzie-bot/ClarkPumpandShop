@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { OperatorSession } from "@/components/ops/data-contract";
 import { buildNorthlinePresentationFixture, NORTHLINE_ORGANIZATION_ID } from "@/lib/ops/fixtures";
-import { buildSpendDashboard, buildSpendEquipment, buildSpendStores, buildSpendVendors, spendScope } from "@/app/app/_data/spend-dashboard";
+import { buildSpendDashboard, buildSpendEquipment, buildSpendStores, buildSpendVendor, buildSpendVendors, spendScope } from "@/app/app/_data/spend-dashboard";
 
 const session = (role: OperatorSession["role"] = "facilities", storeIds?: string[]): OperatorSession => ({ organizationId: NORTHLINE_ORGANIZATION_ID, userId: "u", displayName: "Manager", email: "m@example.test", organizationName: "Clark Pump and Shop", scopeLabel: "All stores", role, ...(storeIds ? { storeIds } : {}) });
 const minor = (label: string) => Math.round(Number(label.replace(/[^0-9.-]/g, "")) * 100);
@@ -35,5 +35,20 @@ describe("Spending dashboard", () => {
     expect(model.metrics.find(metric => metric.id === "in-house")?.value).toBe("—");
     expect(model.metrics.some(metric => metric.id === "typical")).toBe(false);
     expect(spendScope(fixture, session("store_manager", [store]), {}).facts.every(row => row.storeId === store)).toBe(true);
+  });
+  it("opens one vendor or the in-house team as a small dashboard whose parts add up", () => {
+    const vendors = buildSpendVendors(fixture, session(), {});
+    const top = vendors.rows.find(row => row.key !== "in_house")!;
+    const page = buildSpendVendor(fixture, session(), { who: top.key });
+    expect(page.scope.total).toBe(top.amount);
+    expect(page.areas.reduce((sum, row) => sum + row.amount, 0)).toBe(top.amount);
+    expect(page.months.reduce((sum, row) => sum + row.amount, 0)).toBe(top.amount);
+    expect(page.count).toBe(page.scope.facts.length);
+    expect(page.costs.length).toBe(Math.min(25, page.count));
+    // In-house: accounting's total is shown on its own, never mixed into the costs typed on jobs.
+    const inHouse = buildSpendVendor(fixture, session(), { who: "in_house" });
+    expect(inHouse.metrics[0].label).toBe("In-house team (from accounting)");
+    expect(inHouse.metrics.find(metric => metric.id === "recorded")?.label).toBe("Costs typed on in-house jobs");
+    expect(buildSpendVendor(fixture, session("store_manager", [fixture.stores[0].id]), { who: "in_house" }).metrics[0].value).toBe("—");
   });
 });

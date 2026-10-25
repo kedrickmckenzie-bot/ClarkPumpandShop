@@ -132,3 +132,14 @@
 .donutValue { font-size: 17px; font-weight: 700; fill: #172033; }
 .donutLabel { font-size: 12px; fill: #64748b; }
 @media (max-width: 520px) { .donutWrap { grid-template-columns: 1fr; justify-items: center; } .donutWrap .legend { width: 100%; } }
+
+.inHouseLine { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 4px; padding: 12px 14px; border: 1px solid #c9d7f2; border-radius: 6px; background: #f3f7ff; color: #172033; text-decoration: none; }
+.inHouseLine span { color: #526176; font-size: 14px; }
+.inHouseLine svg { margin-left: auto; color: #2457d6; }
+.inHouseLine:hover { border-color: #2457d6; }
+.months { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; align-items: end; height: 170px; padding-top: 8px; }
+.month { display: grid; grid-template-rows: 1fr auto; gap: 4px; height: 100%; text-align: center; }
+.month small { color: #64748b; font-size: 12px; }
+.monthBar { display: flex; align-items: flex-end; height: 100%; border-bottom: 1px solid #cbd5e1; }
+.monthBar i { display: block; width: 100%; min-height: 0; border-radius: 3px 3px 0 0; background: #3f7fd6; }
+.month:hover .monthBar i { background: #245fb3; }

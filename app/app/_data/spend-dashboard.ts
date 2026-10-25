@@ -67,7 +67,7 @@ export function spendScope(fixture: OpsFixture, session: OperatorSession, query:
   const scopeLabel = store && storeById.get(store) ? compactStoreLabel(`Store ${storeById.get(store)!.storeNumber} · ${storeById.get(store)!.name}`, session.organizationName)
     : selectedRegion ? `${selectedRegion.name} · ${scoped.stores.length} stores` : compactStoreLabel(session.scopeLabel, session.organizationName);
   const areaName = (key: string) => key === "unclassified" ? "Not classified" : categoryNames.get(key) ?? sentence(key);
-  const providerName = (key: string) => key === "in_house" ? "Costs on in-house jobs" : key === "unmarked" ? "Vendor not recorded" : vendors.get(key.replace(/^vendor:/, "")) ?? "Vendor";
+  const providerName = (key: string) => key === "in_house" ? "In-house team" : key === "unmarked" ? "Vendor not recorded" : vendors.get(key.replace(/^vendor:/, "")) ?? "Vendor";
   const regions = fixture.regions.filter(row => row.organizationId === org && scopeFixture(fixture, session).stores.some(storeRow => storeRow.regionId === row.id));
   const areas = [...new Set(scoped.workOrders.map(row => row.categoryKey).filter((value): value is string => Boolean(value)))].sort();
   return {
@@ -149,23 +149,28 @@ function pagination(total: number, page: number, size: number, hrefFor: (page: n
 }
 const pageOf = (query: Query) => { const value = Number(first(query.page) ?? 1); return Number.isSafeInteger(value) && value > 0 ? value : 1; };
 
+/** In-house team money from accounting's company-wide totals wholly inside the period; never shown against part of the company. */
+function inHouseFromAccounting(fixture: OpsFixture, session: OperatorSession, scope: SpendScope) {
+  const accounting = activeTotals((fixture.spendTotals ?? []).filter(row => row.organizationId === session.organizationId && row.currency === "USD"))
+    .filter(row => row.periodStart >= scope.period.start && row.periodEnd <= scope.through);
+  const vendorCost = (from: string, to: string) => fixture.costLines.reduce((sum, line) => line.organizationId === session.organizationId && line.amount.currency === "USD" && line.serviceDate.slice(0, 10) >= from && line.serviceDate.slice(0, 10) <= to
+    && costProvider(line, assignmentsForWork(fixture, line.workOrderId).filter(row => row.organizationId === session.organizationId)) !== "in_house" ? sum + line.amount.amountMinor : sum, 0);
+  const inHouse = accounting.reduce((sum, row) => sum + (row.kind === "in_house" ? row.amountMinor : Math.max(0, row.amountMinor - vendorCost(row.periodStart, row.periodEnd))), 0);
+  return { accounting, inHouse, label: accounting.length ? `${day(accounting[0].periodStart)} – ${day(accounting.at(-1)!.periodEnd)}` : undefined };
+}
+
 /** The dashboard: four numbers and four cards, each opening its own page. */
 export function buildSpendDashboard(fixture: OpsFixture, session: OperatorSession, query: Query) {
   const scope = spendScope(fixture, session, query);
   const storeTotals = sumBy(scope.facts, row => row.storeId);
   const typical = median(scope.facts.length ? storeTotals.map(([, value]) => value) : []);
   const [topStoreId, topStoreAmount] = storeTotals[0] ?? ["", 0];
-  // In-house: accounting's company-wide totals wholly inside the period; never shown against part of the company.
-  const accounting = activeTotals((fixture.spendTotals ?? []).filter(row => row.organizationId === session.organizationId && row.currency === "USD"))
-    .filter(row => row.periodStart >= scope.period.start && row.periodEnd <= scope.through);
-  const vendorCost = (from: string, to: string) => fixture.costLines.reduce((sum, line) => line.organizationId === session.organizationId && line.amount.currency === "USD" && line.serviceDate.slice(0, 10) >= from && line.serviceDate.slice(0, 10) <= to
-    && costProvider(line, assignmentsForWork(fixture, line.workOrderId).filter(row => row.organizationId === session.organizationId)) !== "in_house" ? sum + line.amount.amountMinor : sum, 0);
-  const inHouse = accounting.reduce((sum, row) => sum + (row.kind === "in_house" ? row.amountMinor : Math.max(0, row.amountMinor - vendorCost(row.periodStart, row.periodEnd))), 0);
+  const { accounting, inHouse } = inHouseFromAccounting(fixture, session, scope);
   const vendorTotal = scope.facts.filter(row => row.provider !== "in_house").reduce((sum, row) => sum + row.amount, 0);
   const metrics: SpendMetric[] = [
     { id: "recorded", label: "Spent on repairs and maintenance", value: spendMoney(scope.total), detail: `${pct(vendorTotal, scope.total)} paid to outside vendors · ${scope.facts.length} costs`, href: scope.href("/app/spend/costs") },
     { id: "in-house", label: "In-house team", value: scope.companyWide && accounting.length ? spendMoney(inHouse) : "—",
-      detail: !scope.companyWide ? "Entered by accounting for the whole company" : accounting.length ? `From accounting · ${day(accounting[0].periodStart)} – ${day(accounting.at(-1)!.periodEnd)}` : "Not entered for these dates", href: "/app/spend/totals" },
+      detail: !scope.companyWide ? "Entered by accounting for the whole company" : accounting.length ? `From accounting · ${day(accounting[0].periodStart)} – ${day(accounting.at(-1)!.periodEnd)}` : "Not entered for these dates", href: scope.href("/app/spend/vendor", { who: "in_house" }) },
     ...(scope.singleStoreId ? [] : [
       { id: "typical", label: "Typical store", value: spendMoney(typical), detail: `Half of your ${storeTotals.length} stores spent more, half less`, href: scope.href("/app/spend/stores") },
       { id: "top-store", label: "Highest store", value: topStoreId ? scope.storeName(topStoreId).number : "—", detail: topStoreId ? `${spendMoney(topStoreAmount)}${typical ? ` · ${(topStoreAmount / typical).toFixed(1)} times a typical store` : ""}` : "No costs", href: topStoreId ? scope.href("/app/spend", { store: topStoreId, region: undefined }) : scope.href("/app/spend/stores") },
@@ -178,7 +183,7 @@ export function buildSpendDashboard(fixture: OpsFixture, session: OperatorSessio
       ...(rest ? [{ key: "__other", label: "Other", amount: rest, amountLabel: spendMoney(rest), share: pct(rest, whole), color: OTHER_COLOR, href: scope.href("/app/spend/costs") }] : [])];
   };
   const vendors = sumBy(scope.facts, row => row.provider).slice(0, 5).map(([key, amount]) => ({
-    key, label: scope.providerName(key), amountLabel: spendMoney(amount), share: pct(amount, scope.total), amount, href: scope.href("/app/spend/costs", { who: key }),
+    key, label: scope.providerName(key), amountLabel: spendMoney(amount), share: pct(amount, scope.total), amount, href: scope.href("/app/spend/vendor", { who: key }),
     segments: areaSegments(sumBy(scope.facts.filter(row => row.provider === key), row => row.area), amount),
   }));
   const equipment = equipmentRows(scope).slice(0, 5);
@@ -218,10 +223,14 @@ export function buildSpendVendors(fixture: OpsFixture, session: OperatorSession,
   const rows = all.slice((page - 1) * size, page * size).map(([key, amount]) => {
     const facts = scope.facts.filter(row => row.provider === key);
     return { key, label: scope.providerName(key), amount, amountLabel: spendMoney(amount), share: pct(amount, scope.total), jobs: new Set(facts.map(row => row.workId)).size, stores: new Set(facts.map(row => row.storeId)).size,
-      href: scope.href("/app/spend/costs", { who: key }), vendorHref: key.startsWith("vendor:") ? `/app/vendors/${encodeURIComponent(key.slice(7))}` : undefined,
+      href: scope.href("/app/spend/vendor", { who: key, page: undefined }), costsHref: scope.href("/app/spend/costs", { who: key }),
       segments: sumBy(facts, row => row.area).map(([area, value]) => ({ key: area, label: scope.areaName(area), amount: value, amountLabel: spendMoney(value), share: pct(value, amount), color: areaColor(area) })) };
   });
-  return { scope, rows, max: Math.max(1, ...all.map(([, value]) => value)), count: all.length,
+  const wholeCompany = !first(query.store) && !first(query.region) && !first(query.category);
+  const accounting = inHouseFromAccounting(fixture, session, scope);
+  const inHouse = wholeCompany && accounting.accounting.length && (session.role === "facilities" || session.role === "finance" || session.role === "executive")
+    ? { amount: spendMoney(accounting.inHouse), dates: accounting.label!, href: scope.href("/app/spend/vendor", { who: "in_house", page: undefined }) } : undefined;
+  return { scope, rows, inHouse, max: Math.max(1, ...all.map(([, value]) => value)), count: all.length,
     pagination: pagination(all.length, page, size, next => `${scope.href("/app/spend/vendors")}${scope.href("/app/spend/vendors").includes("?") ? "&" : "?"}page=${next}`) };
 }
 
@@ -232,4 +241,44 @@ export function buildSpendEquipment(fixture: OpsFixture, session: OperatorSessio
   const unlinked = scope.facts.filter(row => !row.assetId).reduce((sum, row) => sum + row.amount, 0);
   return { scope, rows: all.slice((page - 1) * size, page * size), count: all.length, offset: (page - 1) * size, unlinked: unlinked ? spendMoney(unlinked) : undefined,
     pagination: pagination(all.length, page, size, next => `${scope.href("/app/spend/equipment")}${scope.href("/app/spend/equipment").includes("?") ? "&" : "?"}page=${next}`) };
+}
+
+/** One vendor (or the in-house team): what they cost, for what, where, by month, then every cost, 25 at a time. */
+export function buildSpendVendor(fixture: OpsFixture, session: OperatorSession, query: Query) {
+  const who = first(query.who) ?? "in_house";
+  const scope = spendScope(fixture, session, { ...query, who }, "/app/spend/vendor");
+  const inHouse = who === "in_house";
+  const facts = scope.facts;
+  const jobs = new Set(facts.map(row => row.workId)).size, stores = new Set(facts.map(row => row.storeId)).size;
+  const wholeCompany = !first(query.store) && !first(query.region) && !first(query.category);
+  const accounting = inHouse ? inHouseFromAccounting(fixture, session, scope) : undefined;
+  const seesAccounting = session.role === "facilities" || session.role === "finance" || session.role === "executive";
+  const metrics: SpendMetric[] = [
+    ...(inHouse ? [{ id: "accounting", label: "In-house team (from accounting)",
+      value: wholeCompany && seesAccounting && accounting!.accounting.length ? spendMoney(accounting!.inHouse) : "—",
+      detail: !wholeCompany ? "Entered for the whole company, so it isn't split by store or area" : !seesAccounting ? "Shown to facilities, finance and the owner" : accounting!.label ? `Entered by accounting · ${accounting!.label}` : "Not entered for these dates", href: "/app/spend/totals" }] : []),
+    { id: "recorded", label: inHouse ? "Costs typed on in-house jobs" : "Paid", value: spendMoney(scope.total), detail: inHouse ? "Parts and costs people entered on jobs. A small part of the total." : `${facts.length} costs`, href: scope.href("/app/spend/costs") },
+    { id: "jobs", label: "Jobs", value: String(jobs), detail: `At ${stores} ${stores === 1 ? "store" : "stores"}`, href: scope.href("/app/spend/costs") },
+    { id: "average", label: "Average per job", value: jobs ? spendMoney(Math.round(scope.total / jobs)) : "—", detail: inHouse ? "Only the costs typed on jobs" : "Total paid divided by jobs", href: scope.href("/app/spend/costs") },
+  ];
+  const areaRows = sumBy(facts, row => row.area);
+  const areas: SpendSegment[] = areaRows.map(([key, amount]) => ({ key, label: scope.areaName(key), amount, amountLabel: spendMoney(amount), share: pct(amount, scope.total), color: areaColor(key), href: scope.href("/app/spend/costs", { category: key }) }));
+  const storeRows = sumBy(facts, row => row.storeId).slice(0, 6).map(([key, amount]) => { const store = scope.storeName(key); return { key, label: store.number, secondary: store.name, amount, amountLabel: spendMoney(amount), href: scope.href("/app/spend/costs", { store: key, region: undefined }) }; });
+  // Every month in the period, including months with nothing, so gaps show as zero rather than disappearing.
+  const months: Array<{ key: string; label: string; amount: number; amountLabel: string }> = [];
+  for (let cursor = scope.period.start.slice(0, 7); cursor <= scope.through.slice(0, 7);) {
+    const amount = facts.filter(row => row.date.startsWith(cursor)).reduce((sum, row) => sum + row.amount, 0);
+    months.push({ key: cursor, label: new Date(`${cursor}-15T12:00:00Z`).toLocaleDateString("en-US", { month: "short", timeZone: "UTC" }), amount, amountLabel: spendMoney(amount) });
+    const [y, m] = cursor.split("-").map(Number);
+    cursor = `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, "0")}`;
+  }
+  const size = 25, page = pageOf(query);
+  const sorted = [...facts].sort((a, b) => b.date.localeCompare(a.date) || b.amount - a.amount || a.id.localeCompare(b.id));
+  const costs = sorted.slice((page - 1) * size, page * size).map(row => { const store = scope.storeName(row.storeId); return { id: row.id, date: day(row.date), job: `${row.workNumber} · ${row.problem}`, href: `/app/work-orders/${encodeURIComponent(row.workId)}`, store: store.number, area: scope.areaName(row.area), amount: spendMoney(row.amount) }; });
+  const here = scope.href("/app/spend/vendor", { who });
+  const shown = { ...scope, chips: scope.chips.filter(chip => chip.label !== scope.providerName(who)) };
+  return { scope: shown, backHref: scope.href("/app/spend/vendors", { who: undefined, page: undefined }), who, inHouse, title: scope.providerName(who), metrics, areas, stores: storeRows, storeMax: Math.max(1, ...storeRows.map(row => row.amount)),
+    months, monthMax: Math.max(1, ...months.map(row => row.amount)), costs, count: facts.length,
+    vendorHref: who.startsWith("vendor:") ? `/app/vendors/${encodeURIComponent(who.slice(7))}` : undefined,
+    pagination: pagination(facts.length, page, size, next => `${here}${here.includes("?") ? "&" : "?"}page=${next}`) };
 }

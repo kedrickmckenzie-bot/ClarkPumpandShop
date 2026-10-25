@@ -69,3 +69,23 @@
   .storeGroup h3, .storePeek { padding-left: 16px; padding-right: 16px; }
   .sectionHead { flex-direction: column; align-items: stretch; }
 }
+.boxes { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.boxes a { display: grid; gap: 2px; padding: 14px 18px; border: 1px solid #d9e0e8; border-radius: 6px; background: #fff; color: #172033; text-decoration: none; }
+.boxes a span { color: #475569; font-weight: 650; }
+.boxes a b { font-size: 30px; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.boxes a small { color: #64748b; font-size: 14px; }
+.boxes a:hover { border-color: #9fb4e8; }
+.boxes a[aria-current="page"] { border-color: #2457d6; box-shadow: inset 0 0 0 1px #2457d6; }
+.boxes a[aria-current="page"] span { color: #1d4ed8; }
+.flash { margin: 0; padding: 12px 16px; border: 1px solid #b7dfc4; border-radius: 6px; background: #eef9f1; color: #14532d; }
+.search input { min-height: 40px; width: min(320px, 100%); padding: 6px 12px; border: 1px solid #c9d3e0; border-radius: 5px; font-size: 15px; }
+.nudgeForm { display: contents; }
+.nudgeForm button { cursor: pointer; font: inherit; font-weight: 600; }
+.nudged { display: inline-flex; align-items: center; min-height: 44px; padding: 0 6px; color: #64748b; font-size: 15px; }
+.pager { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; border-top: 1px solid #e2e7ee; color: #526174; }
+.pager a { font-weight: 600; }
+@media (max-width: 700px) {
+  .boxes { grid-template-columns: 1fr 1fr; }
+  .boxes a b { font-size: 24px; }
+  .search input { width: 100%; }
+}

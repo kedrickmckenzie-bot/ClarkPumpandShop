@@ -4,6 +4,8 @@ This is the persistent execution checklist for the September 14, 2026 review. Re
 
 ## Checkpoint
 
+- 2026-10-25 — Review and spending follow-up. Review now opens on three boxes: Needs me, I can help, and Stuck with someone else (on-site work plus items waiting on others, longest waiting first, searchable, 25 per page). Stuck rows show who the item waits on and for how long, plus a Nudge button: an append-only `work_order.nudged` history entry with the person's name (fixture and SQL), once a day per person, and every third nudge escalates the task one level through the existing escalation command. In the demo no email or text is sent and the page says so. Spending: each vendor and the in-house team opens its own small dashboard (numbers, service-area ring, stores, every month including empty ones, paged costs). In-house shows accounting's total separately from costs typed on jobs, company-wide and finance/facilities/owner only. Menu says "Add spend totals". Approval limits by amount are deferred by the owner.
+
 - 2026-10-25 — Trends overview follows the chosen tile. Picking a measure now changes the chart, "Why it changed" (repairs by service area; average cost, broke again and scheduled maintenance split into "mix of work" plus each service area, adding up exactly; days to fix by in-house vs. vendors and service area, side by side), "Biggest changes" (that measure by store, service area or vendor, increases and decreases, groups under 5 records skipped for rates) and "Months that stood out". Links keep the measure. Tests: parts add up for repairs and the mix/area split; movers keep the measure and show both directions. Browser-checked desktop and phone.
 
 ### Plain words, vendor chart gaps, free-plan memory — October 25, 2026

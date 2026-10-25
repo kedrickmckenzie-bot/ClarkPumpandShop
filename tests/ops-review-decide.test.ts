@@ -45,10 +45,10 @@ it("suggests a few-word job name and prefers the manager's name", () => {
   expect(jobShortName({ assetName: "Walk-in cooler", problem: "Fan is loud" })).toBe("Walk-in cooler");
 });
 
-it("shows Mine as only your items, and My stores as help, on-site by store and waiting", () => {
+it("shows Needs me, I can help, and Stuck with someone else with nudges", () => {
   const row = (id: string, title: string, stage: "new" | "stuck" | "done", bucket: "mine" | "help" | "onsite" | "waiting", extra: Record<string, unknown> = {}) => ({ id, sourceKind: "workflow_task" as const, workOrderId: `wo-${id}`, storeId: "s", title, reason: "", owner: "Facilities", priority: "high" as const, lane: "team" as const, linkHref: `/app/work-orders/wo-${id}`, storeLabel: "Store 114 · North Market", workNumber: `CPS-${id}`, problem: `Problem ${id}`, sourceCount: 1, group: "work_vendor" as const, stage, bucket, waitingOn: "Store manager", waitingSince: "2026-10-01T12:00:00.000Z", ...extra });
   const base = {
-    asOf: "2026-10-05T12:00:00.000Z", canRoute: true, sent: [], showOnsite: false, showAllHelp: false,
+    asOf: "2026-10-05T12:00:00.000Z", canRoute: true, sent: [],
     sections: [
       { stage: "new" as const, rows: [row("1", "Review issue", "new", "mine")], totalCount: 1 },
       { stage: "stuck" as const, rows: [], totalCount: 0 },
@@ -57,20 +57,23 @@ it("shows Mine as only your items, and My stores as help, on-site by store and w
     help: [row("5", "Approve quote", "new", "help", { taskType: "approve_quote" })],
     onsiteByStore: [{ storeId: "s", storeLabel: "Store 114 · North Market", rows: [row("7", "Verify repair", "done", "onsite")], oldest: "2026-10-01T12:00:00.000Z" }],
     waiting: [row("9", "Vendor to respond", "new", "waiting")],
+    stuck: [row("7", "Verify repair", "done", "onsite", { nudge: { count: 0, nudgedToday: false } }), row("9", "Vendor to respond", "new", "waiting", { nudge: { count: 1, nudgedToday: true } })],
     counts: { mine: 2, help: 1, onsite: 1, waiting: 1, stores: 3 },
   };
   const mine = renderToStaticMarkup(createElement(ReviewDecide, { ...base, view: "mine" }));
-  for (const text of ["Mine <b>2</b>", "My stores <b>3</b>", "New · needs a decision (1)", "Done · needs a check (1)", "Problem 1", "Urgent", "Check it"]) expect(mine).toContain(text);
+  for (const text of ["Needs me", "<b>2</b>", "I can help", "Stuck with someone else", "New · needs a decision (1)", "Done · needs a check (1)", "Problem 1", "Urgent", "Check it"]) expect(mine).toContain(text);
   expect(mine).not.toContain("Stuck (0)");
   expect(mine).not.toContain("Problem 5");
-  const stores = renderToStaticMarkup(createElement(ReviewDecide, { ...base, view: "stores" }));
-  for (const text of ["You can help (1)", "Problem 5", "Review quote", "Store manager", "On-site work (1)", "Show on-site work (1)", "Waiting on others (1)"]) expect(stores).toContain(text);
-  // On-site work is counted and summarized by store, but its jobs stay hidden until asked for.
-  expect(stores).not.toContain("Problem 7");
-  expect(renderToStaticMarkup(createElement(ReviewDecide, { ...base, view: "stores", showOnsite: true }))).toContain("Problem 7");
+  const help = renderToStaticMarkup(createElement(ReviewDecide, { ...base, view: "help" }));
+  for (const text of ["I can help (1)", "Problem 5", "Review quote", "Store manager"]) expect(help).toContain(text);
+  expect(help).not.toContain("Problem 7");
+  // Stuck shows on-site work and items waiting on others, each with who it waits on and a Nudge button.
+  const stuck = renderToStaticMarkup(createElement(ReviewDecide, { ...base, view: "waiting" }));
+  for (const text of ["Stuck with someone else (2)", "Problem 7", "Problem 9", "Waiting on <span", "Nudge</button>", "nudged 1 time"]) expect(stuck).toContain(text);
+  expect(stuck).toContain("Nudged today");
   const caughtUp = renderToStaticMarkup(createElement(ReviewDecide, { ...base, view: "mine", sections: [], counts: { ...base.counts, mine: 0 } }));
   expect(caughtUp).toContain("caught up");
-  expect(caughtUp).toContain("See 1 item you can help with");
+  expect(caughtUp).toContain("1 item you can help with");
 });
 
 it("sorts Review items by who can act: yours, help from anywhere, on site, or waiting", async () => {
@@ -200,8 +203,8 @@ it("gives the owner and a store manager their own Review: Mine, then the rest by
   expect(storeReview.help).toEqual([]);
   expect(storeReview.onsiteByStore).toEqual([]);
   expect(storeReview.counts.waiting).toBe(storeReview.counts.stores);
-  const html = renderToStaticMarkup(createElement(ReviewDecide, { ...storeReview, view: "stores", storeView: true, asOf: fixture.asOf, canRoute: false, showOnsite: false, showAllHelp: false }));
-  expect(html).toContain("My store");
-  expect(html).toContain("Open at your store");
-  expect(html).not.toContain("You can help");
+  const html = renderToStaticMarkup(createElement(ReviewDecide, { ...storeReview, view: "waiting", storeView: true, asOf: fixture.asOf, canRoute: false }));
+  expect(html).toContain("Stuck with someone else");
+  expect(html).not.toContain("I can help");
+  expect(storeReview.stuck.length).toBe(storeReview.counts.waiting);
 });

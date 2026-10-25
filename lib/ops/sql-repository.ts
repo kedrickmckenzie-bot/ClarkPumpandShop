@@ -1260,6 +1260,12 @@ class SqlOpsRepository implements OpsRepository {
     };
   }
 
+  async listWorkOrderNudges(organizationId: OpsId, workOrderIds: readonly OpsId[]) {
+    if (!workOrderIds.length) return [];
+    const ids = [...new Set(workOrderIds)].slice(0, 500);
+    return (await this.all(`SELECT aggregate_id, actor_id, actor_name, occurred_at, payload_json FROM ops_audit_events WHERE organization_id = ? AND aggregate_type = 'work_order' AND event_type = 'work_order.nudged' AND aggregate_id IN (${ids.map(() => "?").join(", ")}) ORDER BY occurred_at, id`, [organizationId, ...ids]))
+      .map(r => ({ workOrderId: text(r, "aggregate_id"), taskId: String((JSON.parse(text(r, "payload_json")) as { taskId?: string }).taskId ?? ""), actorId: r.actor_id == null ? undefined : String(r.actor_id), actorName: text(r, "actor_name"), occurredAt: new Date(text(r, "occurred_at")).toISOString() }));
+  }
   async listWorkWarrantyDecisions(organizationId: string, workId: string) {
     return (await this.all("SELECT actor_name, occurred_at, payload_json FROM ops_audit_events WHERE organization_id = ? AND aggregate_type = 'work_order' AND aggregate_id = ? AND event_type = 'work_order.warranty_dismissed' ORDER BY occurred_at DESC, id DESC LIMIT 50", [organizationId, workId])).map(r => ({actorName: text(r,"actor_name"), occurredAt: new Date(text(r,"occurred_at")).toISOString(), payloadJson:text(r,"payload_json")}));
   }

@@ -15,15 +15,20 @@ const copy: Record<DecideStage, { title: string; hint: string; tag: string }> = 
 
 /** New items that are a specific decision rather than "who handles this" open their own page. */
 const decisionButton: Record<string, string> = { approve_quote: "Review quote", review_warranty: "Check warranty", schedule_service: "Set the date", schedule_return_visit: "Open job" };
-const HELP_SHOWN = 8;
 
-type View = "mine" | "stores";
+type View = "mine" | "help" | "waiting";
+const PAGE_SIZE = 25;
 interface Props {
   view: View; sections: DecideSection[]; sent: SentRow[]; help: ReviewItem[]; onsiteByStore: StoreGroup[]; waiting: ReviewItem[];
+  /** On-site work and items waiting on others: what someone else has to move. */
+  stuck: ReviewItem[];
   counts: { mine: number; help: number; onsite: number; waiting: number; stores: number };
-  asOf: string; canRoute: boolean; storeQuery?: string; showOnsite: boolean; showAllHelp: boolean;
+  asOf: string; canRoute: boolean; storeQuery?: string;
   /** A store manager sees their own to-dos and what is open at their store, not other stores' work to pick up. */
   storeView?: boolean;
+  page?: number; q?: string;
+  /** Set after a nudge: the item nudged, and whether it went to the next person up. */
+  nudged?: { taskId: string; escalated: boolean };
 }
 
 function Actions({ row, canRoute }: { row: ReviewItem; canRoute: boolean }) {
@@ -41,7 +46,17 @@ function Actions({ row, canRoute }: { row: ReviewItem; canRoute: boolean }) {
 }
 
 /** One job: the problem in bold, what it needs, then where and how long. */
-function Row({ row, asOf, canRoute, showStage, showWho, viewOnly }: { row: ReviewItem; asOf: string; canRoute: boolean; showStage?: boolean; showWho?: boolean; viewOnly?: boolean }) {
+/** Ask whoever it waits on to move it. Once a day per person; the third nudge sends it to the next person up. */
+function Nudge({ row, returnTo }: { row: ReviewItem; returnTo: string }) {
+  if (!row.nudge) return null;
+  if (row.nudge.nudgedToday) return <span className={styles.nudged}>Nudged today</span>;
+  return <form method="post" action="/api/ops/review/nudge" className={styles.nudgeForm}>
+    <input type="hidden" name="taskId" value={row.id}/><input type="hidden" name="returnTo" value={returnTo}/>
+    <button type="submit" className={styles.btn}>Nudge</button>
+  </form>;
+}
+
+function Row({ row, asOf, canRoute, showStage, showWho, viewOnly, returnTo }: { row: ReviewItem; asOf: string; canRoute: boolean; showStage?: boolean; showWho?: boolean; viewOnly?: boolean; returnTo?: string }) {
   const due = row.dueAt ? plainDue(row.dueAt, asOf) : undefined;
   const urgent = row.priority === "critical" || row.priority === "high";
   const decision = row.stage === "new" ? decisionButton[row.taskType ?? ""] : undefined;
@@ -57,12 +72,12 @@ function Row({ row, asOf, canRoute, showStage, showWho, viewOnly }: { row: Revie
       <p className={styles.meta}>
         {row.storeLabel ?? "Companywide"}
         {row.workNumber ?? row.requestReference ? ` · ${row.workNumber ?? row.requestReference}` : ""}
-        {showWho ? <> · Waiting on <span className={styles.who}>{row.waitingOn}</span>{row.waitingSince ? ` since ${plainDay(row.waitingSince, asOf)}` : ""}</>
+        {showWho ? <> · Waiting on <span className={styles.who}>{row.waitingOn}</span>{row.waitingSince ? <> for <span className={styles.stuckFor}>{stuckFor(row.waitingSince, asOf)}</span></> : ""}{row.nudge?.count ? ` · nudged ${row.nudge.count} ${row.nudge.count === 1 ? "time" : "times"}` : ""}</>
           : row.stuckSince ? <> · <span className={styles.stuckFor}>stuck {stuckFor(row.stuckSince, asOf)}</span></> : row.reportedAt ? ` · reported ${plainDay(row.reportedAt, asOf)}` : ""}
         {due ? <> · <span className={due.late ? styles.late : undefined}>{due.text}</span></> : null}
       </p>
     </div>
-    {viewOnly ? <div className={styles.actions}><Link className={styles.btn} href={row.linkHref}>Open</Link></div> : <Actions row={row} canRoute={canRoute}/>}
+    {viewOnly ? <div className={styles.actions}>{returnTo ? <Nudge row={row} returnTo={returnTo}/> : null}<Link className={styles.btn} href={row.linkHref}>Open</Link></div> : <Actions row={row} canRoute={canRoute}/>}
   </li>;
 }
 
@@ -93,37 +108,39 @@ function SentByTechs({ rows, asOf, canRoute }: { rows: SentRow[]; asOf: string; 
 }
 
 /**
- * Review for managers. "Mine" is only what needs this person. "My stores" is everything else open in their stores:
- * what they can help with from anywhere, on-site work (hidden until asked for, but always counted), and what waits on others.
+ * Review: what needs me, what I can help with, and what is stuck with someone else. Everyone sees the stuck work in
+ * their stores and can nudge it; nobody can approve or take over work above their role from here.
  */
 export function ReviewDecide(props: Props) {
-  const { view, counts, storeQuery } = props;
-  const link = (extra: Record<string, string>, hash = "") => `/app/action-center?${new URLSearchParams({ ...(storeQuery ? { store: storeQuery } : {}), ...extra })}${hash}`;
-  const mineTotal = counts.mine;
+  const { view, counts, storeQuery, q } = props;
+  const link = (extra: Record<string, string | undefined>) => {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries({ store: storeQuery, q, ...extra })) if (value) params.set(key, value);
+    return `/app/action-center?${params}`;
+  };
+  const tiles: Array<{ id: View; label: string; value: number; hint: string }> = [
+    { id: "mine", label: "Needs me", value: counts.mine, hint: "Only you can do these" },
+    ...(props.storeView ? [] : [{ id: "help" as const, label: "I can help", value: counts.help, hint: "Someone else's, but you're allowed to do it" }]),
+    { id: "waiting", label: "Stuck with someone else", value: props.stuck.length, hint: "See who it's waiting on, and nudge them" },
+  ];
   return <div className={styles.page}>
     <header className={styles.header}>
-      <div>
-        <h1>Review</h1>
-        <p>{view === "mine" ? "What needs you." : props.storeView ? "Everything open at your store, and who it's waiting on." : "Everything open in your stores."}</p>
-      </div>
+      <div><h1>Review</h1><p>What needs you, what you can pick up, and what&apos;s stuck.</p></div>
       {props.storeView ? null : <StoreJump />}
     </header>
-    <nav className={styles.tabs} aria-label="Review views">
-      <Link href={link({ view: "mine" })} aria-current={view === "mine" ? "page" : undefined}>Mine <b>{mineTotal}</b></Link>
-      <Link href={link({ view: "stores" })} aria-current={view === "stores" ? "page" : undefined}>{props.storeView ? "My store" : "My stores"} <b>{counts.stores}</b></Link>
-    </nav>
-    {view === "mine" ? <Mine {...props}/> : props.storeView ? <StoreStatus {...props}/> : <Stores {...props} link={link}/>}
-    <p className={styles.footer}><Link href={link({ lane: "all" })}>Search or filter every open item →</Link></p>
+    <nav className={styles.boxes} aria-label="Review views">{tiles.map(tile => <Link key={tile.id} href={link({ view: tile.id })} aria-current={view === tile.id ? "page" : undefined}>
+      <span>{tile.label}</span><b>{tile.value}</b><small>{tile.hint}</small>
+    </Link>)}</nav>
+    {props.nudged ? <p className={styles.flash} role="status">{props.nudged.escalated ? "Nudge recorded. It's been nudged 3 times, so it went to the next person up." : "Nudge recorded on the job's history."} In this demo no email or text is sent.</p> : null}
+    {view === "mine" ? <Mine {...props}/> : <Paged {...props} link={link}/>}
+    <p className={styles.footer}><Link href="/app/action-center?lane=all">Search or filter every open item →</Link></p>
   </div>;
 }
 
-function Mine({ sections, sent, counts, asOf, canRoute, storeQuery }: Props) {
-  const link = `/app/action-center?${new URLSearchParams({ view: "stores", ...(storeQuery ? { store: storeQuery } : {}) })}`;
+function Mine({ sections, sent, counts, asOf, canRoute, storeView, stuck }: Props) {
   if (!counts.mine) return <section className={`${styles.section} ${styles.caughtUp}`}>
     <h2>You&apos;re caught up</h2>
-    <p>Nothing needs you right now.</p>
-    {counts.help ? <Link className={`${styles.btn} ${styles.btnPrimary}`} href={link}>See {counts.help} {counts.help === 1 ? "item" : "items"} you can help with</Link>
-      : counts.stores ? <Link className={styles.btn} href={link}>See what&apos;s open ({counts.stores})</Link> : null}
+    <p>Nothing needs you right now.{!storeView && counts.help ? ` ${counts.help} ${counts.help === 1 ? "item" : "items"} you can help with.` : stuck.length ? ` ${stuck.length} stuck with someone else.` : ""}</p>
   </section>;
   return <>
     <SentByTechs rows={sent} asOf={asOf} canRoute={canRoute}/>
@@ -137,56 +154,34 @@ function Mine({ sections, sent, counts, asOf, canRoute, storeQuery }: Props) {
   </>;
 }
 
-function Stores({ help, onsiteByStore, waiting, counts, asOf, canRoute, showOnsite, showAllHelp, link }: Props & { link: (extra: Record<string, string>, hash?: string) => string }) {
-  const keep = { view: "stores", ...(showOnsite ? { onsite: "1" } : {}), ...(showAllHelp ? { helpAll: "1" } : {}) };
-  const shownHelp = showAllHelp ? help : help.slice(0, HELP_SHOWN);
-  return <>
-    <div className={styles.summary}>
-      <a href="#help"><b>{counts.help}</b> you can help with</a>
-      <a href="#onsite"><b>{counts.onsite}</b> need someone on site</a>
-      <a href="#waiting"><b>{counts.waiting}</b> waiting on others</a>
-    </div>
+const matches = (row: ReviewItem, q?: string) => !q?.trim() || [row.problem, row.title, row.storeLabel, row.workNumber, row.requestReference, row.waitingOn, row.vendorName].join(" ").toLowerCase().includes(q.trim().toLowerCase());
 
-    <section id="help" className={styles.section} aria-label="You can help">
-      <div className={styles.sectionHead}>
-        <h2>You can help ({counts.help})</h2>
-        <p>Assigned to someone else, but you can do it from anywhere.</p>
-      </div>
-      {help.length ? <ul className={styles.list}>{shownHelp.map(row => <Row key={row.id} row={row} asOf={asOf} canRoute={canRoute} showStage showWho/>)}</ul>
-        : <p className={styles.empty}>Nothing to pick up right now.</p>}
-      {help.length > shownHelp.length ? <Link className={styles.more} href={link({ ...keep, helpAll: "1" }, "#help")}>Show all {help.length} →</Link> : null}
-    </section>
-
-    <section id="onsite" className={styles.section} aria-label="On-site work">
-      <div className={styles.sectionHead}>
-        <div><h2>On-site work ({counts.onsite})</h2><p>Needs someone at the store. Check the pile, or plan a visit.</p></div>
-        {counts.onsite ? <Link className={styles.toggle} href={link(showOnsite ? { ...keep, onsite: "" } : { ...keep, onsite: "1" }, "#onsite")} aria-expanded={showOnsite}>{showOnsite ? "Hide" : `Show on-site work (${counts.onsite})`}</Link> : null}
-      </div>
-      {!counts.onsite ? <p className={styles.empty}>No on-site work waiting.</p>
-        : !showOnsite ? <ul className={styles.storePeek}>{onsiteByStore.slice(0, 6).map(group => <li key={group.storeId}><b>{group.storeLabel}</b> · {group.rows.length} {group.rows.length === 1 ? "item" : "items"}{group.oldest ? ` · oldest ${plainDay(group.oldest, asOf)}` : ""}</li>)}{onsiteByStore.length > 6 ? <li>and {onsiteByStore.length - 6} more stores</li> : null}</ul>
-          : onsiteByStore.map(group => <div key={group.storeId} className={styles.storeGroup}>
-            <h3>{group.storeLabel} <span>· {group.rows.length} {group.rows.length === 1 ? "item" : "items"}{group.oldest ? ` · oldest ${plainDay(group.oldest, asOf)}` : ""}</span></h3>
-            <ul className={styles.list}>{group.rows.map(row => <Row key={row.id} row={row} asOf={asOf} canRoute={canRoute} showStage showWho/>)}</ul>
-          </div>)}
-    </section>
-
-    <section id="waiting" className={styles.section} aria-label="Waiting on others">
-      <details>
-        <summary className={styles.sectionHead}><div><h2>Waiting on others ({counts.waiting})</h2><p>A vendor, a higher approval, or a date that hasn&apos;t come yet. Nothing to do unless it&apos;s late.</p></div></summary>
-        {waiting.length ? <ul className={styles.list}>{waiting.map(row => <Row key={row.id} row={row} asOf={asOf} canRoute={canRoute} showStage showWho/>)}</ul> : <p className={styles.empty}>Nothing is waiting on others.</p>}
-      </details>
-    </section>
-  </>;
-}
-
-/** A store manager's view of their store: every open item and who it is waiting on, newest decisions first. */
-function StoreStatus({ waiting, counts, asOf, canRoute }: Props) {
-  return <section className={styles.section} aria-label="Open at your store">
+/** I can help, or Stuck with someone else: one list, searchable, 25 at a time. */
+function Paged(props: Props & { link: (extra: Record<string, string | undefined>) => string }) {
+  const { view, asOf, canRoute, link, q } = props;
+  const waiting = view === "waiting";
+  const all = (waiting ? [...props.stuck].sort((a, b) => {
+    const lateA = a.dueAt && a.dueAt <= asOf ? 0 : 1, lateB = b.dueAt && b.dueAt <= asOf ? 0 : 1;
+    return lateA - lateB || (a.waitingSince ?? "").localeCompare(b.waitingSince ?? "");
+  }) : props.help).filter(row => matches(row, q));
+  const pages = Math.max(1, Math.ceil(all.length / PAGE_SIZE)), page = Math.min(pages, Math.max(1, props.page ?? 1));
+  const rows = all.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const here = link({ view, page: page > 1 ? String(page) : undefined });
+  return <section className={styles.section} aria-label={waiting ? "Stuck with someone else" : "I can help"}>
     <div className={styles.sectionHead}>
-      <h2>Open at your store ({counts.stores})</h2>
-      <p>Being handled by someone else. Open one to see where it stands.</p>
+      <div><h2>{waiting ? "Stuck with someone else" : "I can help"} ({all.length})</h2>
+        <p>{waiting ? "Longest waiting first. Nudge the person it's waiting on." : "Assigned to someone else, but you can do it."}</p></div>
+      <form method="get" action="/app/action-center" className={styles.search}>
+        <input type="hidden" name="view" value={view}/>{props.storeQuery ? <input type="hidden" name="store" value={props.storeQuery}/> : null}
+        <input type="search" name="q" defaultValue={q} placeholder="Search problem, store, job #" aria-label="Search this list"/>
+      </form>
     </div>
-    {waiting.length ? <ul className={styles.list}>{waiting.map(row => <Row key={row.id} row={row} asOf={asOf} canRoute={canRoute} showStage showWho viewOnly/>)}</ul>
-      : <p className={styles.empty}>Nothing else is open at your store.</p>}
+    {rows.length ? <ul className={styles.list}>{rows.map(row => <Row key={row.id} row={row} asOf={asOf} canRoute={canRoute} showStage showWho viewOnly={waiting} returnTo={here}/>)}</ul>
+      : <p className={styles.empty}>{q ? "Nothing matches that search." : waiting ? "Nothing is stuck with anyone else." : "Nothing to pick up right now."}</p>}
+    {pages > 1 ? <nav className={styles.pager} aria-label="Pages">
+      {page > 1 ? <Link href={link({ view, page: page - 1 > 1 ? String(page - 1) : undefined })}>← Previous</Link> : <span/>}
+      <span>Page {page} of {pages}</span>
+      {page < pages ? <Link href={link({ view, page: String(page + 1) })}>Next →</Link> : <span/>}
+    </nav> : null}
   </section>;
 }

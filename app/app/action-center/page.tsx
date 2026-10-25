@@ -15,14 +15,20 @@ const first = (value: string | string[] | undefined) => Array.isArray(value) ? v
 export default async function ActionCenterPage({ searchParams }: { searchParams: Promise<Query> }) {
   const params = await searchParams;
   // Managers land on the three decision sections; any filter or search opens the full queue.
-  const filtered = ["lane", "q", "type", "priority", "stage", "page", "cursor"].some(key => first(params[key]));
+  const reviewView = ["help", "waiting", "stores"].includes(first(params.view) ?? "");
+  const filtered = !reviewView && ["lane", "q", "type", "priority", "stage", "page", "cursor"].some(key => first(params[key]));
   if (!filtered) {
     const session = await loadOperatorSession();
     if (["facilities", "regional", "executive", "store_manager"].includes(session.role)) {
       const asOf = new Date().toISOString(), store = first(params.store);
       const decide = await loadReviewDecide(await getServerOpsRepository(), session, asOf, store);
-      const view = first(params.view) === "stores" ? "stores" : "mine";
-      return <ReviewDecide {...decide} view={view} showOnsite={first(params.onsite) === "1"} showAllHelp={first(params.helpAll) === "1"} storeView={session.role === "store_manager"} asOf={asOf} canRoute={roleCan(session, "assign_internal_work")} storeQuery={store}/>;
+      const storeView = session.role === "store_manager";
+      // "stores" is the older link from Overview: the rest of the stores' open work.
+      const asked = first(params.view);
+      const view = asked === "help" && !storeView ? "help" : asked === "waiting" ? "waiting" : asked === "stores" ? (storeView || !decide.counts.help ? "waiting" : "help") : "mine";
+      const nudged = first(params.nudged);
+      return <ReviewDecide {...decide} view={view} storeView={storeView} asOf={asOf} canRoute={roleCan(session, "assign_internal_work")} storeQuery={store}
+        page={Number(first(params.page)) || 1} q={first(params.q)} nudged={nudged ? { taskId: nudged.replace(/^up:/, ""), escalated: nudged.startsWith("up:") } : undefined}/>;
     }
   }
   let model;

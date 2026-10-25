@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, ChevronDown, ChevronRight, Inbox, X } from "luci
 import type { FilterOptionViewModel } from "@/components/ops/data-contract";
 import { PaginationControls } from "@/components/ops/pagination-controls";
 import { StoreJump } from "@/components/ops/store-jump";
-import type { buildSpendDashboard, buildSpendEquipment, buildSpendStores, buildSpendVendors, SpendGridModel, SpendScope, SpendSegment } from "@/app/app/_data/spend-dashboard";
+import type { buildSpendDashboard, buildSpendEquipment, buildSpendStores, buildSpendVendor, buildSpendVendors, SpendGridModel, SpendScope, SpendSegment } from "@/app/app/_data/spend-dashboard";
 import styles from "./spend-dashboard.module.css";
 
 /** Sequential blue, light → dark: darker squares cost more. */
@@ -23,10 +23,10 @@ function Pick({ label, options }: { label: string; options: FilterOptionViewMode
 }
 
 /** Title, back link, the one-line scope and the filters every Spending page shares. */
-export function SpendFrame({ scope, title, subtitle, back = true, action, children }: { scope: SpendScope; title: string; subtitle: string; back?: boolean; action?: ReactNode; children: ReactNode }) {
+export function SpendFrame({ scope, title, subtitle, back = true, backHref, backLabel = "Spending", action, children }: { scope: SpendScope; title: string; subtitle: string; back?: boolean; backHref?: string; backLabel?: string; action?: ReactNode; children: ReactNode }) {
   return (
     <div className={styles.page}>
-      {back ? <Link className={styles.back} href={scope.href("/app/spend")}><ArrowLeft size={15} aria-hidden="true" />Spending</Link> : null}
+      {back ? <Link className={styles.back} href={backHref ?? scope.href("/app/spend")}><ArrowLeft size={15} aria-hidden="true" />{backLabel}</Link> : null}
       <header className={styles.header}>
         <div><h1>{title}</h1><p>{subtitle} · {scope.scopeLabel} · through {new Date(`${scope.through}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}</p></div>
         {action}
@@ -169,14 +169,15 @@ export function SpendVendorsPage({ model }: { model: ReturnType<typeof buildSpen
   return <SpendFrame scope={model.scope} title="Vendors" subtitle="Who was paid, and for what">
     <section className={styles.panel}>
       <header><h2>Who was paid</h2><span className={styles.count}>Colors are service areas · point at a color to see it</span></header>
+      {model.inHouse ? <Link href={model.inHouse.href} className={styles.inHouseLine}><strong>In-house team: {model.inHouse.amount}</strong><span>From accounting · {model.inHouse.dates}</span><ChevronRight size={15} aria-hidden="true" /></Link> : null}
       {model.rows.length ? <ul className={styles.vendorRows}>{model.rows.map(row => <li key={row.key}>
-        <div className={styles.vendorName}>{row.vendorHref ? <Link href={row.vendorHref} className={styles.strongLink}>{row.label}</Link> : <strong>{row.label}</strong>}<small>{row.jobs} jobs · {row.stores} {row.stores === 1 ? "store" : "stores"}</small></div>
+        <div className={styles.vendorName}><Link href={row.href} className={styles.strongLink}>{row.label}</Link><small>{row.key === "in_house" ? "Costs typed on jobs · " : ""}{row.jobs} jobs · {row.stores} {row.stores === 1 ? "store" : "stores"}</small></div>
         <Link href={row.href} className={styles.vendorBar} aria-label={`${row.label}: ${row.amountLabel}. ${row.segments.map(segment => `${segment.label} ${segment.share}`).join(", ")}`}>
           <SegmentedBar width={row.amount / model.max * 100} segments={row.segments} />
           <small>{row.segments.slice(0, 3).map(segment => `${segment.label} ${segment.share}`).join(" · ")}</small>
         </Link>
         <div className={styles.vendorAmount}><strong>{row.amountLabel}</strong><small>{row.share} of spending</small></div>
-        <Link href={row.href} className={styles.quiet}>Costs<ChevronRight size={14} aria-hidden="true" /></Link>
+        <Link href={row.href} className={styles.quiet}>Open<ChevronRight size={14} aria-hidden="true" /></Link>
       </li>)}</ul> : <Empty />}
       {model.pagination ? <PaginationControls pagination={model.pagination} label="Vendor pages" /> : null}
     </section>
@@ -192,3 +193,43 @@ export function SpendEquipmentPage({ model }: { model: ReturnType<typeof buildSp
     </section>
   </SpendFrame>;
 }
+
+/** One vendor or the in-house team: four numbers, service areas, stores, months, then every cost. */
+export function SpendVendorPage({ model }: { model: ReturnType<typeof buildSpendVendor> }) {
+  const { scope } = model;
+  return <SpendFrame scope={scope} backHref={model.backHref} backLabel="Vendors" title={model.title} subtitle={model.inHouse ? "Your own maintenance team" : "What this vendor cost, and for what"}
+    action={model.vendorHref ? <Link className={styles.secondary} href={model.vendorHref}>Vendor profile<ArrowRight size={15} aria-hidden="true" /></Link> : model.inHouse ? <Link className={styles.secondary} href="/app/spend/totals">Add spend totals<ArrowRight size={15} aria-hidden="true" /></Link> : undefined}>
+    <nav className={styles.metrics} aria-label="At a glance">{model.metrics.map(metric => (
+      <Link key={metric.id} href={metric.href} className={styles.metric}><span>{metric.label}</span><strong>{metric.value}</strong><small>{metric.detail}</small></Link>
+    ))}</nav>
+    <div className={styles.cards}>
+      <Card title="Service areas" href={scope.href("/app/spend/costs")} linkLabel="Costs">
+        {model.areas.length ? <div className={styles.donutWrap}><Donut segments={model.areas} total={spendTotal(model.areas)} />
+          <ul className={styles.legend}>{model.areas.map(segment => <li key={segment.key}><Link href={segment.href}><i style={{ background: segment.color }} aria-hidden="true" /><span>{segment.label}</span><strong>{segment.amountLabel}</strong><small>{segment.share}</small></Link></li>)}</ul></div> : <Empty />}
+      </Card>
+      <Card title="Stores" href={scope.href("/app/spend/costs")} linkLabel="Costs">
+        {model.stores.length ? <ul className={styles.bars}>{model.stores.map(row => <li key={row.key}><Link href={row.href}>
+          <span className={styles.barName}><strong>{row.label}</strong><small>{row.secondary ? `${row.secondary} · ` : ""}{row.amountLabel}</small></span>
+          <span className={styles.barTrack} aria-hidden="true"><span style={{ width: `${row.amount / model.storeMax * 100}%` }}><i className={styles.seg} style={{ flexGrow: 1, background: "#3f7fd6" }} /></span></span>
+        </Link></li>)}</ul> : <Empty />}
+      </Card>
+      <Card wide title="By month" href={scope.href("/app/spend/costs")} linkLabel="Costs">
+        <div className={styles.months} role="img" aria-label={model.months.map(month => `${month.label} ${month.amountLabel}`).join(", ")}>
+          {model.months.map(month => <div key={month.key} className={styles.month} title={`${month.label}: ${month.amountLabel}`}>
+            <span className={styles.monthBar}><i style={{ height: `${month.amount / model.monthMax * 100}%` }} /></span>
+            <small>{month.label}</small>
+          </div>)}
+        </div>
+      </Card>
+    </div>
+    <section className={styles.panel} aria-label="Costs">
+      <header><h2>{model.count} costs</h2><span className={styles.count}>Newest first</span></header>
+      {model.costs.length ? <div className={styles.tableScroll}><table className={styles.table}>
+        <thead><tr><th>Date</th><th>Job</th><th>Store</th><th>Service area</th><th data-align="end">Cost</th></tr></thead>
+        <tbody>{model.costs.map(row => <tr key={row.id}><td>{row.date}</td><td><Link href={row.href} className={styles.strongLink}>{row.job}</Link></td><td>{row.store}</td><td>{row.area}</td><td data-align="end">{row.amount}</td></tr>)}</tbody>
+      </table></div> : <Empty>{model.inHouse ? "No costs typed on in-house jobs for these dates." : undefined}</Empty>}
+      {model.pagination ? <PaginationControls pagination={model.pagination} label="Cost pages" /> : null}
+    </section>
+  </SpendFrame>;
+}
+const spendTotal = (segments: SpendSegment[]) => { const dollars = segments.reduce((sum, row) => sum + row.amount, 0) / 100; return dollars >= 1000 ? `$${(dollars / 1000).toFixed(dollars >= 100_000 ? 0 : 1)}k` : `$${Math.round(dollars)}`; };
