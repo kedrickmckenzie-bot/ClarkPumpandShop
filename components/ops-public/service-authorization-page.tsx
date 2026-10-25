@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowRight, Building2, CalendarDays, MapPin, Phone } from "lucide-react";
 import type { ServiceAuthorizationView } from "./contracts";
 import { formatPublicDateTime, PublicFrame } from "./public-ui";
+import { oneLine } from "@/lib/product/one-line";
 import { VendorResponseForm } from "./vendor-response-form";
 import styles from "./public-workflows.module.css";
 
@@ -17,11 +18,16 @@ export function ServiceAuthorizationPage({ token, authorization, forms=[], job }
       <div className={styles.hero}>
         <div>
           <span className={styles.eyebrow}>Assigned to {authorization.vendorName}</span>
-          <h1 className={styles.title}>{authorization.operatorWorkOrderNumber}</h1>
-          <p className={styles.lede}>{authorization.store.name} · Store {authorization.store.number}</p>
+          <h1 className={styles.title}>{oneLine(authorization.service.problem)}</h1>
+          <p className={styles.lede}>Store {authorization.store.number} · {authorization.store.name} · Work order {authorization.operatorWorkOrderNumber}</p>
         </div>
         <span className={styles.priority}>{authorization.priority}</span>
       </div>
+
+      {job?.onSite.length && authorization.technicianVisitUrl ? <section className={styles.checkoutNextStep}>
+        <div><span className={styles.eyebrow}>On site now</span><h2>{job.onSite.map(visit => visit.technicianName).join(", ")} checked in {formatPublicDateTime(job.onSite[0].checkedInAt, zone)}</h2><p>When the work is done, check out here.</p></div>
+        <Link className={styles.button} href={authorization.technicianVisitUrl}>Check out <ArrowRight aria-hidden="true" size={17} /></Link>
+      </section> : null}
 
       <div className={styles.layout}>
         <div className={styles.stack}>
@@ -29,11 +35,11 @@ export function ServiceAuthorizationPage({ token, authorization, forms=[], job }
             <div className={styles.cardHeader}>
               <div>
                 <span className={styles.eyebrow}>Job details</span>
-                <h2 className={styles.cardTitle} id="service-request-title">What’s wrong?</h2>
+                <h2 className={styles.cardTitle} id="service-request-title">The job</h2>
               </div>
             </div>
 
-            <p className={styles.serviceText}>{authorization.service.problem}</p>
+            {oneLine(authorization.service.problem) !== authorization.service.problem ? <p className={styles.serviceText}>{authorization.service.problem}</p> : null}
             {job ? <p className={styles.helper}>Reported {formatPublicDateTime(job.reportedAt, zone)}{job.reportedBy ? ` by ${job.reportedBy}` : ""}</p> : null}
             <div className={styles.requestedWork}>
               <h2 className={styles.cardTitle}>What we need you to do</h2>

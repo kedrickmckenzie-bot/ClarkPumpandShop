@@ -995,3 +995,8 @@
 .serviceText { font-size: 1rem; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; margin: .75rem 0 0; }
 
 .requestedWork { margin-top: 1.25rem; padding: 1rem; border-left: 3px solid #315dcc; background: #f4f6fa; border-radius: 4px; }
+
+.onSiteRow { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.jobDetails { margin-top: .5rem; }
+.jobDetails summary { cursor: pointer; color: #315dcc; font-weight: 600; }
+.jobDetails p { margin: .4rem 0 0; }

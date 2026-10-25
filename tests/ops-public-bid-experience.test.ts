@@ -92,7 +92,7 @@ describe("public quote request and service authorization distinction", () => {
 
     expect(markup).toContain("Work order");
     expect(markup).toContain("Assigned to ColdLine Refrigeration &amp; HVAC");
-    expect(markup).toContain("What’s wrong?");
+    expect(markup).toContain("The job");
     expect(markup).toContain(serviceAuthorization.service.problem);
     expect(markup).toContain(serviceAuthorization.service.requestedWork);
     expect(markup).toContain("What we need you to do");

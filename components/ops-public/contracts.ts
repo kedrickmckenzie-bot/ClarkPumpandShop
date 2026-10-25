@@ -213,6 +213,8 @@ export interface EligibleWorkOrderView {
   number: string;
   priority: "Routine" | "Urgent" | "Emergency";
   problem: string;
+  /** What the vendor is asked to do. */
+  scope?: string;
   area?: string;
   category?: string;
   asset?: string;
@@ -233,6 +235,7 @@ export interface HeldWorkView {
   holdId: string;
   number: string;
   problem: string;
+  scope?: string;
   category: string;
   asset?: string;
   deadlineAt: string;
@@ -256,6 +259,9 @@ export interface VisitWorkOrderView {
   id: string;
   number: string;
   problem: string;
+  /** What the vendor is asked to do, and the equipment, for the technician's job card. */
+  scope?: string;
+  asset?: string;
   selectionSource?: "assigned_work" | "service_run" | "held_work" | "after_the_fact";
   heldWorkPosture?: "complete_using_professional_judgment" | "look_and_report";
   /** Set when the job's equipment has refrigerant on record, so checkout asks about refrigerant. */

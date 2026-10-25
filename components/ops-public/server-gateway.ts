@@ -564,7 +564,8 @@ async function publicWorkOrdersForVisit(
     const [facts, asset] = workOrder.assetId ? await Promise.all([repository.getAssetRefrigerant(organizationId, workOrder.assetId), repository.getAsset(organizationId, workOrder.assetId)]) : [null, null];
     // Only units the EPA leak rules cover are asked about at checkout; small units are logged from the equipment page if wanted.
     const refrigerant = facts && asset && refrigerantCoverage(facts).covered === true ? { equipment: asset.name, refrigerant: facts.refrigerant, covered: true } : undefined;
-    return { id: workOrder.id, number: workOrder.number, problem: workOrder.problem, selectionSource: link?.selectionSource, heldWorkPosture: hold?.posture, ...(refrigerant ? { refrigerant } : {}) };
+    return { id: workOrder.id, number: workOrder.number, problem: workOrder.problem, scope: vendorFacingScope(workOrder.authorizedScope), asset: asset ? `${asset.name} · ${asset.assetTag}` : undefined,
+      selectionSource: link?.selectionSource, heldWorkPosture: hold?.posture, ...(refrigerant ? { refrigerant } : {}) };
   })));
 }
 
@@ -668,7 +669,10 @@ async function getContextFromAccess(access: PublicAccess, requestedVendorId?: st
     }))).filter((run): run is NonNullable<typeof run> => Boolean(run));
   }))).flat();
   const plannedByWorkOrder = new Map(plannedServiceRuns.flatMap((run) => run.plannedWorkOrderIds.map((workOrderId) => [workOrderId, run] as const)));
-  const eligibleWorkOrders = eligibleWorkOrderBase.map((workOrder) => {
+  // What the vendor is asked to do, so a technician can read the job before choosing it.
+  const scopes = new Map(await Promise.all(eligibleWorkOrderBase.map(async (workOrder) => [workOrder.id, vendorFacingScope((await repository.getWorkOrder(organizationId, workOrder.id))?.authorizedScope)] as const)));
+  const eligibleWorkOrders = eligibleWorkOrderBase.map((base) => {
+    const workOrder = { ...base, scope: scopes.get(base.id) };
     const run = plannedByWorkOrder.get(workOrder.id);
     return run ? { ...workOrder, plannedServiceRun: { id: run.id, startsAt: run.startsAt, stopSequence: run.stopSequence } } : workOrder;
   });
@@ -701,6 +705,7 @@ async function getContextFromAccess(access: PublicAccess, requestedVendorId?: st
           holdId: hold.id,
           number: workOrder.number,
           problem: workOrder.problem,
+          scope: vendorFacingScope(workOrder.authorizedScope),
           category: titleCase(workOrder.categoryKey) ?? "Service",
           asset: detail?.asset ? `${detail.asset.name} · ${detail.asset.assetTag}` : undefined,
           deadlineAt: hold.deadlineAt,
@@ -2121,7 +2126,17 @@ export async function resolveServiceJobContext(token: string) {
     } : undefined,
     photos: files.filter(file => file.contentType?.startsWith("image/")).map(file => ({ id: file.id, name: file.originalName })),
     history,
+    /** Technicians from this vendor checked in on this job right now, on any device. */
+    onSite: await activeVisitsOnJob(org, work.id, view.vendor.id),
   };
+}
+
+async function activeVisitsOnJob(org: string, workOrderId: string, vendorId: string) {
+  const { repository } = runtime();
+  const links = await repository.listSiteVisitWorkOrdersForWorkOrder(org, workOrderId);
+  const visits = await Promise.all([...new Set(links.map(link => link.visitId))].map(id => repository.getVisit(org, id)));
+  return visits.filter((visit): visit is NonNullable<typeof visit> => Boolean(visit && visit.status === "active" && !visit.checkedOutAt && visit.vendorId === vendorId))
+    .map(visit => ({ technicianName: visit.technicianName, checkedInAt: visit.checkedInAt }));
 }
 
 /** A photo the operator shared with the vendor on this job, or null. */
